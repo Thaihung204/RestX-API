@@ -4,7 +4,7 @@ using System.Collections.Generic;
 
 namespace RestX.Models.Admin;
 
-public partial class Admin : Entity<int>
+public partial class Admin : Entity<Guid>
 {
     public string Email { get; set; } = null!;
 

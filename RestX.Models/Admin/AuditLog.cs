@@ -5,9 +5,8 @@ using System.Collections.Generic;
 
 namespace RestX.Models.Admin;
 
-public partial class AuditLog : Entity<int>
+public partial class AuditLog : Entity<Guid>
 {
-
     public int? TenantId { get; set; }
 
     public int? ActorAdminId { get; set; }

@@ -176,7 +176,6 @@ public partial class RestxAdminContext : DbContext
             entity.Property(e => e.NetworkIp)
                 .HasMaxLength(100)
                 .HasColumnName("network_ip");
-            entity.Property(e => e.PlanId).HasColumnName("plan_id");
             entity.Property(e => e.Prefix)
                 .HasMaxLength(100)
                 .HasColumnName("prefix");
@@ -189,10 +188,6 @@ public partial class RestxAdminContext : DbContext
             entity.Property(e => e.Status)
                 .HasDefaultValue(true)
                 .HasColumnName("status");
-
-            entity.HasOne(d => d.Plan).WithMany(p => p.Tenants)
-                .HasForeignKey(d => d.PlanId)
-                .HasConstraintName("FK_Tenants_Plans");
         });
 
         modelBuilder.Entity<TenantSetting>(entity =>

@@ -53,7 +53,6 @@ namespace RestX.BLL.Services
                     Repo.Update(tenant);
                 }
             }
-
             await Repo.SaveAsync();
             return tenant;
         }

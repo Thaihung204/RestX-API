@@ -5,7 +5,7 @@ using System.Collections.Generic;
 
 namespace RestX.Models.Admin;
 
-public partial class Plan : Entity<int>
+public partial class Plan : Entity<Guid>
 {
 
     public string Name { get; set; } = null!;

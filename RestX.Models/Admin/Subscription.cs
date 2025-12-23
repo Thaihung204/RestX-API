@@ -5,7 +5,7 @@ using System.Collections.Generic;
 
 namespace RestX.Models.Admin;
 
-public partial class Subscription : Entity<int>
+public partial class Subscription : Entity<Guid>
 {
     public int TenantId { get; set; }
 

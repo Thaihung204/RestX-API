@@ -5,7 +5,7 @@ using System.Collections.Generic;
 
 namespace RestX.Models.Tenants;
 
-public partial class Tenant : Entity<int>
+public partial class Tenant : Entity<Guid>
 {
     public string Prefix { get; set; } = null!;
 
@@ -23,8 +23,6 @@ public partial class Tenant : Entity<int>
 
     public string? SecondaryColor { get; set; }
 
-    public int? PlanId { get; set; }
-
     public string? NetworkIp { get; set; }
 
     public string? ConnectionString { get; set; }
@@ -36,8 +34,6 @@ public partial class Tenant : Entity<int>
     public DateTime? ExpiredAt { get; set; }
 
     public virtual ICollection<AuditLog> AuditLogs { get; set; } = new List<AuditLog>();
-
-    public virtual Plan? Plan { get; set; }
 
     public virtual ICollection<Subscription> Subscriptions { get; set; } = new List<Subscription>();
 

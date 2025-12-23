@@ -18,4 +18,5 @@ public partial class Admin : Entity<Guid>
 
     public DateTime? LastLoginAt { get; set; }
 
+    public virtual ICollection<AuditLog> AuditLogs { get; set; } = new List<AuditLog>();
 }

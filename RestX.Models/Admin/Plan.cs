@@ -1,5 +1,4 @@
 ﻿using RestX.Models.BaseModel;
-using RestX.Models.Tenants;
 using System;
 using System.Collections.Generic;
 
@@ -7,7 +6,6 @@ namespace RestX.Models.Admin;
 
 public partial class Plan : Entity<Guid>
 {
-
     public string Name { get; set; } = null!;
 
     public string? Description { get; set; }
@@ -23,6 +21,4 @@ public partial class Plan : Entity<Guid>
     public string? Status { get; set; }
 
     public virtual ICollection<Subscription> Subscriptions { get; set; } = new List<Subscription>();
-
-    public virtual ICollection<Tenant> Tenants { get; set; } = new List<Tenant>();
 }

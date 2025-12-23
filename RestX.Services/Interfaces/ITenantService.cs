@@ -10,8 +10,8 @@ namespace RestX.BLL.Interfaces
     public interface ITenantService
     {
         Task<List<Tenant>> GetTenantsAsync();
-        Task<Tenant> GetTenantByIdAsync(int id);
+        Task<Tenant> GetTenantByIdAsync(Guid id);
         Task<Tenant> UpsertTenantAsync(Tenant tenant);
-        Task DeleteTenantAsync(int id);
+        Task DeleteTenantAsync(Guid id);
     }
 }

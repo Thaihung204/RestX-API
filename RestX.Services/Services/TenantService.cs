@@ -16,16 +16,19 @@ namespace RestX.BLL.Services
         {
         }
 
-        public async Task DeleteTenantAsync(int id)
+        public async Task DeleteTenantAsync(Guid id)
         {
             var tenant = await GetTenantByIdAsync(id);
-            Repo.Delete<Tenant>(id);
-            await Repo.SaveAsync();
+            if (tenant != null)
+            {
+                Repo.Delete<Tenant>(id);
+                await Repo.SaveAsync();
+            }
         }
 
-        public async Task<Tenant> GetTenantByIdAsync(int id)
+        public async Task<Tenant> GetTenantByIdAsync(Guid id)
         {
-            var tenant= await Repo.GetByIdAsync<Tenant>(id);
+            var tenant = await Repo.GetByIdAsync<Tenant>(id);
             return tenant;
         }
 
@@ -37,8 +40,9 @@ namespace RestX.BLL.Services
 
         public async Task<Tenant> UpsertTenantAsync(Tenant tenant)
         {
-            if (tenant.Id == 0)
+            if (tenant.Id == Guid.Empty)
             {
+                tenant.Id = Guid.NewGuid();
                 await Repo.CreateAsync(tenant);
             }
             else

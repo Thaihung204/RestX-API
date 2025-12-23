@@ -1,9 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
+using RestX.Models.Admin;
 using RestX.Models.Tenants;
 
-namespace RestX.Models.Admin;
+namespace RestX.DAL.Context;
 
 public partial class RestxAdminContext : DbContext
 {
@@ -36,13 +37,15 @@ public partial class RestxAdminContext : DbContext
     {
         modelBuilder.Entity<Admin>(entity =>
         {
-            entity.HasKey(e => e.Id).HasName("PK__admins__3213E83F38D735A7");
+            entity.HasKey(e => e.Id).HasName("PK__admins__3213E83FDAF7C842");
 
             entity.ToTable("admins");
 
-            entity.HasIndex(e => e.Email, "UQ__admins__AB6E6164CB40E1C8").IsUnique();
+            entity.HasIndex(e => e.Email, "UQ__admins__AB6E616490908416").IsUnique();
 
-            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Id)
+                .HasDefaultValueSql("(newsequentialid())")
+                .HasColumnName("id");
             entity.Property(e => e.Email)
                 .HasMaxLength(255)
                 .HasColumnName("email");
@@ -63,13 +66,15 @@ public partial class RestxAdminContext : DbContext
 
         modelBuilder.Entity<AuditLog>(entity =>
         {
-            entity.HasKey(e => e.Id).HasName("PK__audit_lo__3213E83F8E7D962C");
+            entity.HasKey(e => e.Id).HasName("PK__audit_lo__3213E83F26B22299");
 
             entity.ToTable("audit_logs");
 
             entity.HasIndex(e => e.TenantId, "IX_AuditLogs_Tenant");
 
-            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Id)
+                .HasDefaultValueSql("(newsequentialid())")
+                .HasColumnName("id");
             entity.Property(e => e.Action)
                 .HasMaxLength(100)
                 .HasColumnName("action");
@@ -78,18 +83,20 @@ public partial class RestxAdminContext : DbContext
             entity.Property(e => e.Metadata).HasColumnName("metadata");
             entity.Property(e => e.TenantId).HasColumnName("tenant_id");
 
-            entity.HasOne(d => d.Tenant).WithMany(p => p.AuditLogs)
-                .HasForeignKey(d => d.TenantId)
-                .HasConstraintName("FK_Audit_Tenant");
+            entity.HasOne(d => d.ActorAdmin).WithMany(p => p.AuditLogs)
+                .HasForeignKey(d => d.ActorAdminId)
+                .HasConstraintName("FK_Audit_Admin");
         });
 
         modelBuilder.Entity<Plan>(entity =>
         {
-            entity.HasKey(e => e.Id).HasName("PK__plans__3213E83F0A554473");
+            entity.HasKey(e => e.Id).HasName("PK__plans__3213E83FB5E8A9B4");
 
             entity.ToTable("plans");
 
-            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Id)
+                .HasDefaultValueSql("(newsequentialid())")
+                .HasColumnName("id");
             entity.Property(e => e.Description).HasColumnName("description");
             entity.Property(e => e.MaxStorageMb).HasColumnName("max_storage_mb");
             entity.Property(e => e.MaxUsers).HasColumnName("max_users");
@@ -109,13 +116,15 @@ public partial class RestxAdminContext : DbContext
 
         modelBuilder.Entity<Subscription>(entity =>
         {
-            entity.HasKey(e => e.Id).HasName("PK__subscrip__3213E83FA1385A06");
+            entity.HasKey(e => e.Id).HasName("PK__subscrip__3213E83F77C42AF4");
 
             entity.ToTable("subscriptions");
 
             entity.HasIndex(e => e.TenantId, "IX_Subscriptions_Tenant");
 
-            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Id)
+                .HasDefaultValueSql("(newsequentialid())")
+                .HasColumnName("id");
             entity.Property(e => e.BillingCycle)
                 .HasMaxLength(50)
                 .HasColumnName("billing_cycle");
@@ -132,24 +141,21 @@ public partial class RestxAdminContext : DbContext
                 .HasForeignKey(d => d.PlanId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_Sub_Plan");
-
-            entity.HasOne(d => d.Tenant).WithMany(p => p.Subscriptions)
-                .HasForeignKey(d => d.TenantId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_Sub_Tenant");
         });
 
         modelBuilder.Entity<Tenant>(entity =>
         {
-            entity.HasKey(e => e.Id).HasName("PK__tenants__3213E83F062A1797");
+            entity.HasKey(e => e.Id).HasName("PK__tenants__3213E83F7DE0C654");
 
             entity.ToTable("tenants");
 
             entity.HasIndex(e => e.Prefix, "IX_Tenants_Prefix");
 
-            entity.HasIndex(e => e.Prefix, "UQ__tenants__DA929218A2137A2B").IsUnique();
+            entity.HasIndex(e => e.Prefix, "UQ__tenants__DA929218C1E6D04A").IsUnique();
 
-            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Id)
+                .HasDefaultValueSql("(newsequentialid())")
+                .HasColumnName("id");
             entity.Property(e => e.BackgroundUrl)
                 .HasMaxLength(255)
                 .HasColumnName("background_url");
@@ -192,13 +198,15 @@ public partial class RestxAdminContext : DbContext
 
         modelBuilder.Entity<TenantSetting>(entity =>
         {
-            entity.HasKey(e => e.Id).HasName("PK__tenant_s__3213E83FFBDA1AA3");
+            entity.HasKey(e => e.Id).HasName("PK__tenant_s__3213E83F59C4470C");
 
             entity.ToTable("tenant_settings");
 
             entity.HasIndex(e => new { e.TenantId, e.Key }, "UQ_Tenant_Key").IsUnique();
 
-            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Id)
+                .HasDefaultValueSql("(newsequentialid())")
+                .HasColumnName("id");
             entity.Property(e => e.Key)
                 .HasMaxLength(100)
                 .HasColumnName("key");

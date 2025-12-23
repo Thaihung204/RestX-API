@@ -6,9 +6,7 @@ namespace RestX.Models.Tenants;
 
 public partial class TenantSetting : Entity<Guid>
 {
-    public int Id { get; set; }
-
-    public int TenantId { get; set; }
+    public Guid TenantId { get; set; }
 
     public string Key { get; set; } = null!;
 

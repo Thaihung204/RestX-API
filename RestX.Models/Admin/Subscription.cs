@@ -1,15 +1,15 @@
 ﻿using RestX.Models.BaseModel;
-using RestX.Models.Tenants;
 using System;
 using System.Collections.Generic;
+using RestX.Models.Tenants;
 
 namespace RestX.Models.Admin;
 
 public partial class Subscription : Entity<Guid>
 {
-    public int TenantId { get; set; }
+    public Guid TenantId { get; set; }
 
-    public int PlanId { get; set; }
+    public Guid PlanId { get; set; }
 
     public string? Status { get; set; }
 

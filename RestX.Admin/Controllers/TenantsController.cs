@@ -4,39 +4,34 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
-using Microsoft.EntityFrameworkCore;
-using RestX.Models.Admin;
+using RestX.BLL.Interfaces;
 using RestX.Models.Tenants;
 
 namespace RestX.Admin.Controllers
 {
     public class TenantsController : Controller
     {
-        private readonly RestxAdminContext _context;
+        private readonly ITenantService _tenantService;
 
-        public TenantsController(RestxAdminContext context)
+        public TenantsController(ITenantService tenantService)
         {
-            _context = context;
+            _tenantService = tenantService;
         }
 
-        // GET: Tenants
         public async Task<IActionResult> Index()
         {
-            var restxAdminContext = _context.Tenants.Include(t => t.Plan);
-            return View(await restxAdminContext.ToListAsync());
+            var tenants = await _tenantService.GetTenantsAsync();
+            return View(tenants);
         }
 
-        // GET: Tenants/Details/5
-        public async Task<IActionResult> Details(int? id)
+        public async Task<IActionResult> Details(Guid? id)
         {
             if (id == null)
             {
                 return NotFound();
             }
 
-            var tenant = await _context.Tenants
-                .Include(t => t.Plan)
-                .FirstOrDefaultAsync(m => m.Id == id);
+            var tenant = await _tenantService.GetTenantByIdAsync(id.Value);
             if (tenant == null)
             {
                 return NotFound();
@@ -45,53 +40,41 @@ namespace RestX.Admin.Controllers
             return View(tenant);
         }
 
-        // GET: Tenants/Create
         public IActionResult Create()
         {
-            ViewData["PlanId"] = new SelectList(_context.Plans, "Id", "Name");
             return View();
         }
 
-        // POST: Tenants/Create
-        // To protect from overposting attacks, enable the specific properties you want to bind to.
-        // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([Bind("Prefix,Name,LogoUrl,FaviconUrl,BackgroundUrl,BaseColor,PrimaryColor,SecondaryColor,PlanId,NetworkIp,ConnectionString,Status,Domain,ExpiredAt,Id,CreatedDate,ModifiedDate,CreatedBy,ModifiedBy")] Tenant tenant)
+        public async Task<IActionResult> Create([Bind("Prefix,Name,LogoUrl,FaviconUrl,BackgroundUrl,BaseColor,PrimaryColor,SecondaryColor,NetworkIp,ConnectionString,Status,Domain,ExpiredAt,CreatedDate,ModifiedDate,CreatedBy,ModifiedBy")] Tenant tenant)
         {
             if (ModelState.IsValid)
             {
-                _context.Add(tenant);
-                await _context.SaveChangesAsync();
+                await _tenantService.UpsertTenantAsync(tenant);
                 return RedirectToAction(nameof(Index));
             }
-            ViewData["PlanId"] = new SelectList(_context.Plans, "Id", "Name", tenant.PlanId);
             return View(tenant);
         }
 
-        // GET: Tenants/Edit/5
-        public async Task<IActionResult> Edit(int? id)
+        public async Task<IActionResult> Edit(Guid? id)
         {
             if (id == null)
             {
                 return NotFound();
             }
 
-            var tenant = await _context.Tenants.FindAsync(id);
+            var tenant = await _tenantService.GetTenantByIdAsync(id.Value);
             if (tenant == null)
             {
                 return NotFound();
             }
-            ViewData["PlanId"] = new SelectList(_context.Plans, "Id", "Name", tenant.PlanId);
             return View(tenant);
         }
 
-        // POST: Tenants/Edit/5
-        // To protect from overposting attacks, enable the specific properties you want to bind to.
-        // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("Prefix,Name,LogoUrl,FaviconUrl,BackgroundUrl,BaseColor,PrimaryColor,SecondaryColor,PlanId,NetworkIp,ConnectionString,Status,Domain,ExpiredAt,Id,CreatedDate,ModifiedDate,CreatedBy,ModifiedBy")] Tenant tenant)
+        public async Task<IActionResult> Edit(Guid id, [Bind("Prefix,Name,LogoUrl,FaviconUrl,BackgroundUrl,BaseColor,PrimaryColor,SecondaryColor,NetworkIp,ConnectionString,Status,Domain,ExpiredAt,Id,CreatedDate,ModifiedDate,CreatedBy,ModifiedBy")] Tenant tenant)
         {
             if (id != tenant.Id)
             {
@@ -102,12 +85,11 @@ namespace RestX.Admin.Controllers
             {
                 try
                 {
-                    _context.Update(tenant);
-                    await _context.SaveChangesAsync();
+                    await _tenantService.UpsertTenantAsync(tenant);
                 }
-                catch (DbUpdateConcurrencyException)
+                catch (Exception)
                 {
-                    if (!TenantExists(tenant.Id))
+                    if (!await TenantExistsAsync(tenant.Id))
                     {
                         return NotFound();
                     }
@@ -118,21 +100,17 @@ namespace RestX.Admin.Controllers
                 }
                 return RedirectToAction(nameof(Index));
             }
-            ViewData["PlanId"] = new SelectList(_context.Plans, "Id", "Name", tenant.PlanId);
             return View(tenant);
         }
 
-        // GET: Tenants/Delete/5
-        public async Task<IActionResult> Delete(int? id)
+        public async Task<IActionResult> Delete(Guid? id)
         {
             if (id == null)
             {
                 return NotFound();
             }
 
-            var tenant = await _context.Tenants
-                .Include(t => t.Plan)
-                .FirstOrDefaultAsync(m => m.Id == id);
+            var tenant = await _tenantService.GetTenantByIdAsync(id.Value);
             if (tenant == null)
             {
                 return NotFound();
@@ -141,24 +119,18 @@ namespace RestX.Admin.Controllers
             return View(tenant);
         }
 
-        // POST: Tenants/Delete/5
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> DeleteConfirmed(int id)
+        public async Task<IActionResult> DeleteConfirmed(Guid id)
         {
-            var tenant = await _context.Tenants.FindAsync(id);
-            if (tenant != null)
-            {
-                _context.Tenants.Remove(tenant);
-            }
-
-            await _context.SaveChangesAsync();
+            await _tenantService.DeleteTenantAsync(id);
             return RedirectToAction(nameof(Index));
         }
 
-        private bool TenantExists(int id)
+        private async Task<bool> TenantExistsAsync(Guid id)
         {
-            return _context.Tenants.Any(e => e.Id == id);
+            var tenant = await _tenantService.GetTenantByIdAsync(id);
+            return tenant != null;
         }
     }
 }

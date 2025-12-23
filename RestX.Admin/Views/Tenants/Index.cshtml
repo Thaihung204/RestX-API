@@ -1,0 +1,137 @@
+﻿@model IEnumerable<RestX.Models.Tenants.Tenant>
+
+@{
+    ViewData["Title"] = "Index";
+}
+
+<h1>Index</h1>
+
+<p>
+    <a asp-action="Create">Create New</a>
+</p>
+<table class="table">
+    <thead>
+        <tr>
+            <th>
+                @Html.DisplayNameFor(model => model.Prefix)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.Name)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.LogoUrl)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.FaviconUrl)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.BackgroundUrl)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.BaseColor)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.PrimaryColor)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.SecondaryColor)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.NetworkIp)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.ConnectionString)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.Status)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.Domain)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.ExpiredAt)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.Plan)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.CreatedDate)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.ModifiedDate)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.CreatedBy)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.ModifiedBy)
+            </th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+@foreach (var item in Model) {
+        <tr>
+            <td>
+                @Html.DisplayFor(modelItem => item.Prefix)
+            </td>
+            <td>
+                @Html.DisplayFor(modelItem => item.Name)
+            </td>
+            <td>
+                @Html.DisplayFor(modelItem => item.LogoUrl)
+            </td>
+            <td>
+                @Html.DisplayFor(modelItem => item.FaviconUrl)
+            </td>
+            <td>
+                @Html.DisplayFor(modelItem => item.BackgroundUrl)
+            </td>
+            <td>
+                @Html.DisplayFor(modelItem => item.BaseColor)
+            </td>
+            <td>
+                @Html.DisplayFor(modelItem => item.PrimaryColor)
+            </td>
+            <td>
+                @Html.DisplayFor(modelItem => item.SecondaryColor)
+            </td>
+            <td>
+                @Html.DisplayFor(modelItem => item.NetworkIp)
+            </td>
+            <td>
+                @Html.DisplayFor(modelItem => item.ConnectionString)
+            </td>
+            <td>
+                @Html.DisplayFor(modelItem => item.Status)
+            </td>
+            <td>
+                @Html.DisplayFor(modelItem => item.Domain)
+            </td>
+            <td>
+                @Html.DisplayFor(modelItem => item.ExpiredAt)
+            </td>
+            <td>
+                @Html.DisplayFor(modelItem => item.Plan.Name)
+            </td>
+            <td>
+                @Html.DisplayFor(modelItem => item.CreatedDate)
+            </td>
+            <td>
+                @Html.DisplayFor(modelItem => item.ModifiedDate)
+            </td>
+            <td>
+                @Html.DisplayFor(modelItem => item.CreatedBy)
+            </td>
+            <td>
+                @Html.DisplayFor(modelItem => item.ModifiedBy)
+            </td>
+            <td>
+                <a asp-action="Edit" asp-route-id="@item.Id">Edit</a> |
+                <a asp-action="Details" asp-route-id="@item.Id">Details</a> |
+                <a asp-action="Delete" asp-route-id="@item.Id">Delete</a>
+            </td>
+        </tr>
+}
+    </tbody>
+</table>

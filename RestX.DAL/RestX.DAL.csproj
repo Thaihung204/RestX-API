@@ -10,8 +10,4 @@
     <ProjectReference Include="..\RestX.Models\RestX.Models.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Context\" />
-  </ItemGroup>
-
 </Project>

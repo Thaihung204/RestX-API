@@ -1,6 +1,5 @@
 ﻿using RestX.BLL.Repository.Interfaces;
 using RestX.DAL.Context;
-using RestX.Models.Admin;
 
 
 namespace RestX.BLL.Services.Implementations

@@ -6,7 +6,7 @@ using System.Linq.Expressions;
 using System.Threading.Tasks;
 using RestX.Models.Interfaces;
 
-namespace RestX.BLL.Services.Interfaces
+namespace RestX.BLL.Repository.Interfaces
 {
 
     //using Tprofile.Models.Interfaces;

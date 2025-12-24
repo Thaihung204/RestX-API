@@ -2,7 +2,7 @@
 using System.Threading.Tasks;
 using RestX.Models.Interfaces;
 
-namespace RestX.BLL.Services.Interfaces
+namespace RestX.BLL.Repository.Interfaces
 {
     public interface IRepository : IReadOnlyRepository
     {

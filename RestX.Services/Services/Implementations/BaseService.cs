@@ -1,9 +1,9 @@
-﻿using RestX.BLL.Services.Interfaces;
+﻿using RestX.BLL.Repository.Interfaces;
 using RestX.DAL.Context;
 using RestX.Models.Admin;
 
 
-namespace RestX.BLL.Services.Services
+namespace RestX.BLL.Services.Implementations
 {
     public class BaseService
     {
@@ -28,7 +28,7 @@ namespace RestX.BLL.Services.Services
 
         public BaseService(IRepository repo)
         {
-            this.Repo = repo;
+            Repo = repo;
         }
 
         //public BaseService(IRepository repo, IHttpContextAccessor httpContextAccessor)

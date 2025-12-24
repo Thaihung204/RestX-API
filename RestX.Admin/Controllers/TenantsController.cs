@@ -1,15 +1,13 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Rendering;
-using RestX.BLL.Interfaces;
+﻿using Microsoft.AspNetCore.Mvc;
+using RestX.BLL.Services.Interfaces;
 using RestX.Models.Tenants;
+using System.ComponentModel.DataAnnotations;
 
 namespace RestX.Admin.Controllers
 {
-    public class TenantsController : Controller
+    [Route("api/[controller]")]
+    [ApiController]
+    public class TenantsController : ControllerBase
     {
         private readonly ITenantService _tenantService;
 
@@ -18,119 +16,134 @@ namespace RestX.Admin.Controllers
             _tenantService = tenantService;
         }
 
-        public async Task<IActionResult> Index()
+        [HttpGet]
+        public async Task<ActionResult<IEnumerable<Tenant>>> GetTenants()
         {
-            var tenants = await _tenantService.GetTenantsAsync();
-            return View(tenants);
+            try
+            {
+                var tenants = await _tenantService.GetTenantsAsync();
+                return Ok(tenants);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError,
+                    new { message = "Error retrieving tenants", error = ex.Message });
+            }
         }
 
-        public async Task<IActionResult> Details(Guid? id)
+        [HttpGet("{id}")]
+        public async Task<ActionResult<Tenant>> GetTenant([Required] Guid id)
         {
-            if (id == null)
+            try
             {
-                return NotFound();
-            }
+                var tenant = await _tenantService.GetTenantByIdAsync(id);
 
-            var tenant = await _tenantService.GetTenantByIdAsync(id.Value);
-            if (tenant == null)
+                if (tenant == null)
+                {
+                    return NotFound(new { message = "Tenant not found" });
+                }
+
+                return Ok(tenant);
+            }
+            catch (Exception ex)
             {
-                return NotFound();
+                return StatusCode(StatusCodes.Status500InternalServerError,
+                    new { message = "Error retrieving tenant", error = ex.Message });
             }
-
-            return View(tenant);
         }
 
-        public IActionResult Create()
-        {
-            return View();
-        }
-
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([Bind("Prefix,Name,LogoUrl,FaviconUrl,BackgroundUrl,BaseColor,PrimaryColor,SecondaryColor,NetworkIp,ConnectionString,Status,Domain,ExpiredAt,CreatedDate,ModifiedDate,CreatedBy,ModifiedBy")] Tenant tenant)
-        {
-            if (ModelState.IsValid)
-            {
-                await _tenantService.UpsertTenantAsync(tenant);
-                return RedirectToAction(nameof(Index));
-            }
-            return View(tenant);
-        }
-
-        public async Task<IActionResult> Edit(Guid? id)
-        {
-            if (id == null)
-            {
-                return NotFound();
-            }
-
-            var tenant = await _tenantService.GetTenantByIdAsync(id.Value);
-            if (tenant == null)
-            {
-                return NotFound();
-            }
-            return View(tenant);
-        }
-
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(Guid id, [Bind("Prefix,Name,LogoUrl,FaviconUrl,BackgroundUrl,BaseColor,PrimaryColor,SecondaryColor,NetworkIp,ConnectionString,Status,Domain,ExpiredAt,Id,CreatedDate,ModifiedDate,CreatedBy,ModifiedBy")] Tenant tenant)
+        [HttpPut("{id}")]
+        public async Task<IActionResult> PutTenant([Required] Guid id, [FromBody] Tenant tenant)
         {
             if (id != tenant.Id)
             {
-                return NotFound();
+                return BadRequest(new { message = "ID in URL does not match ID in request body" });
             }
 
-            if (ModelState.IsValid)
+            if (!ModelState.IsValid)
             {
-                try
+                return BadRequest(ModelState);
+            }
+
+            try
+            {
+                var existingTenant = await _tenantService.GetTenantByIdAsync(id);
+                if (existingTenant == null)
                 {
-                    await _tenantService.UpsertTenantAsync(tenant);
+                    return NotFound(new { message = "Tenant not found" });
                 }
-                catch (Exception)
+
+                await _tenantService.UpsertTenantAsync(tenant);
+                return NoContent();
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError,
+                    new { message = "Error updating tenant", error = ex.Message });
+            }
+        }
+
+        [HttpPost]
+        public async Task<ActionResult<Tenant>> PostTenant([FromBody] Tenant tenant)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+            try
+            {
+                tenant.Id = Guid.Empty;
+
+                var createdTenant = await _tenantService.UpsertTenantAsync(tenant);
+
+                return CreatedAtAction(nameof(GetTenant), new { id = createdTenant.Id }, createdTenant);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError,
+                    new { message = "Error creating tenant", error = ex.Message });
+            }
+        }
+
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteTenant([Required] Guid id)
+        {
+            try
+            {
+                var existingTenant = await _tenantService.GetTenantByIdAsync(id);
+                if (existingTenant == null)
                 {
-                    if (!await TenantExistsAsync(tenant.Id))
-                    {
-                        return NotFound();
-                    }
-                    else
-                    {
-                        throw;
-                    }
+                    return NotFound(new { message = "Tenant not found" });
                 }
-                return RedirectToAction(nameof(Index));
-            }
-            return View(tenant);
-        }
 
-        public async Task<IActionResult> Delete(Guid? id)
-        {
-            if (id == null)
+                await _tenantService.DeleteTenantAsync(id);
+                return NoContent();
+            }
+            catch (Exception ex)
             {
-                return NotFound();
+                return StatusCode(StatusCodes.Status500InternalServerError,
+                    new { message = "Error deleting tenant", error = ex.Message });
             }
+        }
 
-            var tenant = await _tenantService.GetTenantByIdAsync(id.Value);
-            if (tenant == null)
+        [HttpHead("{id}")]
+        public async Task<IActionResult> TenantExists([Required] Guid id)
+        {
+            try
             {
-                return NotFound();
+                var tenant = await _tenantService.GetTenantByIdAsync(id);
+                if (tenant == null)
+                {
+                    return NotFound();
+                }
+                return Ok();
             }
-
-            return View(tenant);
-        }
-
-        [HttpPost, ActionName("Delete")]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> DeleteConfirmed(Guid id)
-        {
-            await _tenantService.DeleteTenantAsync(id);
-            return RedirectToAction(nameof(Index));
-        }
-
-        private async Task<bool> TenantExistsAsync(Guid id)
-        {
-            var tenant = await _tenantService.GetTenantByIdAsync(id);
-            return tenant != null;
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError,
+                    new { message = "Error checking tenant existence", error = ex.Message });
+            }
         }
     }
 }

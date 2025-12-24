@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace RestX.BLL.Interfaces
+namespace RestX.BLL.Services.Interfaces
 {
     public interface ITenantService
     {

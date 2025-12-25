@@ -1,11 +1,6 @@
 ﻿using RestX.BLL.Repository.Interfaces;
 using RestX.BLL.Services.Interfaces;
 using RestX.Models.Tenants;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace RestX.BLL.Services.Implementations
 {

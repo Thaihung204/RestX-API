@@ -1,6 +1,4 @@
-﻿using System.Collections.Generic;
-using System.Threading.Tasks;
-using RestX.Models.Interfaces;
+﻿using RestX.Models.Interfaces;
 
 namespace RestX.BLL.Repository.Interfaces
 {

@@ -1,10 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using System.Linq;
+﻿using RestX.Models.Interfaces;
 using System.Linq.Expressions;
-using System.Threading.Tasks;
-using RestX.Models.Interfaces;
 
 namespace RestX.BLL.Repository.Interfaces
 {

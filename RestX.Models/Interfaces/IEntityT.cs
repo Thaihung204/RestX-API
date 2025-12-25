@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace RestX.Models.Interfaces
+﻿namespace RestX.Models.Interfaces
 {
     public interface IEntity<T> : IEntity
     {

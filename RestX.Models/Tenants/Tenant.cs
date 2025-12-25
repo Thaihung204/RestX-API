@@ -1,7 +1,5 @@
 ﻿using RestX.Models.Admin;
 using RestX.Models.BaseModel;
-using System;
-using System.Collections.Generic;
 
 namespace RestX.Models.Tenants;
 

@@ -127,23 +127,5 @@ namespace RestX.Admin.Controllers
             }
         }
 
-        [HttpHead("{id}")]
-        public async Task<IActionResult> TenantExists([Required] Guid id)
-        {
-            try
-            {
-                var tenant = await _tenantService.GetTenantByIdAsync(id);
-                if (tenant == null)
-                {
-                    return NotFound();
-                }
-                return Ok();
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(StatusCodes.Status500InternalServerError,
-                    new { message = "Error checking tenant existence", error = ex.Message });
-            }
-        }
     }
 }

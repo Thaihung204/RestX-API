@@ -1,9 +1,9 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using RestX.BLL.Repository.Interfaces;
+using RestX.BLL.Interfaces;
 using RestX.Models.Interfaces;
 using System.Linq.Expressions;
 
-namespace RestX.BLL.Repository.Implementations
+namespace RestX.BLL.Services
 {
     public class EntityFrameworkReadOnlyRepository<TContext> : IReadOnlyRepository
     where TContext : DbContext
@@ -62,7 +62,7 @@ namespace RestX.BLL.Repository.Implementations
             int? take = null)
             where TEntity : class, IEntity
         {
-            return GetQueryable<TEntity>(null, orderBy, includeProperties, skip, take).ToList();
+            return GetQueryable(null, orderBy, includeProperties, skip, take).ToList();
         }
 
         public virtual async Task<IEnumerable<TEntity>> GetAllAsync<TEntity>(
@@ -72,7 +72,7 @@ namespace RestX.BLL.Repository.Implementations
             int? take = null)
             where TEntity : class, IEntity
         {
-            return await GetQueryable<TEntity>(null, orderBy, includeProperties, skip, take).ToListAsync();
+            return await GetQueryable(null, orderBy, includeProperties, skip, take).ToListAsync();
         }
 
         public virtual IEnumerable<TEntity> Get<TEntity>(
@@ -83,7 +83,7 @@ namespace RestX.BLL.Repository.Implementations
             int? take = null)
             where TEntity : class, IEntity
         {
-            return GetQueryable<TEntity>(filter, orderBy, includeProperties, skip, take).ToList();
+            return GetQueryable(filter, orderBy, includeProperties, skip, take).ToList();
         }
 
         public virtual async Task<IEnumerable<TEntity>> GetAsync<TEntity>(
@@ -94,7 +94,7 @@ namespace RestX.BLL.Repository.Implementations
             int? take = null)
             where TEntity : class, IEntity
         {
-            return await GetQueryable<TEntity>(filter, orderBy, includeProperties, skip, take).ToListAsync();
+            return await GetQueryable(filter, orderBy, includeProperties, skip, take).ToListAsync();
         }
 
         public virtual TEntity GetOne<TEntity>(
@@ -102,7 +102,7 @@ namespace RestX.BLL.Repository.Implementations
             string includeProperties = "")
             where TEntity : class, IEntity
         {
-            return GetQueryable<TEntity>(filter, null, includeProperties).SingleOrDefault();
+            return GetQueryable(filter, null, includeProperties).SingleOrDefault();
         }
 
         public virtual async Task<TEntity> GetOneAsync<TEntity>(
@@ -110,7 +110,7 @@ namespace RestX.BLL.Repository.Implementations
             string includeProperties = null)
             where TEntity : class, IEntity
         {
-            return await GetQueryable<TEntity>(filter, null, includeProperties).SingleOrDefaultAsync();
+            return await GetQueryable(filter, null, includeProperties).SingleOrDefaultAsync();
         }
 
         public virtual TEntity GetFirst<TEntity>(
@@ -119,7 +119,7 @@ namespace RestX.BLL.Repository.Implementations
            string includeProperties = "")
            where TEntity : class, IEntity
         {
-            return GetQueryable<TEntity>(filter, orderBy, includeProperties).FirstOrDefault();
+            return GetQueryable(filter, orderBy, includeProperties).FirstOrDefault();
         }
 
         public virtual async Task<TEntity> GetFirstAsync<TEntity>(
@@ -128,7 +128,7 @@ namespace RestX.BLL.Repository.Implementations
             string includeProperties = null)
             where TEntity : class, IEntity
         {
-            return await GetQueryable<TEntity>(filter, orderBy, includeProperties).FirstOrDefaultAsync();
+            return await GetQueryable(filter, orderBy, includeProperties).FirstOrDefaultAsync();
         }
 
         //public virtual TEntity GetById<TEntity>(object id)
@@ -153,25 +153,25 @@ namespace RestX.BLL.Repository.Implementations
         public virtual int GetCount<TEntity>(Expression<Func<TEntity, bool>> filter = null)
             where TEntity : class, IEntity
         {
-            return GetQueryable<TEntity>(filter).Count();
+            return GetQueryable(filter).Count();
         }
 
         public virtual Task<int> GetCountAsync<TEntity>(Expression<Func<TEntity, bool>> filter = null)
             where TEntity : class, IEntity
         {
-            return GetQueryable<TEntity>(filter).CountAsync();
+            return GetQueryable(filter).CountAsync();
         }
 
         public virtual bool GetExists<TEntity>(Expression<Func<TEntity, bool>> filter = null)
             where TEntity : class, IEntity
         {
-            return GetQueryable<TEntity>(filter).Any();
+            return GetQueryable(filter).Any();
         }
 
         public virtual Task<bool> GetExistsAsync<TEntity>(Expression<Func<TEntity, bool>> filter = null)
             where TEntity : class, IEntity
         {
-            return GetQueryable<TEntity>(filter).AnyAsync();
+            return GetQueryable(filter).AnyAsync();
         }
 
         public void SetCommandTimeout(int timeout)

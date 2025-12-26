@@ -1,8 +1,8 @@
-﻿using RestX.BLL.Repository.Interfaces;
+﻿using RestX.BLL.Interfaces;
 using RestX.DAL.Context;
 
 
-namespace RestX.BLL.Services.Implementations
+namespace RestX.BLL.Services
 {
     public class BaseService
     {

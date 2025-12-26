@@ -1,6 +1,6 @@
 ﻿using RestX.Models.Interfaces;
 
-namespace RestX.BLL.Repository.Interfaces
+namespace RestX.BLL.Interfaces
 {
     public interface IRepository : IReadOnlyRepository
     {

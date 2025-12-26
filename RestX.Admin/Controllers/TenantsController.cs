@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using RestX.BLL.Services.Interfaces;
+using RestX.Admin.Controllers.BaseControllers;
+using RestX.BLL.Interfaces;
 using RestX.Models.Tenants;
 using System.ComponentModel.DataAnnotations;
 
@@ -7,102 +8,71 @@ namespace RestX.Admin.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    public class TenantsController : ControllerBase
+    public class TenantsController : BaseController
     {
-        private readonly ITenantService _tenantService;
+        private readonly ITenantService tenantService;
+        public readonly IExceptionHandler exceptionHandler;
 
-        public TenantsController(ITenantService tenantService)
+        public TenantsController(ITenantService tenantService, IExceptionHandler exceptionHandler) : base(exceptionHandler)
         {
-            _tenantService = tenantService;
+            this.tenantService = tenantService;
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Tenant>>> GetTenants()
+        public async Task<ActionResult<IEnumerable<Tenant>>> GetAllTenants()
         {
             try
             {
-                var tenants = await _tenantService.GetTenantsAsync();
+                var tenants = await tenantService.GetAllTenants();
                 return Ok(tenants);
             }
             catch (Exception ex)
             {
-                return StatusCode(StatusCodes.Status500InternalServerError,
-                    new { message = "Error retrieving tenants", error = ex.Message });
+                this.exceptionHandler.RaiseException(ex);
+                return this.BadRequest("An internal error occurred");
             }
         }
 
         [HttpGet("{id}")]
-        public async Task<ActionResult<Tenant>> GetTenant([Required] Guid id)
+        public async Task<ActionResult<Tenant>> GetTenantById([Required] Guid id)
         {
             try
             {
-                var tenant = await _tenantService.GetTenantByIdAsync(id);
-
-                if (tenant == null)
-                {
-                    return NotFound(new { message = "Tenant not found" });
-                }
-
+                var tenant = await tenantService.GetTenantById(id);
                 return Ok(tenant);
             }
             catch (Exception ex)
             {
-                return StatusCode(StatusCodes.Status500InternalServerError,
-                    new { message = "Error retrieving tenant", error = ex.Message });
+                this.exceptionHandler.RaiseException(ex);
+                return this.BadRequest("An internal error occurred");
             }
         }
 
         [HttpPut("{id}")]
-        public async Task<IActionResult> PutTenant([Required] Guid id, [FromBody] Tenant tenant)
+        public async Task<IActionResult> EditTenant([Required] Guid id, [FromBody] Tenant tenant)
         {
-            if (id != tenant.Id)
-            {
-                return BadRequest(new { message = "ID in URL does not match ID in request body" });
-            }
-
-            if (!ModelState.IsValid)
-            {
-                return BadRequest(ModelState);
-            }
-
             try
             {
-                var existingTenant = await _tenantService.GetTenantByIdAsync(id);
-                if (existingTenant == null)
-                {
-                    return NotFound(new { message = "Tenant not found" });
-                }
-
-                await _tenantService.UpsertTenantAsync(tenant);
-                return NoContent();
+                return Ok(await tenantService.UpsertTenant(tenant));
             }
             catch (Exception ex)
             {
-                return StatusCode(StatusCodes.Status500InternalServerError,
-                    new { message = "Error updating tenant", error = ex.Message });
+                this.exceptionHandler.RaiseException(ex);
+                return this.BadRequest("An internal error occurred");
             }
         }
 
         [HttpPost]
-        public async Task<ActionResult<Tenant>> PostTenant([FromBody] Tenant tenant)
+        public async Task<ActionResult<Tenant>> AddTenant([FromBody] Tenant tenant)
         {
-            if (!ModelState.IsValid)
-            {
-                return BadRequest(ModelState);
-            }
-
             try
             {
-                tenant.Id = Guid.Empty;
-
-                var createdTenant = await _tenantService.UpsertTenantAsync(tenant);
-
-                return CreatedAtAction(nameof(GetTenant), new { id = createdTenant.Id }, createdTenant);
+                return Ok(await tenantService.UpsertTenant(tenant));
             }
             catch (Exception ex)
             {
-                return StatusCode(StatusCodes.Status500InternalServerError,
-                    new { message = "Error creating tenant", error = ex.Message });
+                this.exceptionHandler.RaiseException(ex);
+                return this.BadRequest("An internal error occurred");
             }
         }
 
@@ -111,19 +81,13 @@ namespace RestX.Admin.Controllers
         {
             try
             {
-                var existingTenant = await _tenantService.GetTenantByIdAsync(id);
-                if (existingTenant == null)
-                {
-                    return NotFound(new { message = "Tenant not found" });
-                }
-
-                await _tenantService.DeleteTenantAsync(id);
-                return NoContent();
+                await tenantService.DeleteTenant(id);
+                return Ok();
             }
             catch (Exception ex)
             {
-                return StatusCode(StatusCodes.Status500InternalServerError,
-                    new { message = "Error deleting tenant", error = ex.Message });
+                this.exceptionHandler.RaiseException(ex);
+                return this.BadRequest("An internal error occurred");
             }
         }
 

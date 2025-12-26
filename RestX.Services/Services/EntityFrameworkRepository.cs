@@ -1,11 +1,11 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using RestX.BLL.Repository.Interfaces;
+using RestX.BLL.Interfaces;
 using RestX.Models.Enum;
 using RestX.Models.Interfaces;
 using System.Data;
 using System.Dynamic;
 
-namespace RestX.BLL.Repository.Implementations
+namespace RestX.BLL.Services
 {
     public class EntityFrameworkRepository<TContext> : EntityFrameworkReadOnlyRepository<TContext>, IRepository
     where TContext : DbContext
@@ -23,8 +23,8 @@ namespace RestX.BLL.Repository.Implementations
             entity.CreatedDate = DateTime.UtcNow;
             entity.CreatedBy = createdBy;
             //            entity.CustomProperties = this.ValidateCustomProperties(entity);
-            var newEntity = this.context.Set<TEntity>().Add(entity);
-            this.Save();
+            var newEntity = context.Set<TEntity>().Add(entity);
+            Save();
             //return newEntity.Entity.Id;
             return entity.Id;
         }
@@ -35,8 +35,8 @@ namespace RestX.BLL.Repository.Implementations
             entity.CreatedDate = DateTime.UtcNow;
             entity.CreatedBy = createdBy ?? string.Empty;
             //            entity.CustomProperties = this.ValidateCustomProperties(entity);
-            var newEntity = this.context.Set<TEntity>().Add(entity);
-            await this.SaveAsync();
+            var newEntity = context.Set<TEntity>().Add(entity);
+            await SaveAsync();
             //return newEntity.Entity.Id;
             return entity.Id;
         }
@@ -47,22 +47,22 @@ namespace RestX.BLL.Repository.Implementations
             entity.ModifiedDate = DateTime.UtcNow;
             entity.ModifiedBy = modifiedBy;
             //            entity.CustomProperties = this.ValidateCustomProperties(entity);
-            this.context.Set<TEntity>().Attach(entity);
-            this.context.Entry(entity).State = EntityState.Modified;
+            context.Set<TEntity>().Attach(entity);
+            context.Entry(entity).State = EntityState.Modified;
         }
 
         public virtual void Delete<TEntity>(object id)
             where TEntity : class, IEntity
         {
-            TEntity entity = this.context.Set<TEntity>().Find(id);
-            this.Delete(entity);
+            TEntity entity = context.Set<TEntity>().Find(id);
+            Delete(entity);
         }
 
         public virtual void Delete<TEntity>(TEntity entity)
             where TEntity : class, IEntity
         {
-            var dbSet = this.context.Set<TEntity>();
-            if (this.context.Entry(entity).State == EntityState.Detached)
+            var dbSet = context.Set<TEntity>();
+            if (context.Entry(entity).State == EntityState.Detached)
             {
                 dbSet.Attach(entity);
             }
@@ -72,7 +72,7 @@ namespace RestX.BLL.Repository.Implementations
 
         public virtual void Save()
         {
-            var changes = this.context.ChangeTracker.Entries().Where(e => (e.State == EntityState.Modified || e.State == EntityState.Deleted) && MonitoredTriggerObjects.Contains(e.Entity.GetType().Name))
+            var changes = context.ChangeTracker.Entries().Where(e => (e.State == EntityState.Modified || e.State == EntityState.Deleted) && MonitoredTriggerObjects.Contains(e.Entity.GetType().Name))
                 .Select(c => new TriggerCheckData
                 {
                     ObjectId = c.CurrentValues["Id"],
@@ -87,9 +87,9 @@ namespace RestX.BLL.Repository.Implementations
                 }).ToList();
 
             // We have to get added items here so populate the Id's
-            var newItems = this.context.ChangeTracker.Entries().Where(e => e.State == EntityState.Added && MonitoredTriggerObjects.Contains(e.Entity.GetType().Name)).ToList();
+            var newItems = context.ChangeTracker.Entries().Where(e => e.State == EntityState.Added && MonitoredTriggerObjects.Contains(e.Entity.GetType().Name)).ToList();
 
-            this.context.SaveChanges();
+            context.SaveChanges();
 
             // Add newItems to changes as they will now have correct Id's
             changes.AddRange(newItems.Select(c => new TriggerCheckData
@@ -105,12 +105,12 @@ namespace RestX.BLL.Repository.Implementations
                 //                    propertyName => c.CurrentValues[propertyName] != null ? GetStringValueOfProperty(c.CurrentValues[propertyName]) : c.CurrentValues[propertyName]?.ToString())
             }));
 
-            this.CheckForTriggers(changes);
+            CheckForTriggers(changes);
         }
 
         public virtual async Task SaveAsync()
         {
-            var changes = this.context.ChangeTracker.Entries().Where(e => (e.State == EntityState.Modified || e.State == EntityState.Deleted) && MonitoredTriggerObjects.Contains(e.Entity.GetType().Name))
+            var changes = context.ChangeTracker.Entries().Where(e => (e.State == EntityState.Modified || e.State == EntityState.Deleted) && MonitoredTriggerObjects.Contains(e.Entity.GetType().Name))
                 .Select(c => new TriggerCheckData
                 {
                     ObjectId = c.CurrentValues["Id"],
@@ -124,12 +124,12 @@ namespace RestX.BLL.Repository.Implementations
                     //                propertyName => c.CurrentValues[propertyName] != null ? GetStringValueOfProperty(c.CurrentValues[propertyName]) : c.CurrentValues[propertyName]?.ToString())
                 }).ToList();
 
-            var added = this.context.ChangeTracker.Entries().Where(e => e.State == EntityState.Added).ToList();
+            var added = context.ChangeTracker.Entries().Where(e => e.State == EntityState.Added).ToList();
 
             // We have to get added items here so populate the Id's
-            var newItems = this.context.ChangeTracker.Entries().Where(e => e.State == EntityState.Added && MonitoredTriggerObjects.Contains(e.Entity.GetType().Name)).ToList();
+            var newItems = context.ChangeTracker.Entries().Where(e => e.State == EntityState.Added && MonitoredTriggerObjects.Contains(e.Entity.GetType().Name)).ToList();
 
-            var result = await this.context.SaveChangesAsync();
+            var result = await context.SaveChangesAsync();
 
             // Add newItems to changes as they will now have correct Id's
             changes.AddRange(newItems.Select(c => new TriggerCheckData
@@ -145,12 +145,12 @@ namespace RestX.BLL.Repository.Implementations
                 //                    propertyName => c.CurrentValues[propertyName] != null ? GetStringValueOfProperty(c.CurrentValues[propertyName]) : c.CurrentValues[propertyName]?.ToString())
             }));
 
-            this.CheckForTriggers(changes);
+            CheckForTriggers(changes);
         }
 
         public virtual async Task<T> ExecuteStoredProcedureAsync<T>(string storedProcedure, object[] parameters = null)
         {
-            var conn = this.context.Database.GetDbConnection();
+            var conn = context.Database.GetDbConnection();
             using (var command = conn.CreateCommand())
             {
                 command.CommandText = storedProcedure;
@@ -171,12 +171,12 @@ namespace RestX.BLL.Repository.Implementations
                     return (T)result;
                 }
             }
-            return default(T);
+            return default;
         }
 
         public virtual async Task<T> ExecuteSqlCommandAsync<T>(string query, object[] parameters = null)
         {
-            var conn = this.context.Database.GetDbConnection();
+            var conn = context.Database.GetDbConnection();
             using (var command = conn.CreateCommand())
             {
                 command.CommandText = query;
@@ -196,12 +196,12 @@ namespace RestX.BLL.Repository.Implementations
                     return (T)result;
                 }
             }
-            return default(T);
+            return default;
         }
 
         public virtual async Task<List<T>> ExecuteSqlSelectAsync<T>(string query, object[] parameters = null, int commandTimeout = 600) where T : new()
         {
-            var conn = this.context.Database.GetDbConnection();
+            var conn = context.Database.GetDbConnection();
             using (var command = conn.CreateCommand())
             {
                 // Set the timeout to 6 minutes
@@ -262,7 +262,7 @@ namespace RestX.BLL.Repository.Implementations
 
         public virtual async Task<int> ExecuteNonQueryAsync(string query, object[] parameters = null, int commandTimeout = 600)
         {
-            var conn = this.context.Database.GetDbConnection();
+            var conn = context.Database.GetDbConnection();
             using (var command = conn.CreateCommand())
             {
                 command.CommandTimeout = commandTimeout;
@@ -290,7 +290,7 @@ namespace RestX.BLL.Repository.Implementations
         {
             get
             {
-                if (this.context.GetType().Name != "AdminDbContext")
+                if (context.GetType().Name != "AdminDbContext")
                 {
                     return new List<string>()
                     {
@@ -320,7 +320,7 @@ namespace RestX.BLL.Repository.Implementations
                 return;
             }
 
-            if (this.context.GetType().Name != "AdminDbContext")
+            if (context.GetType().Name != "AdminDbContext")
             {
                 //jobClient.Enqueue<ITriggerService>(x => x.CheckForTriggers(this.tenant.Id, this.tenant.ActiveBrand.Id, changes));
             }

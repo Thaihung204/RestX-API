@@ -3,7 +3,7 @@ using RestX.Models.BaseModel;
 
 namespace RestX.Models.Tenants;
 
-public partial class Tenant : Entity<Guid>
+public class Tenant : Entity<Guid>
 {
     public string Prefix { get; set; } = null!;
 

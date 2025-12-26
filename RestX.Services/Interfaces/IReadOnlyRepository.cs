@@ -1,7 +1,7 @@
 ﻿using RestX.Models.Interfaces;
 using System.Linq.Expressions;
 
-namespace RestX.BLL.Repository.Interfaces
+namespace RestX.BLL.Interfaces
 {
 
     //using Tprofile.Models.Interfaces;

@@ -1,23 +1,11 @@
-using Microsoft.EntityFrameworkCore;
-using RestX.BLL.Interfaces;
-using RestX.BLL.Services;
-using RestX.DAL.Context;
-
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 
 builder.Services.AddControllers();
-
-builder.Services.AddDbContext<RestxAdminContext>(options => options.UseSqlServer(builder.Configuration.GetConnectionString("ConnectionString")));
-
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
-
-builder.Services.AddScoped<IRepository, EntityFrameworkRepository<RestxAdminContext>>();
-builder.Services.AddScoped<ITenantService, TenantService>();
-builder.Services.AddScoped<IExceptionHandler, ExceptionHandler>();
 
 var app = builder.Build();
 

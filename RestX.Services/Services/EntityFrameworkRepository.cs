@@ -294,6 +294,7 @@ namespace RestX.BLL.Services
                 {
                     return new List<string>()
                     {
+                        "Tenants",
                         "Enquiry",
                         "Quote",
                         "EnquiryHistory",

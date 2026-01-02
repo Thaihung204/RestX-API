@@ -25,9 +25,10 @@ namespace RestX.BLL.Services
         public async Task<Tenant> UpsertTenant(Tenant model)
         {
             var tenant = new Tenant();
-            if (tenant.Id != Guid.Empty)
+            if (model.Id != Guid.Empty)
             {
                 tenant = await adminRepo.GetByIdAsync<Tenant>(model.Id);
+                tenant.Prefix = model.Prefix;
                 tenant.Name = model.Name;
                 tenant.LogoUrl = model.LogoUrl;
                 tenant.FaviconUrl = model.FaviconUrl;
@@ -48,6 +49,7 @@ namespace RestX.BLL.Services
             else
             {
                 await adminRepo.CreateAsync(model);
+                tenant = model;
             }
             return tenant;
         }

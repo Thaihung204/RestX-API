@@ -38,8 +38,7 @@ namespace RestX.Admin.Controllers
         {
             try
             {
-                var tenant = await tenantService.GetTenantById(id);
-                return Ok(tenant);
+                return Ok(await tenantService.GetTenantById(id));
             }
             catch (Exception ex)
             {

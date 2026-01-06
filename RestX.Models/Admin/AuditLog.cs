@@ -9,7 +9,7 @@ public partial class AuditLog : Entity<Guid>
 
     public Guid? ActorAdminId { get; set; }
 
-    public string Action { get; set; } = null!;
+    public string Action { get; set; } 
 
     public string? Description { get; set; }
 

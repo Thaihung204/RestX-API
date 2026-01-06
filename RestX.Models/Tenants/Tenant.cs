@@ -5,9 +5,9 @@ namespace RestX.Models.Tenants;
 
 public class Tenant : Entity<Guid>
 {
-    public string Prefix { get; set; } = null!;
+    public string Prefix { get; set; }
 
-    public string Name { get; set; } = null!;
+    public string Name { get; set; }
 
     public string? LogoUrl { get; set; }
 

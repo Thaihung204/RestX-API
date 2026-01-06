@@ -5,6 +5,7 @@ namespace RestX.Models.Admin;
 public partial class Plan : Entity<Guid>
 {
     public string Name { get; set; }
+
     public string Description { get; set; }
 
     public int MaxUsers { get; set; }

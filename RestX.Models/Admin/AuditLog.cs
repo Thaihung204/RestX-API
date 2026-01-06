@@ -5,15 +5,15 @@ namespace RestX.Models.Admin;
 
 public partial class AuditLog : Entity<Guid>
 {
-    public Guid? TenantId { get; set; }
+    public Guid TenantId { get; set; }
 
-    public Guid? ActorAdminId { get; set; }
+    public Guid ActorAdminId { get; set; }
 
     public string Action { get; set; } 
 
-    public string? Description { get; set; }
+    public string Description { get; set; }
 
-    public string? Metadata { get; set; }
+    public string Metadata { get; set; }
 
     public virtual Admin? ActorAdmin { get; set; }
 

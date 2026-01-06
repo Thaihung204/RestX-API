@@ -8,11 +8,11 @@ public partial class Admin : Entity<Guid>
 
     public string PasswordHash { get; set; } 
 
-    public string? FullName { get; set; }
+    public string FullName { get; set; }
 
-    public string? Role { get; set; }
+    public string Role { get; set; }
 
-    public string? Status { get; set; }
+    public string Status { get; set; }
 
     public DateTime? LastLoginAt { get; set; }
 

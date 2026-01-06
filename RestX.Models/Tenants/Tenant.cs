@@ -9,27 +9,27 @@ public class Tenant : Entity<Guid>
 
     public string Name { get; set; }
 
-    public string? LogoUrl { get; set; }
+    public string LogoUrl { get; set; }
 
-    public string? FaviconUrl { get; set; }
+    public string FaviconUrl { get; set; }
 
-    public string? BackgroundUrl { get; set; }
+    public string BackgroundUrl { get; set; }
 
-    public string? BaseColor { get; set; }
+    public string BaseColor { get; set; }
 
-    public string? PrimaryColor { get; set; }
+    public string PrimaryColor { get; set; }
 
-    public string? SecondaryColor { get; set; }
+    public string SecondaryColor { get; set; }
 
-    public string? NetworkIp { get; set; }
+    public string NetworkIp { get; set; }
 
-    public string? ConnectionString { get; set; }
+    public string ConnectionString { get; set; }
 
-    public bool? Status { get; set; }
+    public bool Status { get; set; }
 
-    public string? Domain { get; set; }
+    public string Domain { get; set; }
 
-    public DateTime? ExpiredAt { get; set; }
+    public DateTime ExpiredAt { get; set; }
 
     public virtual ICollection<AuditLog> AuditLogs { get; set; } = new List<AuditLog>();
 

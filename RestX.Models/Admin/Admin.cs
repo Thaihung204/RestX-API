@@ -1,16 +1,11 @@
-﻿using RestX.Models.BaseModel;
+﻿using Microsoft.AspNetCore.Identity;
+using RestX.Models.BaseModel;
 
 namespace RestX.Models.Admin;
 
-public partial class Admin : Entity<Guid>
+public partial class Admin : IdentityUser
 {
-    public string Email { get; set; }
+    public string FirstName { get; set; }
 
-    public string PasswordHash { get; set; } 
-
-    public string FullName { get; set; }
-
-    public DateTime? LastLoginAt { get; set; }
-
-    public virtual ICollection<AuditLog> AuditLogs { get; set; } = new List<AuditLog>();
+    public string LastName { get; set; }
 }

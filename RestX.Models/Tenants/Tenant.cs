@@ -31,9 +31,5 @@ public class Tenant : Entity<Guid>
 
     public DateTime ExpiredAt { get; set; }
 
-    public virtual ICollection<AuditLog> AuditLogs { get; set; } = new List<AuditLog>();
-
-    public virtual ICollection<Subscription> Subscriptions { get; set; } = new List<Subscription>();
-
     public virtual ICollection<TenantSetting> TenantSettings { get; set; } = new List<TenantSetting>();
 }

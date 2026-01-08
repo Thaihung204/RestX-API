@@ -1,7 +1,4 @@
-﻿using System;
-using System.Dynamic;
-
-namespace RestX.Models.Interfaces
+﻿namespace RestX.Models.Interfaces
 {
     public interface IEntity : IModifiableEntity
     {

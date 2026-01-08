@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 
-namespace RESTX.Controllers
+namespace RestX.WebApp.Controllers
 {
     [ApiController]
     [Route("[controller]")]

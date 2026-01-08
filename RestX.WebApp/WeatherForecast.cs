@@ -1,4 +1,4 @@
-namespace RestX.Admin
+namespace RestX.WebApp
 {
     public class WeatherForecast
     {

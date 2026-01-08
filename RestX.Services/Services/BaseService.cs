@@ -1,21 +1,21 @@
-﻿using RestX.BLL.Services.Interfaces;
+﻿using RestX.BLL.Interfaces;
+using RestX.DAL.Context;
 
 
-namespace RestX.BLL.Services.Services
+namespace RestX.BLL.Services
 {
     public class BaseService
     {
-        //protected readonly IRepository Repo;
-        //private readonly IHttpContextAccessor _httpContextAccessor;
-        //private RestaurantContext? restaurantContext;
+        protected readonly IRepository Repo;
+        private RestxAdminContext? Restxadmincontext;
 
-        //protected RestaurantContext RestaurantContext
+        //protected RestxAdminContext Restxadmincontext
         //{
         //    get
         //    {
-        //        if (restaurantContext == null)
+        //        if (Restxadmincontext == null)
         //        {
-        //            restaurantContext = _httpContextAccessor.HttpContext?.Items["RestaurantContext"] as RestaurantContext ?? new RestaurantContext();
+        //            Restxadmincontext = _httpContextAccessor.HttpContext?.Items["RestaurantContext"] as RestaurantContext ?? new RestaurantContext();
         //        }
         //        return restaurantContext;
         //    }
@@ -25,10 +25,10 @@ namespace RestX.BLL.Services.Services
         //protected Guid? StaffId => RestaurantContext.StaffId;
         //protected int TableId => RestaurantContext.TableId;
 
-        //public BaseService(IRepository repo)
-        //{
-        //    this.Repo = repo;
-        //}
+        public BaseService(IRepository repo)
+        {
+            Repo = repo;
+        }
 
         //public BaseService(IRepository repo, IHttpContextAccessor httpContextAccessor)
         //{

@@ -1,5 +1,9 @@
 ﻿using RestX.Models.BaseModel;
 using RestX.Models.Restaurant.Feedbacks;
+using RestX.Models.Restaurant.Identity;
+using RestX.Models.Restaurant.Loyalty;
+using RestX.Models.Restaurant.Orders;
+using RestX.Models.Restaurant.Reservations;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;

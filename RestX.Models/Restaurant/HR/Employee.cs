@@ -1,4 +1,5 @@
 ﻿using RestX.Models.BaseModel;
+using RestX.Models.Restaurant.Identity;
 using RestX.Models.Restaurant.Orders;
 using System;
 using System.Collections.Generic;

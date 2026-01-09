@@ -1,6 +1,7 @@
 ﻿using RestX.Models.BaseModel;
 using RestX.Models.Restaurant.Common;
 using RestX.Models.Restaurant.HR;
+using RestX.Models.Restaurant.Reservations;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;

@@ -6,6 +6,7 @@ using RestX.Models.Restaurant.HR;
 using RestX.Models.Restaurant.Loyalty;
 using RestX.Models.Restaurant.Orders;
 using RestX.Models.Restaurant.Promotions;
+using RestX.Models.Restaurant.Reservations;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;

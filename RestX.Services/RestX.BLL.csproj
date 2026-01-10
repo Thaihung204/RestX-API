@@ -8,10 +8,16 @@
 
   <ItemGroup>
     <PackageReference Include="AutoMapper" Version="16.0.0" />
+    <PackageReference Include="Hangfire.Core" Version="1.8.22" />
     <PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" Version="2.3.0" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="SaasKit.Multitenancy" Version="1.1.4" />
+    <PackageReference Include="Serilog" Version="4.3.0" />
+    <PackageReference Include="StackExchange.Redis" Version="2.10.1" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\RestX.AdminDAL\RestX.AdminDAL.csproj" />
     <ProjectReference Include="..\RestX.DAL\RestX.DAL.csproj" />
     <ProjectReference Include="..\RestX.Models\RestX.Models.csproj" />
   </ItemGroup>

@@ -1,17 +1,17 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using RestX.Models.Restaurant.Common;
-using RestX.Models.Restaurant.Customers;
-using RestX.Models.Restaurant.Feedbacks;
-using RestX.Models.Restaurant.HR;
-using RestX.Models.Restaurant.Identity;
-using RestX.Models.Restaurant.Inventory;
-using RestX.Models.Restaurant.Loyalty;
-using RestX.Models.Restaurant.Menu;
-using RestX.Models.Restaurant.Notifications;
-using RestX.Models.Restaurant.Orders;
-using RestX.Models.Restaurant.Promotions;
-using RestX.Models.Restaurant.Reservations;
-using RestX.Models.Restaurant.Tables;
+using RestX.Models.Common;
+using RestX.Models.Customers;
+using RestX.Models.Feedbacks;
+using RestX.Models.HR;
+using RestX.Models.Identity;
+using RestX.Models.Inventory;
+using RestX.Models.Loyalty;
+using RestX.Models.Menu;
+using RestX.Models.Notifications;
+using RestX.Models.Orders;
+using RestX.Models.Promotions;
+using RestX.Models.Reservations;
+using RestX.Models.Tables;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -37,9 +37,9 @@ namespace RestX.DAL.Context
         #endregion
 
         #region DbSets - Identity & Users
-        public virtual DbSet<User> Users { get; set; }
-        public virtual DbSet<Role> Roles { get; set; }
-        public virtual DbSet<UserRoleAssignment> UserRoleAssignments { get; set; }
+        //public virtual DbSet<User> Users { get; set; }
+        //public virtual DbSet<Role> Roles { get; set; }
+        //public virtual DbSet<UserRoleAssignment> UserRoleAssignments { get; set; }
         #endregion
 
         #region DbSets - HR & Employees
@@ -110,7 +110,7 @@ namespace RestX.DAL.Context
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
 #warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
-            => optionsBuilder.UseSqlServer("Data Source=.;Initial Catalog=restx_tenant_template;Integrated Security=True;Trust Server Certificate=True");
+            => optionsBuilder.UseSqlServer("Server=.;Database=restx_notenant;User ID=sa;Password=Passw0rd1!;MultipleActiveResultSets=True");
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -168,46 +168,46 @@ namespace RestX.DAL.Context
 
         private void ConfigureIdentity(ModelBuilder modelBuilder)
         {
-            modelBuilder.Entity<User>(entity =>
-            {
-                entity.ToTable("Users");
-                entity.HasKey(e => e.Id);
-                entity.HasIndex(e => e.Email).IsUnique();
-                entity.HasIndex(e => e.PhoneNumber).IsUnique();
+            //modelBuilder.Entity<User>(entity =>
+            //{
+            //    entity.ToTable("Users");
+            //    entity.HasKey(e => e.Id);
+            //    entity.HasIndex(e => e.Email).IsUnique();
+            //    entity.HasIndex(e => e.PhoneNumber).IsUnique();
 
-                entity.Property(e => e.Email).HasMaxLength(320);
-                entity.Property(e => e.PasswordHash).HasMaxLength(256).IsRequired();
-                entity.Property(e => e.FullName).HasMaxLength(255).IsRequired();
-                entity.Property(e => e.PhoneNumber).HasMaxLength(15);
-                entity.Property(e => e.Avatar).HasMaxLength(500);
-                entity.Property(e => e.Gender).HasMaxLength(10);
-            });
+            //    entity.Property(e => e.Email).HasMaxLength(320);
+            //    entity.Property(e => e.PasswordHash).HasMaxLength(256).IsRequired();
+            //    entity.Property(e => e.FullName).HasMaxLength(255).IsRequired();
+            //    entity.Property(e => e.PhoneNumber).HasMaxLength(15);
+            //    entity.Property(e => e.Avatar).HasMaxLength(500);
+            //    entity.Property(e => e.Gender).HasMaxLength(10);
+            //});
 
-            modelBuilder.Entity<Role>(entity =>
-            {
-                entity.ToTable("Roles");
-                entity.HasKey(e => e.Id);
-                entity.HasIndex(e => e.RoleName).IsUnique();
+            //modelBuilder.Entity<Role>(entity =>
+            //{
+            //    entity.ToTable("Roles");
+            //    entity.HasKey(e => e.Id);
+            //    entity.HasIndex(e => e.RoleName).IsUnique();
 
-                entity.Property(e => e.RoleName).HasMaxLength(100).IsRequired();
-            });
+            //    entity.Property(e => e.RoleName).HasMaxLength(100).IsRequired();
+            //});
 
-            modelBuilder.Entity<UserRoleAssignment>(entity =>
-            {
-                entity.ToTable("UserRoleAssignments");
-                entity.HasKey(e => e.Id);
-                entity.HasIndex(e => new { e.UserId, e.RoleId }).IsUnique();
+            //modelBuilder.Entity<UserRoleAssignment>(entity =>
+            //{
+            //    entity.ToTable("UserRoleAssignments");
+            //    entity.HasKey(e => e.Id);
+            //    entity.HasIndex(e => new { e.UserId, e.RoleId }).IsUnique();
 
-                entity.HasOne<User>(e => e.User)
-                    .WithMany(u => u.UserRoleAssignments)
-                    .HasForeignKey(e => e.UserId)
-                    .OnDelete(DeleteBehavior.Cascade);
+            //    entity.HasOne<User>(e => e.User)
+            //        .WithMany(u => u.UserRoleAssignments)
+            //        .HasForeignKey(e => e.UserId)
+            //        .OnDelete(DeleteBehavior.Cascade);
 
-                entity.HasOne<Role>(e => e.Role)
-                    .WithMany(r => r.UserRoleAssignments)
-                    .HasForeignKey(e => e.RoleId)
-                    .OnDelete(DeleteBehavior.Cascade);
-            });
+            //    entity.HasOne<Role>(e => e.Role)
+            //        .WithMany(r => r.UserRoleAssignments)
+            //        .HasForeignKey(e => e.RoleId)
+            //        .OnDelete(DeleteBehavior.Cascade);
+            //});
         }
 
         private void ConfigureHR(ModelBuilder modelBuilder)

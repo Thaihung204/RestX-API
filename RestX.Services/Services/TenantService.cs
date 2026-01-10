@@ -39,7 +39,7 @@ namespace RestX.BLL.Services
                 tenant.NetworkIp = model.NetworkIp;
                 tenant.ConnectionString = model.ConnectionString;
                 tenant.Status = model.Status;
-                tenant.Domain = model.Domain;
+                tenant.Hostname = model.Hostname;
                 tenant.ExpiredAt = model.ExpiredAt;
 
                 adminRepo.Update(tenant);

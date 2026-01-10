@@ -51,6 +51,7 @@ namespace RestX.WebApp
         public void ConfigureServices(IServiceCollection services)
         {
             // Multi Tenant Support
+            services.AddScoped<IRedisService, RedisService>();
             services.AddMultitenancy<ActiveTenant, TenantResolver>();
             //services.Configure<RazorViewEngineOptions>(
             //    options => { options.ViewLocationExpanders.Add(new TenantViewLocationExpander()); });
@@ -141,7 +142,7 @@ namespace RestX.WebApp
             services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
             services.AddHttpContextAccessor();
 
-            //services.AddApplicationInsightsTelemetry();
+            services.AddApplicationInsightsTelemetry();
 
             services.AddSnapshotCollector();
 
@@ -197,8 +198,8 @@ namespace RestX.WebApp
                 c.CustomSchemaIds(type => type.FullName);
                 // Set the comments path for the Swagger JSON and UI.
                 // Need to import the XML schema for the BLL to show property decorators from there.
-                c.IncludeXmlComments(Path.Combine(AppContext.BaseDirectory, "RestX.WebApp.xml"), false);
-                c.IncludeXmlComments(Path.Combine(AppContext.BaseDirectory, "RestX.BLL.xml"), false);
+                //c.IncludeXmlComments(Path.Combine(AppContext.BaseDirectory, "RestX.WebApp.xml"), false);
+                //c.IncludeXmlComments(Path.Combine(AppContext.BaseDirectory, "RestX.BLL.xml"), false);
 
 
                 c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme()
@@ -327,18 +328,18 @@ namespace RestX.WebApp
             app.UseAuthorization();
             app.UseMiddleware<TelemetryExtender>();
 
-            app.UseEndpoints(endpoints =>
-            {
-                endpoints.MapControllerRoute("robots", "robots.txt", new { controller = "AppResourceLoader", action = "Robots" });
-                endpoints.MapControllerRoute("login-page", "login", new { controller = "Login", action = "Index" });
-                endpoints.MapControllerRoute("logout-page", "logout", new { controller = "Logout", action = "Index" });
-                endpoints.MapControllerRoute("register-page", "register", new { controller = "Register", action = "Index" });
-                endpoints.MapControllerRoute("no-route", "", new { controller = "Home", action = "Index" });
-                endpoints.MapControllerRoute("default", "{contentUrl}", new { controller = "Home", action = "Index" });
-                endpoints.MapControllers();
-                endpoints.MapControllerRoute("api", "api/{controller}/{action}/{id?}");
-                endpoints.MapFallbackToController("Index", "Public");
-            });
+            //app.UseEndpoints(endpoints =>
+            //{
+            //    endpoints.MapControllerRoute("robots", "robots.txt", new { controller = "AppResourceLoader", action = "Robots" });
+            //    endpoints.MapControllerRoute("login-page", "login", new { controller = "Login", action = "Index" });
+            //    endpoints.MapControllerRoute("logout-page", "logout", new { controller = "Logout", action = "Index" });
+            //    endpoints.MapControllerRoute("register-page", "register", new { controller = "Register", action = "Index" });
+            //    endpoints.MapControllerRoute("no-route", "", new { controller = "Home", action = "Index" });
+            //    endpoints.MapControllerRoute("default", "{contentUrl}", new { controller = "Home", action = "Index" });
+            //    endpoints.MapControllers();
+            //    endpoints.MapControllerRoute("api", "api/{controller}/{action}/{id?}");
+            //    endpoints.MapFallbackToController("Index", "Public");
+            //});
         }
 
     }

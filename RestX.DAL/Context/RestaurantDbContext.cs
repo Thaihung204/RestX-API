@@ -224,10 +224,10 @@ namespace RestX.DAL.Context
                 entity.Property(e => e.Salary).HasColumnType("decimal(18,2)");
                 entity.Property(e => e.SalaryType).HasMaxLength(20).IsRequired();
 
-                entity.HasOne<User>(e => e.User)
-                    .WithMany(u => u.Employees)
-                    .HasForeignKey(e => e.UserId)
-                    .OnDelete(DeleteBehavior.Restrict);
+                //entity.HasOne<User>(e => e.User)
+                //    .WithMany(u => u.Employees)
+                //    .HasForeignKey(e => e.UserId)
+                //    .OnDelete(DeleteBehavior.Restrict);
             });
 
             modelBuilder.Entity<EmployeeSchedule>(entity =>
@@ -423,7 +423,6 @@ namespace RestX.DAL.Context
                 entity.ToTable("Reservations");
                 entity.HasKey(e => e.Id);
                 entity.HasIndex(e => new { e.CustomerId, e.Time });
-
                 entity.Property(e => e.SpecialRequests).HasMaxLength(1000);
                 entity.Property(e => e.DepositAmount).HasColumnType("decimal(18,2)");
 
@@ -643,14 +642,14 @@ namespace RestX.DAL.Context
             {
                 entity.ToTable("Customers");
                 entity.HasKey(e => e.Id);
-                entity.HasIndex(e => e.UserId).IsUnique();
+                entity.HasIndex(e => e.ApplicationUserId).IsUnique();
 
                 entity.Property(e => e.MembershipLevel).HasMaxLength(20);
 
-                entity.HasOne<User>(e => e.User)
-                    .WithMany(u => u.Customers)
-                    .HasForeignKey(e => e.UserId)
-                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.ApplicationUser)
+              .WithOne()
+              .HasForeignKey<Customer>(e => e.ApplicationUserId)
+              .OnDelete(DeleteBehavior.Restrict);
             });
         }
 

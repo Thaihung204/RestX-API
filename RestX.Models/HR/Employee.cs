@@ -13,7 +13,6 @@ namespace RestX.Models.HR
 {
     public partial class Employee : Entity<Guid>
     {
-        public Guid UserId { get; set; }
 
         [Required]
         [MaxLength(20)]
@@ -42,7 +41,7 @@ namespace RestX.Models.HR
 
         public bool IsActive { get; set; } = true;
 
-        public virtual User User { get; set; } = null!;
+        public virtual ApplicationUser ApplicationUser { get; set; } = null!;
         public virtual ICollection<EmployeeSchedule> EmployeeSchedules { get; set; } = new HashSet<EmployeeSchedule>();
         public virtual ICollection<Order> HandledOrders { get; set; } = new HashSet<Order>();
         public virtual ICollection<Payment> ProcessedPayments { get; set; } = new HashSet<Payment>();

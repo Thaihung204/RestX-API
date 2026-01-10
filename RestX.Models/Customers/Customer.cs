@@ -15,7 +15,7 @@ namespace RestX.Models.Customers
 {
     public partial class Customer : Entity<Guid>
     {
-        public Guid UserId { get; set; }
+        public Guid ApplicationUserId { get; set; }
 
         [MaxLength(20)]
         public string MembershipLevel { get; set; } = "BRONZE";
@@ -25,7 +25,7 @@ namespace RestX.Models.Customers
 
         public bool IsActive { get; set; } = true;
 
-        public virtual User User { get; set; } = null!;
+        public virtual ApplicationUser ApplicationUser { get; set; } = null!;
         public virtual ICollection<Reservation> Reservations { get; set; } = new HashSet<Reservation>();
         public virtual ICollection<Order> Orders { get; set; } = new HashSet<Order>();
         public virtual ICollection<PointsTransaction> PointsTransactions { get; set; } = new HashSet<PointsTransaction>();

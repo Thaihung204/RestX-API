@@ -4,8 +4,6 @@ using System.Linq.Expressions;
 namespace RestX.BLL.Interfaces
 {
 
-    //using Tprofile.Models.Interfaces;
-
     public interface IReadOnlyRepository
     {
         void SetCommandTimeout(int timeout);

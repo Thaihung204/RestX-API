@@ -7,7 +7,7 @@ namespace RestX.Models.Identity
     using Microsoft.AspNetCore.Identity;
     using RestX.Models.HR;
 
-    public class ApplicationUser : IdentityUser
+    public class ApplicationUser : IdentityUser<Guid>
     {
         public Guid MemberId { get; set; }
         [ForeignKey("MemberId")]

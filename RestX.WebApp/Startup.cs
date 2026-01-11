@@ -59,10 +59,12 @@ namespace RestX.WebApp
             // Add framework services.
             services.AddDbContext<RestxAdminContext>(
                 options => options.UseSqlServer(Configuration.GetConnectionString("AdminDbContext"), options => options.EnableRetryOnFailure()));
-            services.AddDbContext<RestaurantDbContext>();
+            services.AddDbContext<TenantDbContext>();
 
-            services.AddIdentity<ApplicationUser, IdentityRole>()
-                .AddEntityFrameworkStores<RestaurantDbContext>().AddDefaultTokenProviders();
+            services.AddIdentity<ApplicationUser, IdentityRole<Guid>>()
+                .AddEntityFrameworkStores<TenantDbContext>()
+                .AddDefaultTokenProviders();
+
 
             // Needed if using the force logout function on /logout
             //services.Configure<SecurityStampValidatorOptions>(options =>

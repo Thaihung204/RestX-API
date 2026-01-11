@@ -299,7 +299,7 @@ namespace RestX.WebApp
             });
 
             app.UseMultitenancy<ActiveTenant>();
-            app.UseMiddleware<TenantUnresolvedRedirectMiddleware<ActiveTenant>>("https://www.tprofile.co.uk/", false);
+            app.UseMiddleware<TenantUnresolvedRedirectMiddleware<ActiveTenant>>("https://restx.food/", false);
             app.UseMiddleware<TenantRedirectMiddleware<ActiveTenant>>();
             //app.UseIpRateLimiting();
             app.UseCookiePolicy(new CookiePolicyOptions
@@ -321,7 +321,6 @@ namespace RestX.WebApp
                 c.InjectStylesheet("/css/swagger-style.css");
                 c.InjectJavascript("/js/swagger.js");
                 c.RoutePrefix = "api-documentation";
-                c.SwaggerEndpoint("/swagger/v1/swagger.json", "Tprofile API v1");
                 c.DefaultModelsExpandDepth(-1);
             });
 

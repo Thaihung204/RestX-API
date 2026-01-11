@@ -55,8 +55,9 @@ namespace RestX.BLL.MultiTenancy
 
         public override IEnumerable<string> GetTenantIdentifiers(TenantContext<ActiveTenant> context)
         {
-            return (IEnumerable<string>)context.Tenant.Hostname.ToList();
+            return new[] { context.Tenant.Hostname };
         }
+
 
         public override Task<TenantContext<ActiveTenant>> ResolveAsync(HttpContext context)
         {
@@ -79,7 +80,11 @@ namespace RestX.BLL.MultiTenancy
                 log.LogError(ex, $"Error getting 'hostnameWithPath', full URL: {context.Request.GetDisplayUrl()}");
             }
 
-            var activeTenant = this._dbContext.Tenants.Include("Hostname").Include("Redirects").Include("Contacts.Contact").Include("DevDays").FirstOrDefault(b => b.Hostname == hostname || (!string.IsNullOrEmpty(hostnameWithPath) && b.Hostname == hostnameWithPath));
+            var activeTenant = _dbContext.Tenants
+                .FirstOrDefault(b =>
+                    b.Hostname == hostname ||
+                    (!string.IsNullOrEmpty(hostnameWithPath) && b.Hostname == hostnameWithPath)
+                );
 
             ActiveTenant tenant = null;
             if (activeTenant != null)

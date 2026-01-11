@@ -265,7 +265,9 @@ namespace RestX.WebApp
 
             var documentIntelligenceEndpoint = Configuration.GetSection("AppSettings")["DocumentIntelligenceEndpoint"];
             var documentIntelligenceApiKey = Configuration.GetSection("AppSettings")["DocumentIntelligenceApiKey"];
-            
+
+            // Add MVC Controllers
+            services.AddControllersWithViews();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -298,8 +300,17 @@ namespace RestX.WebApp
                 }
             });
 
+            // Swagger MUST be before multi-tenancy middleware to avoid being blocked
+            app.UseSwagger();
+            app.UseSwaggerUI(c =>
+            {
+                c.RoutePrefix = "swagger";
+                c.SwaggerEndpoint("/swagger/v1/swagger.json", "RestX API v1");
+                c.DefaultModelsExpandDepth(-1);
+            });
+
             app.UseMultitenancy<ActiveTenant>();
-            app.UseMiddleware<TenantUnresolvedRedirectMiddleware<ActiveTenant>>("https://www.tprofile.co.uk/", false);
+            //app.UseMiddleware<TenantUnresolvedRedirectMiddleware<ActiveTenant>>("https://www.tprofile.co.uk/", false);
             app.UseMiddleware<TenantRedirectMiddleware<ActiveTenant>>();
             //app.UseIpRateLimiting();
             app.UseCookiePolicy(new CookiePolicyOptions
@@ -315,33 +326,23 @@ namespace RestX.WebApp
 
             app.UseResponseCompression();
 
-            app.UseSwagger();
-            app.UseSwaggerUI(c =>
-            {
-                c.InjectStylesheet("/css/swagger-style.css");
-                c.InjectJavascript("/js/swagger.js");
-                c.RoutePrefix = "api-documentation";
-                c.SwaggerEndpoint("/swagger/v1/swagger.json", "Tprofile API v1");
-                c.DefaultModelsExpandDepth(-1);
-            });
-
             app.UseRouting();
             app.UseAuthentication();
             app.UseAuthorization();
             app.UseMiddleware<TelemetryExtender>();
 
-            //app.UseEndpoints(endpoints =>
-            //{
-            //    endpoints.MapControllerRoute("robots", "robots.txt", new { controller = "AppResourceLoader", action = "Robots" });
-            //    endpoints.MapControllerRoute("login-page", "login", new { controller = "Login", action = "Index" });
-            //    endpoints.MapControllerRoute("logout-page", "logout", new { controller = "Logout", action = "Index" });
-            //    endpoints.MapControllerRoute("register-page", "register", new { controller = "Register", action = "Index" });
-            //    endpoints.MapControllerRoute("no-route", "", new { controller = "Home", action = "Index" });
-            //    endpoints.MapControllerRoute("default", "{contentUrl}", new { controller = "Home", action = "Index" });
-            //    endpoints.MapControllers();
-            //    endpoints.MapControllerRoute("api", "api/{controller}/{action}/{id?}");
-            //    endpoints.MapFallbackToController("Index", "Public");
-            //});
+            app.UseEndpoints(endpoints =>
+            {
+                endpoints.MapControllerRoute("robots", "robots.txt", new { controller = "AppResourceLoader", action = "Robots" });
+                endpoints.MapControllerRoute("login-page", "login", new { controller = "Login", action = "Index" });
+                endpoints.MapControllerRoute("logout-page", "logout", new { controller = "Logout", action = "Index" });
+                endpoints.MapControllerRoute("register-page", "register", new { controller = "Register", action = "Index" });
+                endpoints.MapControllerRoute("no-route", "", new { controller = "Home", action = "Index" });
+                endpoints.MapControllerRoute("default", "{contentUrl}", new { controller = "Home", action = "Index" });
+                endpoints.MapControllers();
+                endpoints.MapControllerRoute("api", "api/{controller}/{action}/{id?}");
+                endpoints.MapFallbackToController("Index", "Public");
+            });
         }
 
     }

@@ -1,0 +1,90 @@
+version: "3.8"
+
+services:
+
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: restx-sqlserver
+    ports:
+      - "1433:1433"
+    # networks:
+    #   - restx-net
+    # volumes:
+    #   - sql_data:/var/opt/mssql
+    environment:
+      ACCEPT_EULA: "Y"
+      SA_PASSWORD: "RestX@12345"
+    restart: unless-stopped
+
+
+  redis:
+    image: redis:7-alpine
+    container_name: restx-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - restx-net
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+
+
+  web:
+    build:
+      context: .
+      dockerfile: RestX.WebApp/Dockerfile
+    container_name: restx-webapp
+    ports:
+      - "5000:5000"
+    networks:
+      - restx-net
+    environment:
+      - ASPNETCORE_URLS=http://+:5000
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Server=sqlserver,1433;Database=tprofile_notenant;User ID=sa;Password=RestX@12345;Encrypt=False;
+      - ConnectionStrings__AdminDbContext=Server=sqlserver,1433;Database=restx_admin;User ID=sa;Password=RestX@12345;Encrypt=False;
+      - ConnectionStrings__RedisConnection=restx-redis:6379
+    depends_on:
+      - sqlserver
+      - redis
+    volumes:
+      - ./RestX.WebApp/wwwroot/Uploads:/app/wwwroot/Uploads
+    restart: unless-stopped
+
+
+  admin:
+    build:
+      context: .
+      dockerfile: RestX.Admin/Dockerfile
+    container_name: restx-admin
+    ports:
+      - "4999:4999"
+    networks:
+      - restx-net
+    environment:
+      - ASPNETCORE_URLS=http://+:4999
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__ConnectionString=Server=sqlserver,1433;Database=restx_admin;User ID=sa;Password=RestX@12345;Encrypt=False;
+    depends_on:
+      - sqlserver
+    restart: unless-stopped
+
+
+  # proxy:
+  #   build: ./RevertProxy
+  #   container_name: restx-proxy
+  #   ports:
+  #     - "80:80"
+  #   networks:
+  #     - restx-net
+
+
+networks:
+  restx-net:
+    driver: bridge
+
+
+volumes:
+  sql_data:
+  redis_data:

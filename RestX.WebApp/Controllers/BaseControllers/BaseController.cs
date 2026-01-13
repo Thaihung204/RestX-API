@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using RestX.BLL.Interfaces;
 
 namespace RestX.Admin.Controllers.BaseControllers
     {

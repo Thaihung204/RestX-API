@@ -47,6 +47,22 @@ builder.Services.AddHangfireServer();
 
 var app = builder.Build();
 
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+    try
+    {
+        var context = services.GetRequiredService<RestxAdminContext>();
+        await context.Database.MigrateAsync();
+        Console.WriteLine("Database migration completed successfully");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"An error occurred while migrating the database: {ex.Message}");
+        throw;
+    }
+}
+
 app.UseHangfireDashboard("/hangfire");
 
 // Configure the HTTP request pipeline.
@@ -56,7 +72,10 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+if (app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 
 app.UseAuthorization();
 

@@ -61,7 +61,7 @@ ENV ASPNETCORE_URLS=http://+:4999 \
 # Create directories
 RUN mkdir -p /app/logs && \
     chmod -R 777 /app/logs
-
+    dotnet ef database update
 # Expose port
 EXPOSE 4999
 

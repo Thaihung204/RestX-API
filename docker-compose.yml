@@ -3,26 +3,20 @@ version: "3.8"
 services:
 
   sqlserver:
-    image: mcr.microsoft.com/mssql/server:2022-latest
-    container_name: restx-sqlserver
-    ports:
-      - "1433:1433"
-    networks:
-      - restx-net
-    volumes:
-      - sql_data:/var/opt/mssql
-    environment:
-      ACCEPT_EULA: "Y"
-      SA_PASSWORD: "RestX@12345"
-      MSSQL_PID: "Developer"
-    healthcheck:
-      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P RestX@12345 -C -Q 'SELECT 1' || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
-    restart: unless-stopped
-
+      image: mcr.microsoft.com/mssql/server:2022-latest
+      container_name: restx-sqlserver
+      ports:
+        - "1433:1433"
+      networks:
+        - restx-net
+      volumes:
+        - sql_data:/var/opt/mssql
+      environment:
+        ACCEPT_EULA: "Y"
+        SA_PASSWORD: "RestX@12345"
+        MSSQL_PID: "Developer"
+      restart: unless-stopped
+      
   redis:
     image: redis:7-alpine
     container_name: restx-redis
@@ -53,8 +47,7 @@ services:
       - ASPNETCORE_URLS=http://+:4999
       - ASPNETCORE_ENVIRONMENT=Production
     depends_on:
-      sqlserver:
-        condition: service_healthy
+        - sqlserver
     restart: unless-stopped
 
   web:
@@ -71,12 +64,7 @@ services:
       - ASPNETCORE_ENVIRONMENT=Production
       - ConnectionStrings__RedisConnection=redis:6379
     depends_on:
-      sqlserver:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      admin:
-        condition: service_started
+         - sqlserver
     volumes:
       - ./RestX.WebApp/wwwroot/Uploads:/app/wwwroot/Uploads
     restart: unless-stopped

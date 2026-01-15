@@ -17,6 +17,8 @@ using RestX.App.Helpers;
 using RestX.BLL;
 using RestX.BLL.Helpers;
 using RestX.BLL.Interfaces;
+using RestX.BLL.Interfaces.Customers;
+//using RestX.BLL.Interfaces.Employees;
 using RestX.BLL.MultiTenancy;
 using RestX.BLL.Services;
 using RestX.DAL.Context;
@@ -52,6 +54,7 @@ namespace RestX.WebApp
         {
             // Multi Tenant Support
             services.AddScoped<IRedisService, RedisService>();
+
             services.AddMultitenancy<ActiveTenant, TenantResolver>();
             //services.Configure<RazorViewEngineOptions>(
             //    options => { options.ViewLocationExpanders.Add(new TenantViewLocationExpander()); });
@@ -166,8 +169,11 @@ namespace RestX.WebApp
             // Registering the Singleton SocketsHttpHandler lets you reuse it across any HttpClient in your application
             services.AddSingleton<SocketsHttpHandler>(socketsHttpHandler);
             services.AddSignalR();
+            services.AddScoped<IExceptionHandler, ExceptionHandler>();
             services.AddScoped<ITenantService, TenantService>();
-            services.AddScoped<IRepository, EntityFrameworkRepository<RestxAdminContext>>();
+            services.AddScoped<IRepository, EntityFrameworkRepository<TenantDbContext>>();
+            services.AddScoped<ICustomerService, CustomerService>();
+            //services.AddScoped<IEmployeeService, EmployeeService>();
             services.AddSingleton<IMemoryCache, MemoryCache>();
             services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
             services.AddTransient<TelemetryExtender>();
@@ -341,7 +347,7 @@ namespace RestX.WebApp
                 endpoints.MapControllerRoute("default", "{contentUrl}", new { controller = "Home", action = "Index" });
                 endpoints.MapControllers();
                 endpoints.MapControllerRoute("api", "api/{controller}/{action}/{id?}");
-                endpoints.MapFallbackToController("Index", "Public");
+                //endpoints.MapFallbackToController("Index", "Public");
             });
         }
 

@@ -1,5 +1,7 @@
-﻿using RestX.BLL.Interfaces;
+﻿using RestX.BLL.DataSeeders;
+using RestX.BLL.Interfaces;
 using RestX.Models.Tenants;
+using Serilog;
 
 namespace RestX.BLL.Services
 {
@@ -50,8 +52,35 @@ namespace RestX.BLL.Services
             {
                 await adminRepo.CreateAsync(model);
                 tenant = model;
+
+                await SeedTenantDataAsync(tenant);
             }
             return tenant;
+        }
+
+
+        private async Task SeedTenantDataAsync(Tenant tenant)
+        {
+            try
+            {
+                Log.Information($"[TenantService] Starting seed data for tenant: {tenant.Name} ({tenant.Hostname})");
+
+                var seeder = new TenantDataSeeder(
+                    tenant.ConnectionString,
+                    tenant.Hostname
+                );
+
+                await seeder.SeedAsync();
+
+                Log.Information($"[TenantService] ✓ Seed data completed for tenant: {tenant.Name}");
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, $"[TenantService] ✗ Failed to seed data for tenant: {tenant.Name}");
+
+               
+                throw new Exception($"Failed to seed data for tenant {tenant.Name}. Tenant creation aborted.", ex);
+            }
         }
         public async Task DeleteTenant(Guid id)
         {

@@ -226,7 +226,9 @@ namespace RestX.WebApp
 
             var documentIntelligenceEndpoint = Configuration.GetSection("AppSettings")["DocumentIntelligenceEndpoint"];
             var documentIntelligenceApiKey = Configuration.GetSection("AppSettings")["DocumentIntelligenceApiKey"];
-            
+
+            // Add MVC Controllers
+            services.AddControllersWithViews();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -258,6 +260,7 @@ namespace RestX.WebApp
                         "public,max-age=31536000";
                 }
             });
+
 
             app.UseSwagger();
             app.UseSwaggerUI(c =>

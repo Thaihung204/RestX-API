@@ -168,7 +168,8 @@ namespace RestX.BLL.Services
                 Email = dto.Email,
                 PhoneNumber = dto.PhoneNumber,
                 EmailConfirmed = true,
-                LastModified = DateTime.UtcNow
+                LastModified = DateTime.UtcNow,
+                RefreshToken = string.Empty
             };
 
             var createResult = await _userManager.CreateAsync(user, dto.Password);

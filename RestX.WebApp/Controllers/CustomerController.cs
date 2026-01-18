@@ -7,7 +7,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace RestX.WebApp.Controllers
 {
-    [Route("api/[controller]")]
+    [Route("api/customers")]
     [ApiController]
     public class CustomerController : BaseController
     {

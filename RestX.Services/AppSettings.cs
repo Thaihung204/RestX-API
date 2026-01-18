@@ -86,5 +86,8 @@ namespace RestX.BLL
         // SystemsX Settings
         public string SystemsXApiUrl { get; set; }
         public string SystemsXApiKey { get; set; }
+
+        // Frontend Settings
+        public string FrontendUrl { get; set; }
     }
 }

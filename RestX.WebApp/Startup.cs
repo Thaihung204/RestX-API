@@ -17,8 +17,9 @@ using RestX.App.Helpers;
 using RestX.BLL;
 using RestX.BLL.Helpers;
 using RestX.BLL.Interfaces;
+using RestX.BLL.Interfaces.Auth;
 using RestX.BLL.Interfaces.Customers;
-//using RestX.BLL.Interfaces.Employees;
+using RestX.BLL.Interfaces.Employees;
 using RestX.BLL.MultiTenancy;
 using RestX.BLL.Services;
 using RestX.DAL.Context;
@@ -159,6 +160,7 @@ namespace RestX.WebApp
             services.Configure<AppSettings>(Configuration.GetSection("AppSettings"));
             //services.Configure<AzureAdOptions>(Configuration.GetSection("AzureAd"));
             services.Configure<ConnectionStrings>(Configuration.GetSection("ConnectionStrings"));
+            services.Configure<EmailSettings>(Configuration.GetSection("EmailSettings"));
             services.AddResponseCompression();
 
             SocketsHttpHandler socketsHttpHandler = new SocketsHttpHandler
@@ -173,7 +175,9 @@ namespace RestX.WebApp
             services.AddScoped<ITenantService, TenantService>();
             services.AddScoped<IRepository, EntityFrameworkRepository<TenantDbContext>>();
             services.AddScoped<ICustomerService, CustomerService>();
-            //services.AddScoped<IEmployeeService, EmployeeService>();
+            services.AddScoped<IEmployeeService, EmployeeService>();
+            services.AddScoped<IAuthService, AuthService>();
+            services.AddScoped<IEmailService, EmailService>();
             services.AddSingleton<IMemoryCache, MemoryCache>();
             services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
             services.AddTransient<TelemetryExtender>();

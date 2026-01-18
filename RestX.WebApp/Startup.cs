@@ -51,6 +51,7 @@ namespace RestX.WebApp
         public void ConfigureServices(IServiceCollection services)
         {
             // Multi Tenant Support
+            services.AddControllers();
             services.AddScoped<IRedisService, RedisService>();
             services.AddMultitenancy<ActiveTenant, TenantResolver>();
             //services.Configure<RazorViewEngineOptions>(
@@ -118,21 +119,21 @@ namespace RestX.WebApp
                     return Task.CompletedTask;
                 };
             });
-            services.AddAuthorization(options =>
-            {
-                var defaultAuthorizationPolicyBuilder = new AuthorizationPolicyBuilder(
-                    "Cookies",
-                    "Bearer",
-                    "Identity.Application");
-                defaultAuthorizationPolicyBuilder = defaultAuthorizationPolicyBuilder.RequireAuthenticatedUser();
+            //services.AddAuthorization(options =>
+            //{
+            //    var defaultAuthorizationPolicyBuilder = new AuthorizationPolicyBuilder(
+            //        "Cookies",
+            //        "Bearer",
+            //        "Identity.Application");
+            //    defaultAuthorizationPolicyBuilder = defaultAuthorizationPolicyBuilder.RequireAuthenticatedUser();
 
-                var entraId = new AuthorizationPolicyBuilder()
-                    .AddAuthenticationSchemes(OpenIdConnectDefaults.AuthenticationScheme)
-                    .RequireAuthenticatedUser()
-                    .Build();
-                options.AddPolicy("Entra", entraId);
-                options.DefaultPolicy = defaultAuthorizationPolicyBuilder.Build();
-            });
+            //    var entraId = new AuthorizationPolicyBuilder()
+            //        .AddAuthenticationSchemes(OpenIdConnectDefaults.AuthenticationScheme)
+            //        .RequireAuthenticatedUser()
+            //        .Build();
+            //    options.AddPolicy("Entra", entraId);
+            //    options.DefaultPolicy = defaultAuthorizationPolicyBuilder.Build();
+            //});
 
             // MSSQL Hangfire
             services.AddHangfire(x => x.UseSqlServerStorage(Configuration.GetConnectionString("AdminDbContext"),
@@ -156,7 +157,7 @@ namespace RestX.WebApp
             services.Configure<AppSettings>(Configuration.GetSection("AppSettings"));
             //services.Configure<AzureAdOptions>(Configuration.GetSection("AzureAd"));
             services.Configure<ConnectionStrings>(Configuration.GetSection("ConnectionStrings"));
-            services.AddResponseCompression();
+            //services.AddResponseCompression();
 
             SocketsHttpHandler socketsHttpHandler = new SocketsHttpHandler
             {
@@ -178,69 +179,29 @@ namespace RestX.WebApp
 
             isDevlopement = isDevlopement || (Configuration.GetSection("AppSettings")["EmailProvider"] ?? "") == "Mailtrap";
             DIHelper.Setup(services, isDevlopement);
-            
+
+            services.AddCors(options =>
+            {
+                options.AddPolicy("CustomCorsPolicy", builder =>
+                {
+                    builder
+                        .AllowAnyOrigin()
+                        .AllowAnyMethod()
+                        .AllowAnyHeader();
+                });
+            });
+
             services.AddSwaggerGen(c =>
             {
-                c.SwaggerDoc("v1",
-                    new OpenApiInfo
-                    {
-                        Title = "RestX API",
-                        Version = "v1",
-                        Description = "The documentation below is provided to help you integrate directly with RestX using Open API Standards.",
-                        Contact = new OpenApiContact()
-                        {
-                            Name = "RestX Support",
-                            Email = "support@restx.co.uk",
-                            Url = new Uri("https://www.restx.co.uk/")
-                        }
+                c.SwaggerDoc("v1", new OpenApiInfo
+                {
+                    Title = "RestX WebApp API",
+                    Version = "v1"
+                });
 
-                    });
-
-                //c.EnableAnnotations();
                 c.CustomSchemaIds(type => type.FullName);
-                // Set the comments path for the Swagger JSON and UI.
-                // Need to import the XML schema for the BLL to show property decorators from there.
-                //c.IncludeXmlComments(Path.Combine(AppContext.BaseDirectory, "RestX.WebApp.xml"), false);
-                //c.IncludeXmlComments(Path.Combine(AppContext.BaseDirectory, "RestX.BLL.xml"), false);
-
-
-                c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme()
-                {
-                    Name = "Authorization",
-                    Type = SecuritySchemeType.ApiKey,
-                    Scheme = "Bearer",
-                    BearerFormat = "JWT",
-                    In = ParameterLocation.Header,
-                    Description = "JWT Authorization header using the Bearer scheme. \r\n\r\n Enter 'Bearer' [space] and then your token in the text input below.\r\n\r\nExample: \"Bearer 12345abcdef\"",
-                });
-                //c.OperationFilter<AddAuthHeaderOperationFilter>();
-
-                c.TagActionsBy(api =>
-                {
-                    if (api.GroupName != null)
-                    {
-                        return new[] { api.GroupName };
-                    }
-
-                    var controllerActionDescriptor = api.ActionDescriptor as ControllerActionDescriptor;
-                    if (controllerActionDescriptor != null)
-                    {
-                        return new[] { controllerActionDescriptor.ControllerName };
-                    }
-
-                    throw new InvalidOperationException("Unable to determine tag for endpoint.");
-                });
-                c.DocInclusionPredicate((name, api) => true);
-
-                c.OrderActionsBy(apiDesc =>
-                {
-                    return apiDesc.HttpMethod == "GET" ? "1" : "2";
-                });
-                //c.DocumentFilter<TagReOrderDocumentFilter>();
-                //c.DocumentFilter<DupePathRoutesFilter>();
-                //c.DocumentFilter<IVectorFilter>();
-                //c.DocumentFilter<BasePathDocumentFilter>();
             });
+
             //services.AddSwaggerGenNewtonsoftSupport();
 
             // Setup plugins for templator
@@ -300,22 +261,21 @@ namespace RestX.WebApp
                 }
             });
 
-            // Swagger MUST be before multi-tenancy middleware to avoid being blocked
+
             app.UseSwagger();
             app.UseSwaggerUI(c =>
             {
                 c.RoutePrefix = "swagger";
-                c.SwaggerEndpoint("/swagger/v1/swagger.json", "RestX API v1");
-                c.DefaultModelsExpandDepth(-1);
+                c.SwaggerEndpoint("/swagger/v1/swagger.json", "RestX WebApp API v1");
             });
 
             app.UseMultitenancy<ActiveTenant>();
-            //app.UseMiddleware<TenantUnresolvedRedirectMiddleware<ActiveTenant>>("https://www.tprofile.co.uk/", false);
+            app.UseMiddleware<TenantUnresolvedRedirectMiddleware<ActiveTenant>>("https://restx.food", false);
             app.UseMiddleware<TenantRedirectMiddleware<ActiveTenant>>();
             //app.UseIpRateLimiting();
             app.UseCookiePolicy(new CookiePolicyOptions
             {
-                MinimumSameSitePolicy = Microsoft.AspNetCore.Http.SameSiteMode.None, // Needs to be none so we can set cookies for brands with multiple domains
+                MinimumSameSitePolicy = Microsoft.AspNetCore.Http.SameSiteMode.None,
             });
             app.Use((context, next) =>
             {
@@ -324,8 +284,6 @@ namespace RestX.WebApp
                 return next.Invoke();
             });
 
-            app.UseResponseCompression();
-
             app.UseRouting();
             app.UseAuthentication();
             app.UseAuthorization();
@@ -333,16 +291,14 @@ namespace RestX.WebApp
 
             app.UseEndpoints(endpoints =>
             {
-                endpoints.MapControllerRoute("robots", "robots.txt", new { controller = "AppResourceLoader", action = "Robots" });
-                endpoints.MapControllerRoute("login-page", "login", new { controller = "Login", action = "Index" });
-                endpoints.MapControllerRoute("logout-page", "logout", new { controller = "Logout", action = "Index" });
-                endpoints.MapControllerRoute("register-page", "register", new { controller = "Register", action = "Index" });
-                endpoints.MapControllerRoute("no-route", "", new { controller = "Home", action = "Index" });
-                endpoints.MapControllerRoute("default", "{contentUrl}", new { controller = "Home", action = "Index" });
                 endpoints.MapControllers();
-                endpoints.MapControllerRoute("api", "api/{controller}/{action}/{id?}");
-                endpoints.MapFallbackToController("Index", "Public");
+
+                endpoints.MapControllerRoute(
+                    name: "default",
+                    pattern: "{controller=Home}/{action=Index}/{id?}"
+                );
             });
+
         }
 
     }

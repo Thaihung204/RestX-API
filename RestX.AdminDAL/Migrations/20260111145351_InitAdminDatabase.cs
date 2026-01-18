@@ -3,10 +3,10 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace RestX.DAL.Migrations
+namespace RestX.AdminDAL.Migrations
 {
     /// <inheritdoc />
-    public partial class InitialCreate : Migration
+    public partial class InitAdminDatabase : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -65,11 +65,26 @@ namespace RestX.DAL.Migrations
                     BaseColor = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     PrimaryColor = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     SecondaryColor = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    HeaderColor = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    FooterColor = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     NetworkIp = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     ConnectionString = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     Status = table.Column<bool>(type: "bit", nullable: false),
-                    Domain = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    Hostname = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     ExpiredAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    BusinessName = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    BusinessAddressLine1 = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    BusinessAddressLine2 = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    BusinessAddressLine3 = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    BusinessAddressLine4 = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    BusinessCounty = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    BusinessPostCode = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    BusinessCountry = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    BusinessPrimaryPhone = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    BusinessSecondaryPhone = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    BusinessEmailAddress = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    BusinessCompanyNumber = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    BusinessOpeningHours = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     CreatedDate = table.Column<DateTime>(type: "datetime2", nullable: false),
                     ModifiedDate = table.Column<DateTime>(type: "datetime2", nullable: true),
                     CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),

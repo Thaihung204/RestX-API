@@ -15,52 +15,39 @@ namespace RestX.BLL.Services
 {
     public class RedisService : IRedisService
     {
-        static object connectLock = new object();
-        private readonly RestX.BLL.AppSettings settings;
-        private static ConcurrentBag<Lazy<ConnectionMultiplexer>> connections;
+        private static readonly object connectLock = new object();
+        private readonly AppSettings settings;
+        private static Lazy<ConnectionMultiplexer>? _connection;
+        private static string? _connectionString;
         private bool _disposed = false;
 
         public RedisService(IOptions<ConnectionStrings> connectionStrings, IOptions<AppSettings> settings)
         {
-            lock (connectLock)
+            this.settings = settings.Value;
+
+            // Use single shared connection (recommended by StackExchange.Redis)
+            if (_connection == null || _connectionString != connectionStrings.Value.RedisConnection)
             {
-                connections = new ConcurrentBag<Lazy<ConnectionMultiplexer>>();
-                for (var i = 0; i < 10; i++)
+                lock (connectLock)
                 {
-                    connections.Add(new Lazy<ConnectionMultiplexer>(() =>
+                    if (_connection == null || _connectionString != connectionStrings.Value.RedisConnection)
                     {
-                        return ConnectionMultiplexer.Connect(connectionStrings.Value.RedisConnection);
-                    }));
+                        _connectionString = connectionStrings.Value.RedisConnection;
+                        _connection = new Lazy<ConnectionMultiplexer>(() =>
+                        {
+                            var options = ConfigurationOptions.Parse(_connectionString);
+                            options.AbortOnConnectFail = false;
+                            options.ConnectTimeout = 5000;
+                            options.SyncTimeout = 5000;
+                            options.AsyncTimeout = 5000;
+                            return ConnectionMultiplexer.Connect(options);
+                        });
+                    }
                 }
             }
-
-            this.settings = settings.Value;
         }
 
-
-        private static ConnectionMultiplexer RedisDatabase => GetLeastLoadedConnection();
-
-        /// <summary>
-        /// Get least loaded connection to Redis servers
-        /// </summary>
-        /// <returns></returns>
-        protected static ConnectionMultiplexer GetLeastLoadedConnection()
-        {
-            Lazy<ConnectionMultiplexer> connection;
-
-            var loadedLazys = connections.Where(lazy => lazy.IsValueCreated);
-
-            if (loadedLazys.Count() == connections.Count)
-            {
-                connection = connections.OrderBy(lazy => lazy.Value.GetCounters().TotalOutstanding).First();
-            }
-            else
-            {
-                connection = connections.First(lazy => !lazy.IsValueCreated);
-            }
-
-            return connection.Value;
-        }
+        private static ConnectionMultiplexer RedisDatabase => _connection!.Value;
 
         /// <summary>
         /// Release all resources associated with this object
@@ -79,8 +66,12 @@ namespace RestX.BLL.Services
 
             if (disposing)
             {
-                var activeConnections = connections.Where(lazy => lazy.IsValueCreated).ToList();
-                activeConnections.ForEach(connection => connection.Value.Dispose());
+                // Single connection disposal
+                if (_connection != null && _connection.IsValueCreated)
+                {
+                    _connection.Value.Dispose();
+                    _connection = null;
+                }
             }
             _disposed = true;
         }
@@ -115,7 +106,7 @@ namespace RestX.BLL.Services
                 else
                 {
                     RedisDatabase.GetDatabase().StringSet(key, value, (Expiration)cacheTime);
-                }                
+                }
             }
             catch (Exception ex)
             {
@@ -177,7 +168,7 @@ namespace RestX.BLL.Services
                 else
                 {
                     await RedisDatabase.GetDatabase().StringSetAsync(key, value, (Expiration)cacheTime);
-                }                
+                }
             }
             catch (Exception ex)
             {
@@ -225,7 +216,7 @@ namespace RestX.BLL.Services
         {
             if (chunkSize < 1) throw new ArgumentException("Chunk size must be greater than 0.", nameof(chunkSize));
             if (value == null) throw new ArgumentNullException(nameof(value));
-            
+
             var valueBytes = Encoding.UTF8.GetBytes(value);
 
             // Divide the value into chunks.
@@ -355,5 +346,10 @@ namespace RestX.BLL.Services
             }
             return Encoding.UTF8.GetString(valueBytes);
         }
+
+        // Alias methods for convenience
+        public async Task<string> GetAsync(string key) => await GetStringAsync(key);
+        public async Task SetAsync(string key, string value, TimeSpan? cacheTime = null) => await SetStringAsync(key, value, cacheTime);
+        public async Task DeleteAsync(string key) => await RemoveAsync(key);
     }
 }

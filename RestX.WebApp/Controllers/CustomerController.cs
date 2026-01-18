@@ -1,7 +1,7 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
+using RestX.BLL.DTOs.Customer;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Customers;
-using RestX.Models.Customers;
 using RestX.WebApp.Controllers.BaseControllers;
 using System.ComponentModel.DataAnnotations;
 
@@ -11,71 +11,99 @@ namespace RestX.WebApp.Controllers
     [ApiController]
     public class CustomerController : BaseController
     {
-        private readonly ICustomerService customerService;
+        private readonly ICustomerService _customerService;
+
         public CustomerController(ICustomerService customerService, IExceptionHandler exceptionHandler) : base(exceptionHandler)
         {
-            this.customerService = customerService;
+            _customerService = customerService;
         }
+
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Customer>>> GetAllCustomers()
+        public async Task<IActionResult> GetAllCustomers([FromQuery] CustomerFilterParams filter)
         {
             try
             {
-                var customers = await customerService.GetAllCustomers();
-                return Ok(customers);
+                var result = await _customerService.GetAllCustomers(filter);
+                return Ok(new { success = true, data = result });
             }
             catch (Exception ex)
             {
-                this.exceptionHandler.RaiseException(ex);
-                return this.BadRequest("An internal error occurred");
+                exceptionHandler.RaiseException(ex);
+                return BadRequest(new { success = false, message = "An internal error occurred" });
             }
         }
+
 
         [HttpGet("{id}")]
-        public async Task<ActionResult<Customer>> GetCustomerById([Required] Guid id)
+        public async Task<IActionResult> GetCustomerById([Required] Guid id)
         {
             try
             {
-                var customer = await customerService.GetCustomerById(id);
-                if (customer == null) return NotFound();
-                return Ok(customer);
+                var customer = await _customerService.GetCustomerById(id);
+                if (customer == null)
+                {
+                    return NotFound(new { success = false, message = "Customer not found" });
+                }
+                return Ok(new { success = true, data = customer });
             }
             catch (Exception ex)
             {
-                this.exceptionHandler.RaiseException(ex);
-                return this.BadRequest("An internal error occurred");
-            }
-        }
-
-        [HttpPut("{id}")]
-        public async Task<IActionResult> EditCustomer([Required] Guid id, [FromBody] Customer customer)
-        {
-            try
-            {
-                customer.Id = id;
-                var result = await customerService.UpsertCustomer(customer);
-                return Ok(result);
-            }
-            catch (Exception ex)
-            {
-                this.exceptionHandler.RaiseException(ex);
-                return this.BadRequest("An internal error occurred");
+                exceptionHandler.RaiseException(ex);
+                return BadRequest(new { success = false, message = "An internal error occurred" });
             }
         }
 
         [HttpPost]
-        public async Task<ActionResult<Customer>> AddCustomer([FromBody] Customer customer)
+        public async Task<IActionResult> CreateCustomer([FromBody] CreateCustomerDto dto)
         {
             try
             {
-                var created = await customerService.UpsertCustomer(customer);
-                return Ok(created);
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest(new { success = false, message = "Invalid data", errors = ModelState });
+                }
+
+                var result = await _customerService.CreateCustomer(dto);
+                return Ok(new { success = true, message = "Customer created successfully", data = result });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
             }
             catch (Exception ex)
             {
-                this.exceptionHandler.RaiseException(ex);
-                return this.BadRequest("An internal error occurred");
+                exceptionHandler.RaiseException(ex);
+                return BadRequest(new { success = false, message = "An internal error occurred" });
+            }
+        }
+
+
+        [HttpPut("{id}")]
+        public async Task<IActionResult> UpdateCustomer([Required] Guid id, [FromBody] UpdateCustomerDto dto)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest(new { success = false, message = "Invalid data", errors = ModelState });
+                }
+
+                var result = await _customerService.UpdateCustomer(id, dto);
+                if (result == null)
+                {
+                    return NotFound(new { success = false, message = "Customer not found" });
+                }
+                return Ok(new { success = true, message = "Customer updated successfully", data = result });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                exceptionHandler.RaiseException(ex);
+                return BadRequest(new { success = false, message = "An internal error occurred" });
             }
         }
 
@@ -84,13 +112,17 @@ namespace RestX.WebApp.Controllers
         {
             try
             {
-                await customerService.DeleteCustomer(id);
-                return Ok();
+                var success = await _customerService.DeleteCustomer(id);
+                if (!success)
+                {
+                    return NotFound(new { success = false, message = "Customer not found" });
+                }
+                return Ok(new { success = true, message = "Customer deleted successfully" });
             }
             catch (Exception ex)
             {
-                this.exceptionHandler.RaiseException(ex);
-                return this.BadRequest("An internal error occurred");
+                exceptionHandler.RaiseException(ex);
+                return BadRequest(new { success = false, message = "An internal error occurred" });
             }
         }
     }

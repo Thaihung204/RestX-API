@@ -113,11 +113,13 @@ namespace RestX.DAL.Context
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
-            
             if (!optionsBuilder.IsConfigured)
             {
                 optionsBuilder.UseSqlServer("Server=.;Database=demo_tenant;User ID=sa;Password=123;MultipleActiveResultSets=True;TrustServerCertificate=True;");
             }
+
+            // Performance optimizations
+            optionsBuilder.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
         }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)

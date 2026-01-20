@@ -6,9 +6,9 @@ namespace RestX.Admin.Controllers.BaseControllers
     {
         public class BaseController : Controller
         {
-            public readonly IExceptionHandler exceptionHandler;
+            public readonly BLL.Interfaces.IExceptionHandler exceptionHandler;
 
-            public BaseController(IExceptionHandler exceptionHandler)
+            public BaseController(BLL.Interfaces.IExceptionHandler exceptionHandler)
             {
                 this.exceptionHandler = exceptionHandler;
             }

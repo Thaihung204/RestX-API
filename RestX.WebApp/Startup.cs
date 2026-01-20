@@ -282,7 +282,7 @@ namespace RestX.WebApp
 
             app.UseMultitenancy<ActiveTenant>();
             app.UseMiddleware<TenantUnresolvedRedirectMiddleware<ActiveTenant>>("https://restx.food", false);
-            app.UseMiddleware<TenantRedirectMiddleware<ActiveTenant>>();
+            //app.UseMiddleware<TenantRedirectMiddleware<ActiveTenant>>();
             //app.UseIpRateLimiting();
             app.UseCookiePolicy(new CookiePolicyOptions
             {

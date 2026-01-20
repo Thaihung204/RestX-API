@@ -10,29 +10,17 @@ using RestX.Models.Admin;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-
-builder.Services.AddControllers();
-
+// Add DB Context 
 builder.Services.AddDbContext<RestxAdminContext>(options => options.UseSqlServer(builder.Configuration.GetConnectionString("ConnectionString")));
 
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
-
-builder.Services.AddScoped<IRepository, EntityFrameworkRepository<RestxAdminContext>>();
-builder.Services.AddScoped<ITenantService, TenantService>();
-builder.Services.AddScoped<IExceptionHandler, ExceptionHandler>();
-
-builder.Services.AddIdentity<Admin, IdentityRole>().AddEntityFrameworkStores<RestxAdminContext>().AddDefaultTokenProviders();
-
+//Add HangFire 
 builder.Services.AddHangfire(config =>
 {
     config.SetDataCompatibilityLevel(CompatibilityLevel.Version_170)
           .UseSimpleAssemblyNameTypeSerializer()
           .UseRecommendedSerializerSettings()
           .UseSqlServerStorage(
-              builder.Configuration.GetConnectionString("ConnectionString"),
+              builder.Configuration.GetConnectionString("HangfireConnection"),
               new SqlServerStorageOptions
               {
                   CommandBatchMaxTimeout = TimeSpan.FromMinutes(5),
@@ -42,21 +30,49 @@ builder.Services.AddHangfire(config =>
                   DisableGlobalLocks = true
               });
 });
-
 builder.Services.AddHangfireServer();
 
+// Add services to the container.
+builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+builder.Services.AddScoped<IRepository, EntityFrameworkRepository<RestxAdminContext>>();
+builder.Services.AddScoped<ITenantService, TenantService>();
+builder.Services.AddScoped<IExceptionHandler, ExceptionHandler>();
+
+builder.Services.AddIdentity<Admin, IdentityRole>().AddEntityFrameworkStores<RestxAdminContext>().AddDefaultTokenProviders();
+
 var app = builder.Build();
+
+//using (var scope = app.Services.CreateScope())
+//{
+//    var services = scope.ServiceProvider;
+//    try
+//    {
+//        var context = services.GetRequiredService<RestxAdminContext>();
+//        await context.Database.MigrateAsync();
+//        Console.WriteLine("Database migration completed successfully");
+//    }
+//    catch (Exception ex)
+//    {
+//        Console.WriteLine($"An error occurred while migrating the database: {ex.Message}");
+//        throw;
+//    }
+//}
 
 app.UseHangfireDashboard("/hangfire");
 
 // Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
+//if (app.Environment.IsDevelopment())
+//{
     app.UseSwagger();
     app.UseSwaggerUI();
-}
+//}
 
-app.UseHttpsRedirection();
+if (app.Environment.IsDevelopment())
+{
+    //app.UseHttpsRedirection();
+}
 
 app.UseAuthorization();
 

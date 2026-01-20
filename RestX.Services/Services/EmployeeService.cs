@@ -1,11 +1,13 @@
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Data.SqlClient;
 using RestX.BLL.DTOs.Common;
 using RestX.BLL.DTOs.Employee;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Employees;
 using RestX.Models.HR;
 using RestX.Models.Identity;
-using System.Linq.Expressions;
+using System.Data;
+using System.Text;
 
 namespace RestX.BLL.Services
 {
@@ -27,112 +29,104 @@ namespace RestX.BLL.Services
 
         public async Task<PaginatedResult<EmployeeListItemDto>> GetAllEmployeesPaginated(EmployeeFilterParams filter)
         {
-            Expression<Func<Employee, bool>>? filterExpression = null;
-            var predicates = new List<Expression<Func<Employee, bool>>>();
+            var query = new StringBuilder();
+            query.Append(@"
+                SELECT #SELECT#
+                FROM Employees e
+                LEFT JOIN AspNetUsers u ON e.Id = u.MemberId
+                WHERE 1 = 1
+            ");
 
+            var countParameters = new List<SqlParameter>();
+            var queryParameters = new List<SqlParameter>();
+
+            // Apply filters
             if (filter.IsActive.HasValue)
             {
-                predicates.Add(e => e.IsActive == filter.IsActive.Value);
+                query.Append(" AND e.IsActive = @IsActive ");
+                countParameters.Add(new SqlParameter("IsActive", SqlDbType.Bit) { Value = filter.IsActive.Value });
+                queryParameters.Add(new SqlParameter("IsActive", SqlDbType.Bit) { Value = filter.IsActive.Value });
             }
 
             if (!string.IsNullOrEmpty(filter.Position))
             {
-                predicates.Add(e => e.Position.Contains(filter.Position));
+                query.Append(" AND e.Position LIKE '%' + @Position + '%' ");
+                countParameters.Add(new SqlParameter("Position", SqlDbType.NVarChar) { Value = filter.Position });
+                queryParameters.Add(new SqlParameter("Position", SqlDbType.NVarChar) { Value = filter.Position });
             }
 
             if (filter.HireDateFrom.HasValue)
             {
-                predicates.Add(e => e.HireDate >= filter.HireDateFrom.Value);
+                query.Append(" AND e.HireDate >= @HireDateFrom ");
+                countParameters.Add(new SqlParameter("HireDateFrom", SqlDbType.DateTime) { Value = filter.HireDateFrom.Value });
+                queryParameters.Add(new SqlParameter("HireDateFrom", SqlDbType.DateTime) { Value = filter.HireDateFrom.Value });
             }
+
             if (filter.HireDateTo.HasValue)
             {
-                predicates.Add(e => e.HireDate <= filter.HireDateTo.Value);
+                query.Append(" AND e.HireDate <= @HireDateTo ");
+                countParameters.Add(new SqlParameter("HireDateTo", SqlDbType.DateTime) { Value = filter.HireDateTo.Value });
+                queryParameters.Add(new SqlParameter("HireDateTo", SqlDbType.DateTime) { Value = filter.HireDateTo.Value });
             }
 
-            if (predicates.Any())
-            {
-                filterExpression = predicates.Aggregate((current, next) => CombineExpressions(current, next));
-            }
-
-            var allEmployees = await _repo.GetAsync<Employee>(filter: filterExpression);
-
-            var employeeIds = allEmployees.Select(e => e.Id).ToList();
-            var users = _userManager.Users.Where(u => u.MemberId.HasValue && employeeIds.Contains(u.MemberId.Value)).ToList();
-            var userDict = users.Where(u => u.MemberId.HasValue).ToDictionary(u => u.MemberId!.Value, u => u);
-
+            // Apply search
             if (!string.IsNullOrEmpty(filter.Search))
             {
-                var searchLower = filter.Search.ToLower();
-                allEmployees = allEmployees.Where(e =>
-                    e.Code.ToLower().Contains(searchLower) ||
-                    e.Position.ToLower().Contains(searchLower) ||
-                    (userDict.TryGetValue(e.Id, out var user) && (
-                        (user.UserName?.ToLower().Contains(searchLower) ?? false) ||
-                        (user.Email?.ToLower().Contains(searchLower) ?? false)
-                    ))
-                ).ToList();
+                query.Append(@" AND (
+                    e.Code LIKE '%' + @Search + '%'
+                    OR e.Position LIKE '%' + @Search + '%'
+                    OR u.UserName LIKE '%' + @Search + '%'
+                    OR u.Email LIKE '%' + @Search + '%'
+                ) ");
+                countParameters.Add(new SqlParameter("Search", SqlDbType.NVarChar) { Value = filter.Search });
+                queryParameters.Add(new SqlParameter("Search", SqlDbType.NVarChar) { Value = filter.Search });
             }
 
-            allEmployees = ApplySorting(allEmployees, userDict, filter.SortBy, filter.SortDescending);
+            // Count query - execute at DB level
+            var countQuery = query.ToString().Replace("#SELECT#", "COUNT(*)");
+            var totalCount = await _repo.ExecuteSqlCommandAsync<int>(countQuery, countParameters.ToArray());
 
-            var totalCount = allEmployees.Count();
+            // Pagination calculation
+            int skip = (filter.PageNumber - 1) * filter.PageSize;
 
-            var skip = (filter.PageNumber - 1) * filter.PageSize;
-            var employees = allEmployees.Skip(skip).Take(filter.PageSize);
+            // Select columns
+            var selectColumns = @"
+                e.Id,
+                e.Code,
+                e.Position,
+                e.IsActive,
+                e.HireDate,
+                u.Email,
+                u.UserName AS FullName
+            ";
 
-            var items = employees.Select(e =>
-            {
-                userDict.TryGetValue(e.Id, out var user);
-                return new EmployeeListItemDto
-                {
-                    Id = e.Id,
-                    Code = e.Code,
-                    FullName = user?.UserName ?? string.Empty,
-                    Email = user?.Email ?? string.Empty,
-                    Position = e.Position,
-                    IsActive = e.IsActive,
-                    HireDate = e.HireDate
-                };
-            }).ToList();
+            var mainQuery = query.ToString().Replace("#SELECT#", selectColumns);
+
+            // Apply sorting
+            mainQuery += GetSortClause(filter.SortBy, filter.SortDescending);
+
+            // Apply pagination at DB level - OFFSET/FETCH
+            mainQuery += $" OFFSET {skip} ROWS FETCH NEXT {filter.PageSize} ROWS ONLY";
+
+            var items = await _repo.ExecuteSqlSelectAsync<EmployeeListItemDto>(mainQuery, queryParameters.ToArray());
 
             return new PaginatedResult<EmployeeListItemDto>(items, totalCount, filter.PageNumber, filter.PageSize);
         }
 
-        private IEnumerable<Employee> ApplySorting(IEnumerable<Employee> employees, Dictionary<Guid, ApplicationUser> userDict, string? sortBy, bool sortDescending)
+        private static string GetSortClause(string? sortBy, bool sortDescending)
         {
-            if (string.IsNullOrEmpty(sortBy))
-            {
-                return sortDescending
-                    ? employees.OrderByDescending(e => e.CreatedDate)
-                    : employees.OrderBy(e => e.CreatedDate);
-            }
+            var direction = sortDescending ? "DESC" : "ASC";
 
-            return sortBy.ToLower() switch
+            return (sortBy?.ToLower()) switch
             {
-                "code" => sortDescending ? employees.OrderByDescending(e => e.Code) : employees.OrderBy(e => e.Code),
-                "fullname" => sortDescending
-                    ? employees.OrderByDescending(e => userDict.TryGetValue(e.Id, out var u) ? u.UserName : "")
-                    : employees.OrderBy(e => userDict.TryGetValue(e.Id, out var u) ? u.UserName : ""),
-                "email" => sortDescending
-                    ? employees.OrderByDescending(e => userDict.TryGetValue(e.Id, out var u) ? u.Email : "")
-                    : employees.OrderBy(e => userDict.TryGetValue(e.Id, out var u) ? u.Email : ""),
-                "position" => sortDescending ? employees.OrderByDescending(e => e.Position) : employees.OrderBy(e => e.Position),
-                "hiredate" => sortDescending ? employees.OrderByDescending(e => e.HireDate) : employees.OrderBy(e => e.HireDate),
-                "isactive" => sortDescending ? employees.OrderByDescending(e => e.IsActive) : employees.OrderBy(e => e.IsActive),
-                _ => sortDescending ? employees.OrderByDescending(e => e.CreatedDate) : employees.OrderBy(e => e.CreatedDate)
+                "code" => $" ORDER BY e.Code {direction}",
+                "fullname" => $" ORDER BY u.UserName {direction}",
+                "email" => $" ORDER BY u.Email {direction}",
+                "position" => $" ORDER BY e.Position {direction}",
+                "hiredate" => $" ORDER BY e.HireDate {direction}",
+                "isactive" => $" ORDER BY e.IsActive {direction}",
+                _ => $" ORDER BY e.CreatedDate {direction}"
             };
-        }
-
-        private static Expression<Func<T, bool>> CombineExpressions<T>(
-            Expression<Func<T, bool>> expr1,
-            Expression<Func<T, bool>> expr2)
-        {
-            var parameter = Expression.Parameter(typeof(T));
-            var combined = Expression.AndAlso(
-                Expression.Invoke(expr1, parameter),
-                Expression.Invoke(expr2, parameter)
-            );
-            return Expression.Lambda<Func<T, bool>>(combined, parameter);
         }
 
         public async Task<EmployeeResponseDto?> GetEmployeeById(Guid id)

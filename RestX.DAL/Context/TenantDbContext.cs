@@ -115,7 +115,7 @@ namespace RestX.DAL.Context
         {
             if (!optionsBuilder.IsConfigured)
             {
-                optionsBuilder.UseSqlServer("Server=sqlserver,1433;Database=demo_tenant;User ID=sa;Password=YourStrong!Passw0rd;MultipleActiveResultSets=True;TrustServerCertificate=True;");
+                optionsBuilder.UseSqlServer("Server=localhost;Database=demo_tenant;User ID=sa;Password=YourStrong!Passw0rd;MultipleActiveResultSets=True;TrustServerCertificate=True;");
             }
 
             // Performance optimizations

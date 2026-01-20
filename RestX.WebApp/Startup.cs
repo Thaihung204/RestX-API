@@ -182,6 +182,7 @@ namespace RestX.WebApp
             services.AddSingleton<IMemoryCache, MemoryCache>();
             services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
             services.AddTransient<TelemetryExtender>();
+            services.AddScoped<IDishService, DishService>();
 
             // Feature Management
             //services.AddSingleton<IFeatureDefinitionProvider, TenantBrandFeatureProvider>()

@@ -11,7 +11,6 @@ namespace RestX.BLL.Services
     public class DishService : BaseService, IDishService
     {
         private readonly IRepository repo;
-        private readonly IMapper mapper;
 
         public DishService(IRepository repo) : base(repo)
         {
@@ -146,6 +145,7 @@ namespace RestX.BLL.Services
             // SELECT list
             var selectItems = @"
                 DISTINCT
+                d.Id,
                 d.Name,
                 c.Name AS CategoryName,
                 d.Price,
@@ -187,7 +187,25 @@ namespace RestX.BLL.Services
                     includeProperties: "Category,DishImages",
                     take: 1))
                 .FirstOrDefault();
-            return mapper.Map<DishItem>(dish);
+
+            var mainImageUrl = dish.DishImages?
+                .Where(x => x.IsActive && x.ImageType == DishImageType.Main)
+                .OrderBy(x => x.DisplayOrder)
+                .ThenBy(x => x.Id)
+                .Select(x => x.ImageUrl)
+                .FirstOrDefault();
+
+            return new DishItem
+            {
+                Id = dish.Id,
+                Name = dish.Name,
+                CategoryName = dish.Category?.Name ?? string.Empty,
+                Price = dish.Price,
+                IsActive = dish.IsActive,
+                CreatedDate = dish.CreatedDate,
+                Description = dish.Description,
+                MainImageUrl = mainImageUrl
+            };
         }
 
         public async Task<Dish> UpsertDish(Dish model)

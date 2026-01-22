@@ -8,11 +8,11 @@ namespace RestX.BLL.Services
 {
     public class DishService : BaseService, IDishService
     {
-        private readonly IRepository _repo;
+        private readonly IRepository repo;
 
         public DishService(IRepository repo) : base(repo)
         {
-            _repo = repo;
+            this.repo = repo;
         }
 
         public async Task<DishSearchResult> GetAllDishes(DishSearch model)
@@ -170,14 +170,14 @@ namespace RestX.BLL.Services
 
         public async Task<Dish?> GetDishById(Guid id)
         {
-            return await _repo.GetByIdAsync<Dish>(id);
+            return await repo.GetByIdAsync<Dish>(id);
         }
 
         public async Task<Dish> UpsertDish(Dish model)
         {
             if (model.Id != Guid.Empty)
             {
-                var dish = await _repo.GetByIdAsync<Dish>(model.Id);
+                var dish = await repo.GetByIdAsync<Dish>(model.Id);
                 if (dish == null)
                 {
                     throw new InvalidOperationException("Dish not found");
@@ -195,14 +195,13 @@ namespace RestX.BLL.Services
                 dish.IsActive = model.IsActive;
                 dish.AutoDisableByStock = model.AutoDisableByStock;
 
-                _repo.Update(dish);
-                await _repo.SaveAsync();
+                repo.Update(dish);
+                await repo.SaveAsync();
 
                 return dish;
             }
 
-            await _repo.CreateAsync(model);
-            await _repo.SaveAsync();
+            await repo.CreateAsync(model);
             return model;
         }
 
@@ -211,8 +210,8 @@ namespace RestX.BLL.Services
             var dish = await GetDishById(id);
             if (dish != null)
             {
-                _repo.Delete<Dish>(id);
-                await _repo.SaveAsync();
+                repo.Delete<Dish>(id);
+                await repo.SaveAsync();
             }
         }
     }

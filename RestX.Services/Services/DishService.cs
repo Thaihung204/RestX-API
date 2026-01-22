@@ -24,6 +24,14 @@ namespace RestX.BLL.Services
                 SELECT #SELECT#
                 FROM dbo.Dishes d
                 JOIN dbo.Categories c ON d.CategoryId = c.Id
+                OUTER APPLY (
+                    SELECT TOP (1) di.ImageUrl
+                    FROM dbo.DishImages di
+                    WHERE di.DishId = d.Id
+                      AND di.IsActive = 1
+                      AND di.ImageType = 0
+                    ORDER BY di.DisplayOrder ASC, di.Id ASC
+                ) mainImg
                 WHERE 1 = 1
             ");
 
@@ -139,7 +147,8 @@ namespace RestX.BLL.Services
                 c.Name AS CategoryName,
                 d.Price,
                 d.IsActive,
-                d.CreatedDate
+                d.CreatedDate,
+                mainImg.ImageUrl AS MainImageUrl
             ";
 
             var mainQuery = countQuery.Replace(

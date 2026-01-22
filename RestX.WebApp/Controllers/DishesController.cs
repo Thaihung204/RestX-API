@@ -10,11 +10,11 @@ namespace RestX.WebApp.Controllers
     [ApiController]
     public class DishesController : BaseController
     {
-        private readonly IDishService _dishService;
+        private readonly IDishService dishService;
 
         public DishesController(IDishService dishService, IExceptionHandler exceptionHandler) : base(exceptionHandler)
         {
-            _dishService = dishService;
+            this.dishService = dishService;
         }
 
         [HttpGet]
@@ -23,7 +23,7 @@ namespace RestX.WebApp.Controllers
         {
             try
             {
-                var dishes = await _dishService.GetAllDishes(searchModel);
+                var dishes = await dishService.GetAllDishes(searchModel);
                 return Ok(dishes);
             }
             catch (Exception ex)
@@ -38,7 +38,7 @@ namespace RestX.WebApp.Controllers
         {
             try
             {
-                var dish = await _dishService.GetDishById(id);
+                var dish = await dishService.GetDishById(id);
                 return Ok(dish);
             }
             catch (Exception ex)
@@ -54,7 +54,7 @@ namespace RestX.WebApp.Controllers
             try
             {
                 dish.Id = id;
-                return Ok(await _dishService.UpsertDish(dish));
+                return Ok(await dishService.UpsertDish(dish));
             }
             catch (Exception ex)
             {
@@ -68,7 +68,7 @@ namespace RestX.WebApp.Controllers
         {
             try
             {
-                return Ok(await _dishService.UpsertDish(dish));
+                return Ok(await dishService.UpsertDish(dish));
             }
             catch (Exception ex)
             {
@@ -82,7 +82,7 @@ namespace RestX.WebApp.Controllers
         {
             try
             {
-                await _dishService.DeleteDish(id);
+                await dishService.DeleteDish(id);
                 return Ok();
             }
             catch (Exception ex)

@@ -20,9 +20,9 @@ namespace RestX.BLL.DTOs.Employee
         [MaxLength(320)]
         public string Email { get; set; } = string.Empty;
 
-        [Required(ErrorMessage = "Password is required")]
-        [MinLength(6, ErrorMessage = "Password must be at least 6 characters")]
-        public string Password { get; set; } = string.Empty;
+        //[Required(ErrorMessage = "Password is required")]
+        //[MinLength(6, ErrorMessage = "Password must be at least 6 characters")]
+        //public string Password { get; set; } = string.Empty;
 
         [Required(ErrorMessage = "Full name is required")]
         [MaxLength(255)]
@@ -32,9 +32,6 @@ namespace RestX.BLL.DTOs.Employee
         [MaxLength(15)]
         public string? PhoneNumber { get; set; }
 
-        [Required(ErrorMessage = "Employee code is required")]
-        [MaxLength(20)]
-        public string Code { get; set; } = string.Empty;
 
         [MaxLength(500)]
         public string? Address { get; set; }
@@ -122,5 +119,7 @@ namespace RestX.BLL.DTOs.Employee
         public string Position { get; set; } = string.Empty;
         public bool IsActive { get; set; }
         public DateTime HireDate { get; set; }
+        public DateTime CreatedDate { get; set; }
+
     }
 }

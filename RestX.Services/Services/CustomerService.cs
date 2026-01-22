@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
 using RestX.BLL.DTOs.Common;
 using RestX.BLL.DTOs.Customer;
 using RestX.BLL.Interfaces;
@@ -82,24 +83,23 @@ namespace RestX.BLL.Services
                 queryParameters.Add(new SqlParameter("Search", SqlDbType.NVarChar) { Value = filter.Search });
             }
 
-            // Count query - execute at DB level
-            var countQuery = query.ToString().Replace("#SELECT#", "COUNT(*)");
-            var totalCount = await _repo.ExecuteSqlCommandAsync<int>(countQuery, countParameters.ToArray());
+            var countQuery = query.ToString().Replace("#SELECT#", "COUNT(DISTINCT c.Id)");
+            int totalCount = await _repo.ExecuteSqlCommandAsync<int>(countQuery, countParameters.ToArray());
 
-            // Pagination calculation
-            int skip = (filter.PageNumber - 1) * filter.PageSize;
+            int skip = filter.PageNumber == 1 ? 0 : (filter.PageNumber - 1) * filter.PageSize;
 
             // Select columns
             var selectColumns = @"
-                c.Id,
-                c.MembershipLevel,
-                c.LoyaltyPoints,
-                c.IsActive,
-                c.CreatedDate,
-                u.Email,
-                u.UserName AS FullName,
-                u.PhoneNumber
-            ";
+                    DISTINCT
+                     c.Id,
+                     u.UserName AS FullName,
+                    u.Email,
+                    u.PhoneNumber,
+                    c.MembershipLevel,
+                    c.LoyaltyPoints,
+                    c.IsActive,
+                    c.CreatedDate
+                     ";
 
             var mainQuery = query.ToString().Replace("#SELECT#", selectColumns);
 
@@ -114,9 +114,9 @@ namespace RestX.BLL.Services
             return new PaginatedResult<CustomerListItemDto>(items, totalCount, filter.PageNumber, filter.PageSize);
         }
 
-        private string GetSortClause(string? sortBy, bool sortDescending)
+        private string GetSortClause(string? sortBy, bool desc)
         {
-            var direction = sortDescending ? "DESC" : "ASC";
+            var direction = desc ? "DESC" : "ASC";
 
             return (sortBy?.ToLower()) switch
             {
@@ -134,10 +134,17 @@ namespace RestX.BLL.Services
         {
             var customer = await _repo.GetFirstAsync<Customer>(
                 filter: c => c.Id == id,
-                includeProperties: "ApplicationUser,Orders,Reservations"
-            );
+                includeProperties: "ApplicationUser");
 
             if (customer == null) return null;
+
+            var totalOrders = await _repo.ExecuteSqlCommandAsync<int>(
+                "SELECT COUNT(*) FROM Orders WHERE CustomerId = @CustomerId",
+                new SqlParameter("CustomerId", id));
+
+            var totalReservations = await _repo.ExecuteSqlCommandAsync<int>(
+                "SELECT COUNT(*) FROM Reservations WHERE CustomerId = @CustomerId",
+                new SqlParameter("CustomerId", id));
 
             var user = customer.ApplicationUser;
 
@@ -153,10 +160,11 @@ namespace RestX.BLL.Services
                 Email = user?.Email ?? string.Empty,
                 FullName = user?.UserName ?? string.Empty,
                 PhoneNumber = user?.PhoneNumber,
-                TotalOrders = customer.Orders?.Count ?? 0,
-                TotalReservations = customer.Reservations?.Count ?? 0
+                TotalOrders = totalOrders,
+                TotalReservations = totalReservations
             };
         }
+
 
         public async Task<CustomerResponseDto> CreateCustomer(CreateCustomerDto dto)
         {
@@ -169,7 +177,7 @@ namespace RestX.BLL.Services
             var user = new ApplicationUser
             {
                 Id = Guid.NewGuid(),
-                UserName = dto.FullName,
+                UserName = dto.Email,
                 Email = dto.Email,
                 PhoneNumber = dto.PhoneNumber,
                 EmailConfirmed = true,
@@ -201,7 +209,7 @@ namespace RestX.BLL.Services
             };
 
             await _repo.CreateAsync(customer);
-
+            await _repo.SaveAsync();
             return new CustomerResponseDto
             {
                 Id = customer.Id,
@@ -212,7 +220,7 @@ namespace RestX.BLL.Services
                 ModifiedDate = customer.ModifiedDate,
                 UserId = user.Id,
                 Email = user.Email ?? string.Empty,
-                FullName = user.UserName ?? string.Empty,
+                FullName = dto.FullName,
                 PhoneNumber = user.PhoneNumber,
                 TotalOrders = 0,
                 TotalReservations = 0
@@ -222,9 +230,9 @@ namespace RestX.BLL.Services
         public async Task<CustomerResponseDto?> UpdateCustomer(Guid id, UpdateCustomerDto dto)
         {
             var customer = await _repo.GetFirstAsync<Customer>(
-                filter: c => c.Id == id,
-                includeProperties: "ApplicationUser,Orders,Reservations"
-            );
+       filter: c => c.Id == id,
+       includeProperties: "ApplicationUser"
+   );
 
             if (customer == null) return null;
 
@@ -238,11 +246,30 @@ namespace RestX.BLL.Services
             var user = customer.ApplicationUser;
             if (user != null)
             {
-                if (!string.IsNullOrEmpty(dto.FullName)) user.UserName = dto.FullName;
-                if (!string.IsNullOrEmpty(dto.PhoneNumber)) user.PhoneNumber = dto.PhoneNumber;
+                if (!string.IsNullOrWhiteSpace(dto.FullName))
+                    user.UserName = dto.FullName;
+
+                if (!string.IsNullOrWhiteSpace(dto.PhoneNumber))
+                    user.PhoneNumber = dto.PhoneNumber;
+
                 user.LastModified = DateTime.UtcNow;
-                await _userManager.UpdateAsync(user);
+
+                var updateResult = await _userManager.UpdateAsync(user);
+                if (!updateResult.Succeeded)
+                {
+                    var errors = string.Join(", ", updateResult.Errors.Select(e => e.Description));
+                    throw new InvalidOperationException($"Failed to update user: {errors}");
+                }
             }
+            var totalOrders = await _repo.ExecuteSqlCommandAsync<int>(
+        "SELECT COUNT(*) FROM Orders WHERE CustomerId = @CustomerId",
+        new SqlParameter("CustomerId", id)
+    );
+
+            var totalReservations = await _repo.ExecuteSqlCommandAsync<int>(
+                "SELECT COUNT(*) FROM Reservations WHERE CustomerId = @CustomerId",
+                new SqlParameter("CustomerId", id)
+            );
 
             return new CustomerResponseDto
             {
@@ -256,23 +283,44 @@ namespace RestX.BLL.Services
                 Email = user?.Email ?? string.Empty,
                 FullName = user?.UserName ?? string.Empty,
                 PhoneNumber = user?.PhoneNumber,
-                TotalOrders = customer.Orders?.Count ?? 0,
-                TotalReservations = customer.Reservations?.Count ?? 0
+                TotalOrders = totalOrders,
+                TotalReservations = totalReservations
             };
         }
 
         public async Task<bool> DeleteCustomer(Guid id)
         {
-            var customer = await _repo.GetByIdAsync<Customer>(id);
 
-            if (customer == null) return false;
+            var customer = await _repo.GetFirstAsync<Customer>(
+                c => c.Id == id,
+                includeProperties: "ApplicationUser"
+            );
+
+            if (customer == null)
+                return false;
 
             customer.IsActive = false;
-
             _repo.Update(customer);
+
+            var user = customer.ApplicationUser;
+            if (user != null)
+            {
+                user.LockoutEnabled = true;
+                user.LockoutEnd = DateTimeOffset.MaxValue;
+                user.LastModified = DateTime.UtcNow;
+
+                var result = await _userManager.UpdateAsync(user);
+                if (!result.Succeeded)
+                {
+                    var errors = string.Join(", ", result.Errors.Select(e => e.Description));
+                    throw new InvalidOperationException(errors);
+                }
+            }
+
             await _repo.SaveAsync();
 
             return true;
         }
+
     }
 }

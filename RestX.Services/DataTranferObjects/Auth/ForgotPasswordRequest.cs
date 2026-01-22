@@ -2,14 +2,15 @@ using System.ComponentModel.DataAnnotations;
 
 namespace RestX.BLL.DTOs.Auth
 {
-    public class ForgotPasswordRequestDto
+    public class ForgotPasswordRequest
     {
         [Required(ErrorMessage = "Email is required")]
         [EmailAddress(ErrorMessage = "Invalid email format")]
         public string Email { get; set; } = string.Empty;
     }
 
-    public class ResetPasswordRequestDto
+    public class ResetPasswordRequest
+
     {
         [Required(ErrorMessage = "Email is required")]
         [EmailAddress(ErrorMessage = "Invalid email format")]

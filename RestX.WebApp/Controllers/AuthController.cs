@@ -21,7 +21,7 @@ namespace RestX.WebApp.Controllers
 
         [HttpPost("login")]
         [AllowAnonymous]
-        public async Task<IActionResult> Login([FromBody] LoginRequestDto request)
+        public async Task<IActionResult> Login([FromBody] LoginRequest request)
         {
             try
             {
@@ -42,7 +42,7 @@ namespace RestX.WebApp.Controllers
             catch (Exception ex)
             {
                 exceptionHandler.RaiseException(ex);
-                return BadRequest(AuthResponseDto.FailureResponse("An internal error occurred"));
+                return BadRequest(AuthResponse.FailureResponse("An internal error occurred"));
             }
         }
 
@@ -55,7 +55,7 @@ namespace RestX.WebApp.Controllers
                 var userId = GetCurrentUserId();
                 if (userId == null)
                 {
-                    return Unauthorized(AuthResponseDto.FailureResponse("User not authenticated"));
+                    return Unauthorized(AuthResponse.FailureResponse("User not authenticated"));
                 }
 
                 var result = await _authService.LogoutAsync(userId.Value);
@@ -70,14 +70,14 @@ namespace RestX.WebApp.Controllers
             catch (Exception ex)
             {
                 exceptionHandler.RaiseException(ex);
-                return BadRequest(AuthResponseDto.FailureResponse("An internal error occurred"));
+                return BadRequest(AuthResponse.FailureResponse("An internal error occurred"));
             }
         }
 
 
         [HttpPost("change-password")]
         [Authorize]
-        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequestDto request)
+        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
         {
             try
             {
@@ -89,7 +89,7 @@ namespace RestX.WebApp.Controllers
                 var userId = GetCurrentUserId();
                 if (userId == null)
                 {
-                    return Unauthorized(AuthResponseDto.FailureResponse("User not authenticated"));
+                    return Unauthorized(AuthResponse.FailureResponse("User not authenticated"));
                 }
 
                 var result = await _authService.ChangePasswordAsync(userId.Value, request);
@@ -104,13 +104,13 @@ namespace RestX.WebApp.Controllers
             catch (Exception ex)
             {
                 exceptionHandler.RaiseException(ex);
-                return BadRequest(AuthResponseDto.FailureResponse("An internal error occurred"));
+                return BadRequest(AuthResponse.FailureResponse("An internal error occurred"));
             }
         }
 
         [HttpPost("forgot-password")]
         [AllowAnonymous]
-        public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequestDto request)
+        public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
         {
             try
             {
@@ -126,14 +126,14 @@ namespace RestX.WebApp.Controllers
             catch (Exception ex)
             {
                 exceptionHandler.RaiseException(ex);
-                return BadRequest(AuthResponseDto.FailureResponse("An internal error occurred"));
+                return BadRequest(AuthResponse.FailureResponse("An internal error occurred"));
             }
         }
 
 
         [HttpPost("reset-password")]
         [AllowAnonymous]
-        public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequestDto request)
+        public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request)
         {
             try
             {
@@ -154,13 +154,13 @@ namespace RestX.WebApp.Controllers
             catch (Exception ex)
             {
                 exceptionHandler.RaiseException(ex);
-                return BadRequest(AuthResponseDto.FailureResponse("An internal error occurred"));
+                return BadRequest(AuthResponse.FailureResponse("An internal error occurred"));
             }
         }
 
         [HttpPost("register")]
         [AllowAnonymous]
-        public async Task<IActionResult> RegisterCustomer([FromBody] RegisterCustomerRequestDto request)
+        public async Task<IActionResult> RegisterCustomer([FromBody] RegisterCustomerRequest request)
         {
             try
             {
@@ -181,7 +181,7 @@ namespace RestX.WebApp.Controllers
             catch (Exception ex)
             {
                 exceptionHandler.RaiseException(ex);
-                return BadRequest(AuthResponseDto.FailureResponse("An internal error occurred"));
+                return BadRequest(AuthResponse.FailureResponse("An internal error occurred"));
             }
         }
 
@@ -193,7 +193,7 @@ namespace RestX.WebApp.Controllers
             {
                 if (string.IsNullOrEmpty(request.RefreshToken))
                 {
-                    return BadRequest(AuthResponseDto.FailureResponse("Refresh token is required"));
+                    return BadRequest(AuthResponse.FailureResponse("Refresh token is required"));
                 }
 
                 var result = await _authService.RefreshTokenAsync(request.RefreshToken);
@@ -208,7 +208,7 @@ namespace RestX.WebApp.Controllers
             catch (Exception ex)
             {
                 exceptionHandler.RaiseException(ex);
-                return BadRequest(AuthResponseDto.FailureResponse("An internal error occurred"));
+                return BadRequest(AuthResponse.FailureResponse("An internal error occurred"));
             }
         }
 

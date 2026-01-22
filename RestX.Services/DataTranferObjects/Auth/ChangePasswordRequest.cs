@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace RestX.BLL.DTOs.Auth
 {
-    public class ChangePasswordRequestDto
+    public class ChangePasswordRequest
     {
         [Required(ErrorMessage = "Current password is required")]
         public string CurrentPassword { get; set; } = string.Empty;

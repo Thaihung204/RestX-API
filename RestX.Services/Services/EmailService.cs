@@ -18,25 +18,25 @@ namespace RestX.BLL.Services
 
     public class EmailService : IEmailService
     {
-        private readonly EmailSettings _emailSettings;
+        private readonly EmailSettings emailSettings;
 
         public EmailService(IOptions<EmailSettings> emailSettings)
         {
-            _emailSettings = emailSettings.Value;
+            this.emailSettings = emailSettings.Value;
         }
 
         public async Task SendEmailAsync(string toEmail, string subject, string body)
         {
-            var smtpClient = new SmtpClient(_emailSettings.SmtpServer)
+            var smtpClient = new SmtpClient(emailSettings.SmtpServer)
             {
-                Port = _emailSettings.SmtpPort,
-                Credentials = new NetworkCredential(_emailSettings.Username, _emailSettings.Password),
-                EnableSsl = _emailSettings.EnableSsl,
+                Port = emailSettings.SmtpPort,
+                Credentials = new NetworkCredential(emailSettings.Username, emailSettings.Password),
+                EnableSsl = emailSettings.EnableSsl,
             };
 
             var mailMessage = new MailMessage
             {
-                From = new MailAddress(_emailSettings.SenderEmail, _emailSettings.SenderName),
+                From = new MailAddress(emailSettings.SenderEmail, emailSettings.SenderName),
                 Subject = subject,
                 Body = body,
                 IsBodyHtml = true,

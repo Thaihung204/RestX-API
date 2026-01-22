@@ -1,14 +1,14 @@
 namespace RestX.BLL.DTOs.Auth
 {
-    public class AuthResponseDto
+    public class AuthResponse
     {
         public bool Success { get; set; }
         public string Message { get; set; } = string.Empty;
         public object? Data { get; set; }
 
-        public static AuthResponseDto SuccessResponse(string message, object? data = null)
+        public static AuthResponse SuccessResponse(string message, object? data = null)
         {
-            return new AuthResponseDto
+            return new AuthResponse
             {
                 Success = true,
                 Message = message,
@@ -16,9 +16,9 @@ namespace RestX.BLL.DTOs.Auth
             };
         }
 
-        public static AuthResponseDto FailureResponse(string message)
+        public static AuthResponse FailureResponse(string message)
         {
-            return new AuthResponseDto
+            return new AuthResponse
             {
                 Success = false,
                 Message = message,

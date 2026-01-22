@@ -4,12 +4,12 @@ namespace RestX.BLL.Interfaces.Auth
 {
     public interface IAuthService
     {
-        Task<AuthResponseDto> LoginAsync(LoginRequestDto request);
-        Task<AuthResponseDto> LogoutAsync(Guid userId);
-        Task<AuthResponseDto> ChangePasswordAsync(Guid userId, ChangePasswordRequestDto request);
-        Task<AuthResponseDto> ForgotPasswordAsync(ForgotPasswordRequestDto request);
-        Task<AuthResponseDto> ResetPasswordAsync(ResetPasswordRequestDto request);
-        Task<AuthResponseDto> RegisterCustomerAsync(RegisterCustomerRequestDto request);
-        Task<AuthResponseDto> RefreshTokenAsync(string refreshToken);
+        Task<AuthResponse> LoginAsync(LoginRequest request);
+        Task<AuthResponse> LogoutAsync(Guid userId);
+        Task<AuthResponse> ChangePasswordAsync(Guid userId, ChangePasswordRequest request);
+        Task<AuthResponse> ForgotPasswordAsync(ForgotPasswordRequest request);
+        Task<AuthResponse> ResetPasswordAsync(ResetPasswordRequest request);
+        Task<AuthResponse> RegisterCustomerAsync(RegisterCustomerRequest request);
+        Task<AuthResponse> RefreshTokenAsync(string refreshToken);
     }
 }

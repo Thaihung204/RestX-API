@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace RestX.BLL.DTOs.Auth
 {
-    public class LoginRequestDto
+    public class LoginRequest
     {
         [Required(ErrorMessage = "Email is required")]
         [EmailAddress(ErrorMessage = "Invalid email format")]

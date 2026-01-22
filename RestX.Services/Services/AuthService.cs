@@ -15,13 +15,13 @@ namespace RestX.BLL.Services
 {
     public class AuthService : BaseService, IAuthService
     {
-        private readonly UserManager<ApplicationUser> _userManager;
-        private readonly SignInManager<ApplicationUser> _signInManager;
-        private readonly RoleManager<IdentityRole<Guid>> _roleManager;
-        private readonly IEmailService _emailService;
-        private readonly IRedisService _redisService;
-        private readonly IRepository _repo;
-        private readonly AppSettings _appSettings;
+        private readonly UserManager<ApplicationUser> userManager;
+        private readonly SignInManager<ApplicationUser> signInManager;
+        private readonly RoleManager<IdentityRole<Guid>> roleManager;
+        private readonly IEmailService emailService;
+        private readonly IRedisService redisService;
+        private readonly IRepository repo;
+        private readonly AppSettings appSettings;
 
         private const int PASSWORD_RESET_TOKEN_EXPIRY_MINUTES = 15;
         private const int ACCESS_TOKEN_EXPIRY_HOURS = 1;
@@ -36,43 +36,43 @@ namespace RestX.BLL.Services
             IRedisService redisService,
             IOptions<AppSettings> appSettings) : base(repo)
         {
-            _repo = repo;
-            _userManager = userManager;
-            _signInManager = signInManager;
-            _roleManager = roleManager;
-            _emailService = emailService;
-            _redisService = redisService;
-            _appSettings = appSettings.Value;
+            this.repo = repo;
+            this.userManager = userManager;
+            this.signInManager = signInManager;
+            this.roleManager = roleManager;
+            this.emailService = emailService;
+            this.redisService = redisService;
+            this.appSettings = appSettings.Value;
         }
 
-        public async Task<AuthResponseDto> LoginAsync(LoginRequestDto request)
+        public async Task<AuthResponse> LoginAsync(LoginRequest request)
         {
-            var user = await _userManager.FindByEmailAsync(request.Email);
+            var user = await userManager.FindByEmailAsync(request.Email);
             if (user == null)
             {
-                return AuthResponseDto.FailureResponse("Invalid email or password");
+                return AuthResponse.FailureResponse("Invalid email or password");
             }
 
-            var result = await _signInManager.CheckPasswordSignInAsync(user, request.Password, lockoutOnFailure: true);
+            var result = await signInManager.CheckPasswordSignInAsync(user, request.Password, lockoutOnFailure: true);
             if (!result.Succeeded)
             {
                 if (result.IsLockedOut)
                 {
-                    return AuthResponseDto.FailureResponse("Account is locked. Please try again later.");
+                    return AuthResponse.FailureResponse("Account is locked. Please try again later.");
                 }
-                return AuthResponseDto.FailureResponse("Invalid email or password");
+                return AuthResponse.FailureResponse("Invalid email or password");
             }
 
-            var roles = await _userManager.GetRolesAsync(user);
+            var roles = await userManager.GetRolesAsync(user);
             var accessToken = GenerateJwtToken(user, roles);
             var refreshToken = GenerateRefreshToken();
 
             user.RefreshToken = refreshToken;
             user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(REFRESH_TOKEN_EXPIRY_DAYS);
             user.LastLoginTime = DateTime.UtcNow;
-            await _userManager.UpdateAsync(user);
+            await userManager.UpdateAsync(user);
 
-            var response = new LoginResponseDto
+            var response = new LoginResponse
             {
                 AccessToken = accessToken,
                 RefreshToken = refreshToken,
@@ -87,104 +87,111 @@ namespace RestX.BLL.Services
                 }
             };
 
-            return AuthResponseDto.SuccessResponse("Login successful", response);
+            return AuthResponse.SuccessResponse("Login successful", response);
         }
 
-        public async Task<AuthResponseDto> LogoutAsync(Guid userId)
+        public async Task<AuthResponse> LogoutAsync(Guid userId)
         {
-            var user = await _userManager.FindByIdAsync(userId.ToString());
+            var user = await userManager.FindByIdAsync(userId.ToString());
             if (user == null)
             {
-                return AuthResponseDto.FailureResponse("User not found");
+                return AuthResponse.FailureResponse("User not found");
             }
 
             user.RefreshToken = null!;
             user.RefreshTokenExpiryTime = null;
-            await _userManager.UpdateAsync(user);
+            await userManager.UpdateAsync(user);
 
-            return AuthResponseDto.SuccessResponse("Logout successful");
+            return AuthResponse.SuccessResponse("Logout successful");
         }
 
-        public async Task<AuthResponseDto> ChangePasswordAsync(Guid userId, ChangePasswordRequestDto request)
+        public async Task<AuthResponse> ChangePasswordAsync(Guid userId, ChangePasswordRequest request)
         {
-            var user = await _userManager.FindByIdAsync(userId.ToString());
+            var user = await userManager.FindByIdAsync(userId.ToString());
             if (user == null)
             {
-                return AuthResponseDto.FailureResponse("User not found");
+                return AuthResponse.FailureResponse("User not found");
             }
 
-            var result = await _userManager.ChangePasswordAsync(user, request.CurrentPassword, request.NewPassword);
+            var result = await userManager.ChangePasswordAsync(user, request.CurrentPassword, request.NewPassword);
             if (!result.Succeeded)
             {
                 var errors = string.Join(", ", result.Errors.Select(e => e.Description));
-                return AuthResponseDto.FailureResponse($"Failed to change password: {errors}");
+                return AuthResponse.FailureResponse($"Failed to change password: {errors}");
             }
 
             user.LastModified = DateTime.UtcNow;
-            await _userManager.UpdateAsync(user);
+            await userManager.UpdateAsync(user);
 
-            return AuthResponseDto.SuccessResponse("Password changed successfully");
+            return AuthResponse.SuccessResponse("Password changed successfully");
         }
 
-        public async Task<AuthResponseDto> ForgotPasswordAsync(ForgotPasswordRequestDto request)
+        public async Task<AuthResponse> ForgotPasswordAsync(ForgotPasswordRequest request)
         {
-            var user = await _userManager.FindByEmailAsync(request.Email);
+            var user = await userManager.FindByEmailAsync(request.Email);
             if (user == null)
             {
-                return AuthResponseDto.SuccessResponse("If the email exists, a password reset link has been sent");
+                return AuthResponse.SuccessResponse("If the email exists, a password reset link has been sent");
             }
 
-            var resetToken = await _userManager.GeneratePasswordResetTokenAsync(user);
+            var resetToken = await userManager.GeneratePasswordResetTokenAsync(user);
             var encodedToken = Uri.EscapeDataString(resetToken);
             var encodedEmail = Uri.EscapeDataString(request.Email);
 
-            var resetLink = $"{_appSettings.FrontendUrl}/reset-password?email={encodedEmail}&token={encodedToken}";
+            var resetLink = $"{appSettings.FrontendUrl}/reset-password?email={encodedEmail}&token={encodedToken}";
 
             try
             {
-                await _emailService.SendPasswordResetLinkAsync(request.Email, resetLink);
+                await emailService.SendPasswordResetLinkAsync(request.Email, resetLink);
             }
             catch
             {
-                return AuthResponseDto.FailureResponse("Failed to send password reset email. Please try again later.");
+                return AuthResponse.FailureResponse("Failed to send password reset email. Please try again later.");
             }
 
-            return AuthResponseDto.SuccessResponse("A password reset link has been sent to your email");
+            return AuthResponse.SuccessResponse(
+        "A password reset link has been sent to your email",
+        new
+        {
+            Email = request.Email,
+            Token = encodedToken
+        }
+    );
         }
 
-        public async Task<AuthResponseDto> ResetPasswordAsync(ResetPasswordRequestDto request)
+        public async Task<AuthResponse> ResetPasswordAsync(ResetPasswordRequest request)
         {
-            var user = await _userManager.FindByEmailAsync(request.Email);
+            var user = await userManager.FindByEmailAsync(request.Email);
             if (user == null)
             {
-                return AuthResponseDto.FailureResponse("Invalid reset link");
+                return AuthResponse.FailureResponse("Invalid reset link");
             }
 
             var decodedToken = Uri.UnescapeDataString(request.Token);
-            var result = await _userManager.ResetPasswordAsync(user, decodedToken, request.NewPassword);
+            var result = await userManager.ResetPasswordAsync(user, decodedToken, request.NewPassword);
 
             if (!result.Succeeded)
             {
                 var errors = string.Join(", ", result.Errors.Select(e => e.Description));
                 if (errors.Contains("Invalid token"))
                 {
-                    return AuthResponseDto.FailureResponse("The reset link has expired or is invalid. Please request a new one.");
+                    return AuthResponse.FailureResponse("The reset link has expired or is invalid. Please request a new one.");
                 }
-                return AuthResponseDto.FailureResponse($"Failed to reset password: {errors}");
+                return AuthResponse.FailureResponse($"Failed to reset password: {errors}");
             }
 
             user.LastModified = DateTime.UtcNow;
-            await _userManager.UpdateAsync(user);
+            await userManager.UpdateAsync(user);
 
-            return AuthResponseDto.SuccessResponse("Password reset successfully");
+            return AuthResponse.SuccessResponse("Password reset successfully");
         }
 
-        public async Task<AuthResponseDto> RegisterCustomerAsync(RegisterCustomerRequestDto request)
+        public async Task<AuthResponse> RegisterCustomerAsync(RegisterCustomerRequest request)
         {
-            var existingUser = await _userManager.FindByEmailAsync(request.Email);
+            var existingUser = await userManager.FindByEmailAsync(request.Email);
             if (existingUser != null)
             {
-                return AuthResponseDto.FailureResponse("Email already exists");
+                return AuthResponse.FailureResponse("Email already exists");
             }
 
             var user = new ApplicationUser
@@ -198,19 +205,19 @@ namespace RestX.BLL.Services
                 RefreshToken = string.Empty
             };
 
-            var result = await _userManager.CreateAsync(user, request.Password);
+            var result = await userManager.CreateAsync(user, request.Password);
             if (!result.Succeeded)
             {
                 var errors = string.Join(", ", result.Errors.Select(e => e.Description));
-                return AuthResponseDto.FailureResponse($"Failed to create user: {errors}");
+                return AuthResponse.FailureResponse($"Failed to create user: {errors}");
             }
 
             const string customerRole = "Customer";
-            if (!await _roleManager.RoleExistsAsync(customerRole))
+            if (!await roleManager.RoleExistsAsync(customerRole))
             {
-                await _roleManager.CreateAsync(new IdentityRole<Guid>(customerRole));
+                await roleManager.CreateAsync(new IdentityRole<Guid>(customerRole));
             }
-            await _userManager.AddToRoleAsync(user, customerRole);
+            await userManager.AddToRoleAsync(user, customerRole);
 
             var customer = new Customer
             {
@@ -223,9 +230,9 @@ namespace RestX.BLL.Services
                 ModifiedDate = DateTime.UtcNow
             };
 
-            await _repo.CreateAsync(customer);
+            await repo.CreateAsync(customer);
 
-            return AuthResponseDto.SuccessResponse("Registration successful", new
+            return AuthResponse.SuccessResponse("Registration successful", new
             {
                 UserId = user.Id,
                 Email = user.Email,
@@ -233,23 +240,23 @@ namespace RestX.BLL.Services
             });
         }
 
-        public async Task<AuthResponseDto> RefreshTokenAsync(string refreshToken)
+        public async Task<AuthResponse> RefreshTokenAsync(string refreshToken)
         {
             var user = await GetUserByRefreshToken(refreshToken);
             if (user == null || user.RefreshTokenExpiryTime <= DateTime.UtcNow)
             {
-                return AuthResponseDto.FailureResponse("Invalid or expired refresh token");
+                return AuthResponse.FailureResponse("Invalid or expired refresh token");
             }
 
-            var roles = await _userManager.GetRolesAsync(user);
+            var roles = await userManager.GetRolesAsync(user);
             var newAccessToken = GenerateJwtToken(user, roles);
             var newRefreshToken = GenerateRefreshToken();
 
             user.RefreshToken = newRefreshToken;
             user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(REFRESH_TOKEN_EXPIRY_DAYS);
-            await _userManager.UpdateAsync(user);
+            await userManager.UpdateAsync(user);
 
-            var response = new LoginResponseDto
+            var response = new LoginResponse
             {
                 AccessToken = newAccessToken,
                 RefreshToken = newRefreshToken,
@@ -264,7 +271,7 @@ namespace RestX.BLL.Services
                 }
             };
 
-            return AuthResponseDto.SuccessResponse("Token refreshed successfully", response);
+            return AuthResponse.SuccessResponse("Token refreshed successfully", response);
         }
 
         private string GenerateJwtToken(ApplicationUser user, IList<string> roles)
@@ -282,7 +289,7 @@ namespace RestX.BLL.Services
                 claims.Add(new Claim(ClaimTypes.Role, role));
             }
 
-            var key = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(_appSettings.Secret));
+            var key = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(appSettings.Secret));
             var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
             var token = new JwtSecurityToken(
@@ -306,7 +313,7 @@ namespace RestX.BLL.Services
 
         private async Task<ApplicationUser?> GetUserByRefreshToken(string refreshToken)
         {
-            var users = _userManager.Users.Where(u => u.RefreshToken == refreshToken).ToList();
+            var users = userManager.Users.Where(u => u.RefreshToken == refreshToken).ToList();
             return await Task.FromResult(users.FirstOrDefault());
         }
     }

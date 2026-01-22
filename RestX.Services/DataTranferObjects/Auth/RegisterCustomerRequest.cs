@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace RestX.BLL.DTOs.Auth
 {
-    public class RegisterCustomerRequestDto
+    public class RegisterCustomerRequest
     {
         [Required(ErrorMessage = "Email is required")]
         [EmailAddress(ErrorMessage = "Invalid email format")]

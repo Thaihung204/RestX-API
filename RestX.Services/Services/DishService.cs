@@ -1,5 +1,7 @@
-﻿using Microsoft.Data.SqlClient;
+﻿using AutoMapper;
+using Microsoft.Data.SqlClient;
 using RestX.BLL.Interfaces;
+using RestX.Models.Enum;
 using RestX.Models.Menu;
 using System.Data;
 using System.Text;
@@ -9,6 +11,7 @@ namespace RestX.BLL.Services
     public class DishService : BaseService, IDishService
     {
         private readonly IRepository repo;
+        private readonly IMapper mapper;
 
         public DishService(IRepository repo) : base(repo)
         {
@@ -177,9 +180,14 @@ namespace RestX.BLL.Services
             return result;
         }
 
-        public async Task<Dish?> GetDishById(Guid id)
+        public async Task<DishItem> GetDishById(Guid id)
         {
-            return await repo.GetByIdAsync<Dish>(id);
+            var dish = (await repo.GetAsync<Dish>(
+                    filter: d => d.Id == id,
+                    includeProperties: "Category,DishImages",
+                    take: 1))
+                .FirstOrDefault();
+            return mapper.Map<DishItem>(dish);
         }
 
         public async Task<Dish> UpsertDish(Dish model)

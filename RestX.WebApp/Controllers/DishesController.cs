@@ -19,17 +19,17 @@ namespace RestX.WebApp.Controllers
 
         [HttpGet]
 
-        public async Task<ActionResult<IEnumerable<Dish>>> GetAllDishes()
+        public async Task<ActionResult<IEnumerable<Dish>>> GetAllDishes([FromQuery] DishSearch searchModel)
         {
             try
             {
-                var dishes = await _dishService.GetAllDishes();
+                var dishes = await _dishService.GetAllDishes(searchModel);
                 return Ok(dishes);
             }
             catch (Exception ex)
             {
-                exceptionHandler.RaiseException(ex);
-                return BadRequest("An internal error occurred");
+                this.exceptionHandler.RaiseException(ex);
+                return this.BadRequest("An internal error occurred");
             }
         }
 

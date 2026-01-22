@@ -4,7 +4,7 @@ namespace RestX.BLL.Interfaces
 {
     public interface IDishService
     {
-        Task<IEnumerable<Dish>> GetAllDishes();
+        Task<DishSearchResult> GetAllDishes(DishSearch model);
         Task<Dish?> GetDishById(Guid id);
         Task<Dish> UpsertDish(Dish model);
         Task DeleteDish(Guid id);

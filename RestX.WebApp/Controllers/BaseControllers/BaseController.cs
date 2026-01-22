@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using RestX.BLL.Interfaces;
 
-namespace RestX.Admin.Controllers.BaseControllers
+namespace RestX.WebApp.Controllers.BaseControllers
     {
         public class BaseController : Controller
         {
@@ -13,3 +13,4 @@ namespace RestX.Admin.Controllers.BaseControllers
             }
         }
     }
+}

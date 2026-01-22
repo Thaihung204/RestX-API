@@ -17,6 +17,9 @@ using RestX.App.Helpers;
 using RestX.BLL;
 using RestX.BLL.Helpers;
 using RestX.BLL.Interfaces;
+using RestX.BLL.Interfaces.Auth;
+using RestX.BLL.Interfaces.Customers;
+using RestX.BLL.Interfaces.Employees;
 using RestX.BLL.MultiTenancy;
 using RestX.BLL.Services;
 using RestX.DAL.Context;
@@ -53,6 +56,7 @@ namespace RestX.WebApp
             // Multi Tenant Support
             services.AddControllers();
             services.AddScoped<IRedisService, RedisService>();
+
             services.AddMultitenancy<ActiveTenant, TenantResolver>();
             //services.Configure<RazorViewEngineOptions>(
             //    options => { options.ViewLocationExpanders.Add(new TenantViewLocationExpander()); });
@@ -157,7 +161,8 @@ namespace RestX.WebApp
             services.Configure<AppSettings>(Configuration.GetSection("AppSettings"));
             //services.Configure<AzureAdOptions>(Configuration.GetSection("AzureAd"));
             services.Configure<ConnectionStrings>(Configuration.GetSection("ConnectionStrings"));
-            //services.AddResponseCompression();
+            services.Configure<EmailSettings>(Configuration.GetSection("EmailSettings"));
+            services.AddResponseCompression();
 
             SocketsHttpHandler socketsHttpHandler = new SocketsHttpHandler
             {
@@ -167,6 +172,7 @@ namespace RestX.WebApp
             // Registering the Singleton SocketsHttpHandler lets you reuse it across any HttpClient in your application
             services.AddSingleton<SocketsHttpHandler>(socketsHttpHandler);
             services.AddSignalR();
+            services.AddScoped<IExceptionHandler, ExceptionHandler>();
             services.AddScoped<ITenantService, TenantService>();
             services.AddSingleton<IMemoryCache, MemoryCache>();
             services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
@@ -291,11 +297,8 @@ namespace RestX.WebApp
             app.UseEndpoints(endpoints =>
             {
                 endpoints.MapControllers();
-
-                endpoints.MapControllerRoute(
-                    name: "default",
-                    pattern: "{controller=Home}/{action=Index}/{id?}"
-                );
+                endpoints.MapControllerRoute("api", "api/{controller}/{action}/{id?}");
+                //endpoints.MapFallbackToController("Index", "Public");
             });
 
         }

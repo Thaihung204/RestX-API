@@ -10,13 +10,13 @@ namespace RestX.BLL.DataSeeders
 
     public class TenantDataSeeder
     {
-        private readonly string _connectionString;
-        private readonly string _tenantHostname;
+        private readonly string connectionString;
+        private readonly string tenantHostname;
 
         public TenantDataSeeder(string connectionString, string tenantHostname)
         {
-            _connectionString = connectionString;
-            _tenantHostname = tenantHostname;
+            this.connectionString = connectionString;
+            this.tenantHostname = tenantHostname;
         }
 
 
@@ -24,10 +24,10 @@ namespace RestX.BLL.DataSeeders
         {
             try
             {
-                Log.Information($"[TenantDataSeeder] Starting seed Tier 1 data for tenant: {_tenantHostname}");
+                Log.Information($"[TenantDataSeeder] Starting seed Tier 1 data for tenant: {tenantHostname}");
 
                 var optionsBuilder = new DbContextOptionsBuilder<TenantDbContext>();
-                optionsBuilder.UseSqlServer(_connectionString);
+                optionsBuilder.UseSqlServer(connectionString);
 
                 using var context = new TenantDbContext(optionsBuilder.Options);
 
@@ -36,11 +36,11 @@ namespace RestX.BLL.DataSeeders
 
                 await SeedMinimalDataAsync(context);
 
-                Log.Information($"[TenantDataSeeder] Seed data completed successfully for tenant: {_tenantHostname}");
+                Log.Information($"[TenantDataSeeder] Seed data completed successfully for tenant: {tenantHostname}");
             }
             catch (Exception ex)
             {
-                Log.Error(ex, $"[TenantDataSeeder] Failed to seed data for tenant: {_tenantHostname}");
+                Log.Error(ex, $"[TenantDataSeeder] Failed to seed data for tenant: {tenantHostname}");
                 throw;
             }
         }

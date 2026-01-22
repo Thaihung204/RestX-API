@@ -115,7 +115,7 @@ namespace RestX.BLL.Services
                 else
                 {
                     RedisDatabase.GetDatabase().StringSet(key, value, (Expiration)cacheTime);
-                }                
+                }
             }
             catch (Exception ex)
             {
@@ -177,7 +177,7 @@ namespace RestX.BLL.Services
                 else
                 {
                     await RedisDatabase.GetDatabase().StringSetAsync(key, value, (Expiration)cacheTime);
-                }                
+                }
             }
             catch (Exception ex)
             {
@@ -225,7 +225,7 @@ namespace RestX.BLL.Services
         {
             if (chunkSize < 1) throw new ArgumentException("Chunk size must be greater than 0.", nameof(chunkSize));
             if (value == null) throw new ArgumentNullException(nameof(value));
-            
+
             var valueBytes = Encoding.UTF8.GetBytes(value);
 
             // Divide the value into chunks.

@@ -197,7 +197,7 @@ namespace RestX.BLL.Services
             var user = new ApplicationUser
             {
                 Id = Guid.NewGuid(),
-                UserName = request.FullName,
+                UserName = request.Email,
                 Email = request.Email,
                 PhoneNumber = request.PhoneNumber,
                 EmailConfirmed = true,
@@ -230,7 +230,17 @@ namespace RestX.BLL.Services
                 ModifiedDate = DateTime.UtcNow
             };
 
-            await repo.CreateAsync(customer);
+            try
+            {
+                await repo.CreateAsync(customer);
+                await repo.SaveAsync();
+            }
+            catch
+            {
+                await userManager.DeleteAsync(user);
+                throw;
+            }
+
 
             return AuthResponse.SuccessResponse("Registration successful", new
             {

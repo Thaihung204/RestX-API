@@ -44,7 +44,7 @@ namespace RestX.Models.Menu
 
         public bool AutoDisableByStock { get; set; } = false;
 
-        public virtual Category Category { get; set; } = null!;
+        public virtual Category? Category { get; set; } = null!;
         public virtual ICollection<DishImage> DishImages { get; set; } = new HashSet<DishImage>();
         public virtual ICollection<DishRecipe> DishRecipes { get; set; } = new HashSet<DishRecipe>();
         public virtual ICollection<ComboDetail> ComboDetails { get; set; } = new HashSet<ComboDetail>();

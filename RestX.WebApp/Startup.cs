@@ -168,7 +168,6 @@ namespace RestX.WebApp
             services.AddSingleton<SocketsHttpHandler>(socketsHttpHandler);
             services.AddSignalR();
             services.AddScoped<ITenantService, TenantService>();
-            services.AddScoped<IRepository, EntityFrameworkRepository<RestxAdminContext>>();
             services.AddSingleton<IMemoryCache, MemoryCache>();
             services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
             services.AddTransient<TelemetryExtender>();

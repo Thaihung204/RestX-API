@@ -1,5 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using RestX.Admin.Controllers.BaseControllers;
+using RestX.WebApp.Controllers.BaseControllers;
 using RestX.BLL.Interfaces;
 using RestX.Models.Menu;
 using System.ComponentModel.DataAnnotations;

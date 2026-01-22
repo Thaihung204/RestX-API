@@ -12,11 +12,11 @@ namespace RestX.WebApp.Controllers
     [ApiController]
     public class AuthController : BaseController
     {
-        private readonly IAuthService _authService;
+        private readonly IAuthService authService;
 
         public AuthController(IAuthService authService, IExceptionHandler exceptionHandler) : base(exceptionHandler)
         {
-            _authService = authService;
+            this.authService = authService;
         }
 
         [HttpPost("login")]
@@ -30,7 +30,7 @@ namespace RestX.WebApp.Controllers
                     return BadRequest(ModelState);
                 }
 
-                var result = await _authService.LoginAsync(request);
+                var result = await authService.LoginAsync(request);
 
                 if (!result.Success)
                 {
@@ -58,7 +58,7 @@ namespace RestX.WebApp.Controllers
                     return Unauthorized(AuthResponse.FailureResponse("User not authenticated"));
                 }
 
-                var result = await _authService.LogoutAsync(userId.Value);
+                var result = await authService.LogoutAsync(userId.Value);
 
                 if (!result.Success)
                 {
@@ -92,7 +92,7 @@ namespace RestX.WebApp.Controllers
                     return Unauthorized(AuthResponse.FailureResponse("User not authenticated"));
                 }
 
-                var result = await _authService.ChangePasswordAsync(userId.Value, request);
+                var result = await authService.ChangePasswordAsync(userId.Value, request);
 
                 if (!result.Success)
                 {
@@ -119,7 +119,7 @@ namespace RestX.WebApp.Controllers
                     return BadRequest(ModelState);
                 }
 
-                var result = await _authService.ForgotPasswordAsync(request);
+                var result = await authService.ForgotPasswordAsync(request);
 
                 return Ok(result);
             }
@@ -142,7 +142,7 @@ namespace RestX.WebApp.Controllers
                     return BadRequest(ModelState);
                 }
 
-                var result = await _authService.ResetPasswordAsync(request);
+                var result = await authService.ResetPasswordAsync(request);
 
                 if (!result.Success)
                 {
@@ -169,7 +169,7 @@ namespace RestX.WebApp.Controllers
                     return BadRequest(ModelState);
                 }
 
-                var result = await _authService.RegisterCustomerAsync(request);
+                var result = await authService.RegisterCustomerAsync(request);
 
                 if (!result.Success)
                 {
@@ -196,7 +196,7 @@ namespace RestX.WebApp.Controllers
                     return BadRequest(AuthResponse.FailureResponse("Refresh token is required"));
                 }
 
-                var result = await _authService.RefreshTokenAsync(request.RefreshToken);
+                var result = await authService.RefreshTokenAsync(request.RefreshToken);
 
                 if (!result.Success)
                 {

@@ -14,18 +14,18 @@ namespace RestX.BLL.Services
 {
     public class CustomerService : BaseService, ICustomerService
     {
-        private readonly IRepository _repo;
-        private readonly UserManager<ApplicationUser> _userManager;
-        private readonly RoleManager<IdentityRole<Guid>> _roleManager;
+        private readonly IRepository repo;
+        private readonly UserManager<ApplicationUser> userManager;
+        private readonly RoleManager<IdentityRole<Guid>> roleManager;
 
         public CustomerService(
             IRepository repo,
             UserManager<ApplicationUser> userManager,
             RoleManager<IdentityRole<Guid>> roleManager) : base(repo)
         {
-            _repo = repo;
-            _userManager = userManager;
-            _roleManager = roleManager;
+            this.repo = repo;
+            this.userManager = userManager;
+            this.roleManager = roleManager;
         }
 
         public async Task<PaginatedResult<CustomerListItemDto>> GetAllCustomers(CustomerFilterParams filter)
@@ -84,7 +84,7 @@ namespace RestX.BLL.Services
             }
 
             var countQuery = query.ToString().Replace("#SELECT#", "COUNT(DISTINCT c.Id)");
-            int totalCount = await _repo.ExecuteSqlCommandAsync<int>(countQuery, countParameters.ToArray());
+            int totalCount = await repo.ExecuteSqlCommandAsync<int>(countQuery, countParameters.ToArray());
 
             int skip = filter.PageNumber == 1 ? 0 : (filter.PageNumber - 1) * filter.PageSize;
 
@@ -109,7 +109,7 @@ namespace RestX.BLL.Services
             // Apply pagination at DB level - OFFSET/FETCH
             mainQuery += $" OFFSET {skip} ROWS FETCH NEXT {filter.PageSize} ROWS ONLY";
 
-            var items = await _repo.ExecuteSqlSelectAsync<CustomerListItemDto>(mainQuery, queryParameters.ToArray());
+            var items = await repo.ExecuteSqlSelectAsync<CustomerListItemDto>(mainQuery, queryParameters.ToArray());
 
             return new PaginatedResult<CustomerListItemDto>(items, totalCount, filter.PageNumber, filter.PageSize);
         }
@@ -132,17 +132,17 @@ namespace RestX.BLL.Services
 
         public async Task<CustomerResponseDto?> GetCustomerById(Guid id)
         {
-            var customer = await _repo.GetFirstAsync<Customer>(
+            var customer = await repo.GetFirstAsync<Customer>(
                 filter: c => c.Id == id,
                 includeProperties: "ApplicationUser");
 
             if (customer == null) return null;
 
-            var totalOrders = await _repo.ExecuteSqlCommandAsync<int>(
+            var totalOrders = await repo.ExecuteSqlCommandAsync<int>(
                 "SELECT COUNT(*) FROM Orders WHERE CustomerId = @CustomerId",
                 new SqlParameter("CustomerId", id));
 
-            var totalReservations = await _repo.ExecuteSqlCommandAsync<int>(
+            var totalReservations = await repo.ExecuteSqlCommandAsync<int>(
                 "SELECT COUNT(*) FROM Reservations WHERE CustomerId = @CustomerId",
                 new SqlParameter("CustomerId", id));
 
@@ -168,7 +168,7 @@ namespace RestX.BLL.Services
 
         public async Task<CustomerResponseDto> CreateCustomer(CreateCustomerDto dto)
         {
-            var existingUser = await _userManager.FindByEmailAsync(dto.Email);
+            var existingUser = await userManager.FindByEmailAsync(dto.Email);
             if (existingUser != null)
             {
                 throw new InvalidOperationException("Email already exists");
@@ -185,7 +185,7 @@ namespace RestX.BLL.Services
                 RefreshToken = string.Empty
             };
 
-            var createResult = await _userManager.CreateAsync(user, dto.Password);
+            var createResult = await userManager.CreateAsync(user, dto.Password);
             if (!createResult.Succeeded)
             {
                 var errors = string.Join(", ", createResult.Errors.Select(e => e.Description));
@@ -193,11 +193,11 @@ namespace RestX.BLL.Services
             }
 
             const string customerRole = "Customer";
-            if (!await _roleManager.RoleExistsAsync(customerRole))
+            if (!await roleManager.RoleExistsAsync(customerRole))
             {
-                await _roleManager.CreateAsync(new IdentityRole<Guid>(customerRole));
+                await roleManager.CreateAsync(new IdentityRole<Guid>(customerRole));
             }
-            await _userManager.AddToRoleAsync(user, customerRole);
+            await userManager.AddToRoleAsync(user, customerRole);
 
             var customer = new Customer
             {
@@ -208,8 +208,7 @@ namespace RestX.BLL.Services
                 IsActive = true
             };
 
-            await _repo.CreateAsync(customer);
-            await _repo.SaveAsync();
+            await repo.CreateAsync(customer);
             return new CustomerResponseDto
             {
                 Id = customer.Id,
@@ -229,7 +228,7 @@ namespace RestX.BLL.Services
 
         public async Task<CustomerResponseDto?> UpdateCustomer(Guid id, UpdateCustomerDto dto)
         {
-            var customer = await _repo.GetFirstAsync<Customer>(
+            var customer = await repo.GetFirstAsync<Customer>(
        filter: c => c.Id == id,
        includeProperties: "ApplicationUser"
    );
@@ -240,8 +239,8 @@ namespace RestX.BLL.Services
             if (dto.LoyaltyPoints.HasValue) customer.LoyaltyPoints = dto.LoyaltyPoints.Value;
             if (dto.IsActive.HasValue) customer.IsActive = dto.IsActive.Value;
 
-            _repo.Update(customer);
-            await _repo.SaveAsync();
+            repo.Update(customer);
+            await repo.SaveAsync();
 
             var user = customer.ApplicationUser;
             if (user != null)
@@ -254,19 +253,19 @@ namespace RestX.BLL.Services
 
                 user.LastModified = DateTime.UtcNow;
 
-                var updateResult = await _userManager.UpdateAsync(user);
+                var updateResult = await userManager.UpdateAsync(user);
                 if (!updateResult.Succeeded)
                 {
                     var errors = string.Join(", ", updateResult.Errors.Select(e => e.Description));
                     throw new InvalidOperationException($"Failed to update user: {errors}");
                 }
             }
-            var totalOrders = await _repo.ExecuteSqlCommandAsync<int>(
+            var totalOrders = await repo.ExecuteSqlCommandAsync<int>(
         "SELECT COUNT(*) FROM Orders WHERE CustomerId = @CustomerId",
         new SqlParameter("CustomerId", id)
     );
 
-            var totalReservations = await _repo.ExecuteSqlCommandAsync<int>(
+            var totalReservations = await repo.ExecuteSqlCommandAsync<int>(
                 "SELECT COUNT(*) FROM Reservations WHERE CustomerId = @CustomerId",
                 new SqlParameter("CustomerId", id)
             );
@@ -291,7 +290,7 @@ namespace RestX.BLL.Services
         public async Task<bool> DeleteCustomer(Guid id)
         {
 
-            var customer = await _repo.GetFirstAsync<Customer>(
+            var customer = await repo.GetFirstAsync<Customer>(
                 c => c.Id == id,
                 includeProperties: "ApplicationUser"
             );
@@ -300,7 +299,7 @@ namespace RestX.BLL.Services
                 return false;
 
             customer.IsActive = false;
-            _repo.Update(customer);
+            repo.Update(customer);
 
             var user = customer.ApplicationUser;
             if (user != null)
@@ -309,7 +308,7 @@ namespace RestX.BLL.Services
                 user.LockoutEnd = DateTimeOffset.MaxValue;
                 user.LastModified = DateTime.UtcNow;
 
-                var result = await _userManager.UpdateAsync(user);
+                var result = await userManager.UpdateAsync(user);
                 if (!result.Succeeded)
                 {
                     var errors = string.Join(", ", result.Errors.Select(e => e.Description));
@@ -317,7 +316,7 @@ namespace RestX.BLL.Services
                 }
             }
 
-            await _repo.SaveAsync();
+            await repo.SaveAsync();
 
             return true;
         }

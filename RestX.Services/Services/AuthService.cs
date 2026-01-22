@@ -233,7 +233,6 @@ namespace RestX.BLL.Services
             try
             {
                 await repo.CreateAsync(customer);
-                await repo.SaveAsync();
             }
             catch
             {

@@ -7,27 +7,27 @@ namespace RestX.BLL.DataSeeders
 
     public class StatusSystemSeeder
     {
-        private readonly TenantDbContext _context;
+        private readonly TenantDbContext context;
 
         public StatusSystemSeeder(TenantDbContext context)
         {
-            _context = context;
+            this.context = context;
         }
 
         public async Task SeedAsync()
         {
-            if (await _context.StatusTypes.AnyAsync())
+            if (await context.StatusTypes.AnyAsync())
             {
                 return;
             }
 
             var statusTypes = CreateStatusTypes();
-            await _context.StatusTypes.AddRangeAsync(statusTypes);
-            await _context.SaveChangesAsync();
+            await context.StatusTypes.AddRangeAsync(statusTypes);
+            await context.SaveChangesAsync();
 
             var statusValues = CreateStatusValues(statusTypes);
-            await _context.StatusValues.AddRangeAsync(statusValues);
-            await _context.SaveChangesAsync();
+            await context.StatusValues.AddRangeAsync(statusValues);
+            await context.SaveChangesAsync();
         }
 
         private List<StatusType> CreateStatusTypes()

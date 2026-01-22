@@ -13,9 +13,6 @@
         Task<List<string>> GetAllKeys();
         Task<List<string>> GetAllKeys(string patternSearch);
 
-        // Alias methods for convenience
-        Task<string> GetAsync(string key);
-        Task SetAsync(string key, string value, TimeSpan? cacheTime = null);
-        Task DeleteAsync(string key);
+     
     }
 }

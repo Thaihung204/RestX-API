@@ -11,11 +11,11 @@ namespace RestX.WebApp.Controllers
     [ApiController]
     public class EmployeesController : BaseController
     {
-        private readonly IEmployeeService _employeeService;
+        private readonly IEmployeeService employeeService;
 
         public EmployeesController(IEmployeeService employeeService, IExceptionHandler exceptionHandler) : base(exceptionHandler)
         {
-            _employeeService = employeeService;
+            this.employeeService = employeeService;
         }
 
         [HttpGet]
@@ -23,7 +23,7 @@ namespace RestX.WebApp.Controllers
         {
             try
             {
-                var result = await _employeeService.GetAllEmployeesPaginated(filter);
+                var result = await employeeService.GetAllEmployeesPaginated(filter);
                 return Ok(new { success = true, data = result });
             }
             catch (Exception ex)
@@ -38,7 +38,7 @@ namespace RestX.WebApp.Controllers
         {
             try
             {
-                var employee = await _employeeService.GetEmployeeById(id);
+                var employee = await employeeService.GetEmployeeById(id);
                 if (employee == null)
                 {
                     return NotFound(new { success = false, message = "Employee not found" });
@@ -62,7 +62,7 @@ namespace RestX.WebApp.Controllers
                     return BadRequest(new { success = false, message = "Invalid data", errors = ModelState });
                 }
 
-                var result = await _employeeService.CreateEmployee(dto);
+                var result = await employeeService.CreateEmployee(dto);
                 return Ok(new { success = true, message = "Employee created successfully", data = result });
             }
             catch (InvalidOperationException ex)
@@ -86,7 +86,7 @@ namespace RestX.WebApp.Controllers
                     return BadRequest(new { success = false, message = "Invalid data", errors = ModelState });
                 }
 
-                var result = await _employeeService.UpdateEmployee(id, dto);
+                var result = await employeeService.UpdateEmployee(id, dto);
                 if (result == null)
                 {
                     return NotFound(new { success = false, message = "Employee not found" });
@@ -109,7 +109,7 @@ namespace RestX.WebApp.Controllers
         {
             try
             {
-                var success = await _employeeService.DeleteEmployee(id);
+                var success = await employeeService.DeleteEmployee(id);
                 if (!success)
                 {
                     return NotFound(new { success = false, message = "Employee not found" });

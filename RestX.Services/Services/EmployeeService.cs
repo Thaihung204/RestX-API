@@ -201,7 +201,6 @@ namespace RestX.BLL.Services
             };
 
             await repo.CreateAsync(employee);
-            await repo.SaveAsync();
             var randomPassword = GenerateRandomPassword();
             var user = new ApplicationUser
             {

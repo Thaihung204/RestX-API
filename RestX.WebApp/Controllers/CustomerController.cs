@@ -11,11 +11,12 @@ namespace RestX.WebApp.Controllers
     [ApiController]
     public class CustomerController : BaseController
     {
-        private readonly ICustomerService _customerService;
+        private readonly ICustomerService customerService;
 
         public CustomerController(ICustomerService customerService, IExceptionHandler exceptionHandler) : base(exceptionHandler)
         {
-            _customerService = customerService;
+            this.customerService = customerService;
+            this.customerService = customerService;
         }
 
 
@@ -24,7 +25,7 @@ namespace RestX.WebApp.Controllers
         {
             try
             {
-                var result = await _customerService.GetAllCustomers(filter);
+                var result = await customerService.GetAllCustomers(filter);
                 return Ok(new { success = true, data = result });
             }
             catch (Exception ex)
@@ -40,7 +41,7 @@ namespace RestX.WebApp.Controllers
         {
             try
             {
-                var customer = await _customerService.GetCustomerById(id);
+                var customer = await customerService.GetCustomerById(id);
                 if (customer == null)
                 {
                     return NotFound(new { success = false, message = "Customer not found" });
@@ -64,7 +65,7 @@ namespace RestX.WebApp.Controllers
                     return BadRequest(new { success = false, message = "Invalid data", errors = ModelState });
                 }
 
-                var result = await _customerService.CreateCustomer(dto);
+                var result = await customerService.CreateCustomer(dto);
                 return Ok(new { success = true, message = "Customer created successfully", data = result });
             }
             catch (InvalidOperationException ex)
@@ -89,7 +90,7 @@ namespace RestX.WebApp.Controllers
                     return BadRequest(new { success = false, message = "Invalid data", errors = ModelState });
                 }
 
-                var result = await _customerService.UpdateCustomer(id, dto);
+                var result = await customerService.UpdateCustomer(id, dto);
                 if (result == null)
                 {
                     return NotFound(new { success = false, message = "Customer not found" });
@@ -112,7 +113,7 @@ namespace RestX.WebApp.Controllers
         {
             try
             {
-                var success = await _customerService.DeleteCustomer(id);
+                var success = await customerService.DeleteCustomer(id);
                 if (!success)
                 {
                     return NotFound(new { success = false, message = "Customer not found" });

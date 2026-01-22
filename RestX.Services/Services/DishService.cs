@@ -1,5 +1,7 @@
-﻿using Microsoft.Data.SqlClient;
+﻿using AutoMapper;
+using Microsoft.Data.SqlClient;
 using RestX.BLL.Interfaces;
+using RestX.Models.Enum;
 using RestX.Models.Menu;
 using System.Data;
 using System.Text;
@@ -143,6 +145,7 @@ namespace RestX.BLL.Services
             // SELECT list
             var selectItems = @"
                 DISTINCT
+                d.Id,
                 d.Name,
                 c.Name AS CategoryName,
                 d.Price,
@@ -177,9 +180,32 @@ namespace RestX.BLL.Services
             return result;
         }
 
-        public async Task<Dish?> GetDishById(Guid id)
+        public async Task<DishItem> GetDishById(Guid id)
         {
-            return await repo.GetByIdAsync<Dish>(id);
+            var dish = (await repo.GetAsync<Dish>(
+                    filter: d => d.Id == id,
+                    includeProperties: "Category,DishImages",
+                    take: 1))
+                .FirstOrDefault();
+
+            var mainImageUrl = dish.DishImages?
+                .Where(x => x.IsActive && x.ImageType == DishImageType.Main)
+                .OrderBy(x => x.DisplayOrder)
+                .ThenBy(x => x.Id)
+                .Select(x => x.ImageUrl)
+                .FirstOrDefault();
+
+            return new DishItem
+            {
+                Id = dish.Id,
+                Name = dish.Name,
+                CategoryName = dish.Category?.Name ?? string.Empty,
+                Price = dish.Price,
+                IsActive = dish.IsActive,
+                CreatedDate = dish.CreatedDate,
+                Description = dish.Description,
+                MainImageUrl = mainImageUrl
+            };
         }
 
         public async Task<Dish> UpsertDish(Dish model)

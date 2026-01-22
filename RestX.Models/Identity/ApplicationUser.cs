@@ -9,9 +9,9 @@ namespace RestX.Models.Identity
 
     public class ApplicationUser : IdentityUser<Guid>
     {
-        public Guid MemberId { get; set; }
+        public Guid? MemberId { get; set; }
         [ForeignKey("MemberId")]
-        public virtual Employee Member { get; set; }
+        public virtual Employee? Member { get; set; }
         public DateTime? LastLoginTime { get; set; }
         public DateTime LastModified { get; set; } = DateTime.UtcNow;
         public string RefreshToken { get; set; }

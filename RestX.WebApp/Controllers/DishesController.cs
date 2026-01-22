@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using RestX.WebApp.Controllers.BaseControllers;
 using RestX.BLL.Interfaces;
 using RestX.Models.Menu;
+using RestX.WebApp.Controllers.BaseControllers;
 using System.ComponentModel.DataAnnotations;
 
 namespace RestX.WebApp.Controllers

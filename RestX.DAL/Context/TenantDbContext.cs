@@ -113,7 +113,7 @@ namespace RestX.DAL.Context
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
 #warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
-            => optionsBuilder.UseSqlServer("Server=localhost,1433;Database=demo_tenant;User ID=sa;Password=YourStrong!Passw0rd;MultipleActiveResultSets=True;TrustServerCertificate=True;");
+            => optionsBuilder.UseSqlServer("Server=restx-sqlserver,1433;Database=demo_tenant;User Id=sa;Password=Passw0r1!;Encrypt=False;TrustServerCertificate=True;");
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -291,7 +291,7 @@ namespace RestX.DAL.Context
                 entity.HasKey(e => e.Id);
 
                 entity.Property(e => e.ImageUrl).HasMaxLength(500).IsRequired();
-                entity.Property(e => e.TypeId).HasMaxLength(20);
+                entity.Property(e => e.ImageType).HasMaxLength(20);
 
                 entity.HasOne<Dish>(e => e.Dish)
                     .WithMany(d => d.DishImages)

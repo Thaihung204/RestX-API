@@ -18,10 +18,17 @@ namespace RestX.BLL.Services
             var tenants = await adminRepo.GetAllAsync<Tenant>();
             return tenants.ToList();
         }
-        public async Task<Tenant> GetTenantById(Guid id)
+
+        public async Task<Tenant> GetTenantByIdOrHostname(string data)
         {
-            var tenant = await adminRepo.GetByIdAsync<Tenant>(id);
-            return tenant;
+            if (Guid.TryParse(data, out var tenantId))
+            {
+                return await adminRepo.GetByIdAsync<Tenant>(tenantId);
+            }
+
+            return await adminRepo.GetOneAsync<Tenant>(
+                t => t.Hostname == data
+            );
         }
 
         public async Task<Tenant> UpsertTenant(Tenant model)
@@ -82,9 +89,9 @@ namespace RestX.BLL.Services
                 throw new Exception($"Failed to seed data for tenant {tenant.Name}. Tenant creation aborted.", ex);
             }
         }
-        public async Task DeleteTenant(Guid id)
+        public async Task DeleteTenant(string id)
         {
-            var tenant = await GetTenantById(id);
+            var tenant = await GetTenantByIdOrHostname(id);
             if (tenant != null)
             {
                 adminRepo.Delete<Tenant>(id);

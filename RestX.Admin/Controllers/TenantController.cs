@@ -6,14 +6,14 @@ using System.ComponentModel.DataAnnotations;
 
 namespace RestX.Admin.Controllers
 {
-    [Route("api/[controller]")]
+    [Route("api/tenants")]
     [ApiController]
-    public class TenantsController : BaseController
+    public class TenantController : BaseController
     {
         private readonly ITenantService tenantService;
         public readonly IExceptionHandler exceptionHandler;
 
-        public TenantsController(ITenantService tenantService, IExceptionHandler exceptionHandler) : base(exceptionHandler)
+        public TenantController(ITenantService tenantService, IExceptionHandler exceptionHandler) : base(exceptionHandler)
         {
             this.tenantService = tenantService;
         }
@@ -33,12 +33,12 @@ namespace RestX.Admin.Controllers
             }
         }
 
-        [HttpGet("{id}")]
-        public async Task<ActionResult<Tenant>> GetTenantById([Required] Guid id)
+        [HttpGet("{data}")]
+        public async Task<ActionResult<Tenant>> GetTenantByIdOrHostname([Required] string data)
         {
             try
             {
-                return Ok(await tenantService.GetTenantById(id));
+                return Ok(await tenantService.GetTenantByIdOrHostname(data));
             }
             catch (Exception ex)
             {
@@ -76,7 +76,7 @@ namespace RestX.Admin.Controllers
         }
 
         [HttpDelete("{id}")]
-        public async Task<IActionResult> DeleteTenant([Required] Guid id)
+        public async Task<IActionResult> DeleteTenant([Required] string id)
         {
             try
             {

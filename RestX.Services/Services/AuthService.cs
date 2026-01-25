@@ -6,6 +6,7 @@ using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Auth;
 using RestX.Models.Customers;
 using RestX.Models.Identity;
+using RestX.Models.Tenants;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
@@ -19,8 +20,6 @@ namespace RestX.BLL.Services
         private readonly SignInManager<ApplicationUser> signInManager;
         private readonly RoleManager<IdentityRole<Guid>> roleManager;
         private readonly IEmailService emailService;
-        private readonly IRedisService redisService;
-        private readonly IRepository repo;
         private readonly AppSettings appSettings;
 
         private const int PASSWORD_RESET_TOKEN_EXPIRY_MINUTES = 15;
@@ -34,14 +33,13 @@ namespace RestX.BLL.Services
             RoleManager<IdentityRole<Guid>> roleManager,
             IEmailService emailService,
             IRedisService redisService,
-            IOptions<AppSettings> appSettings) : base(repo)
+            IOptions<AppSettings> appSettings,
+            IEnumerable<ActiveTenant> tenant = null) : base(repo, redisService, tenant)
         {
-            this.repo = repo;
             this.userManager = userManager;
             this.signInManager = signInManager;
             this.roleManager = roleManager;
             this.emailService = emailService;
-            this.redisService = redisService;
             this.appSettings = appSettings.Value;
         }
 
@@ -232,7 +230,7 @@ namespace RestX.BLL.Services
 
             try
             {
-                await repo.CreateAsync(customer);
+                await Repo.CreateAsync(customer);
             }
             catch
             {

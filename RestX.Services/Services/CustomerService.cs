@@ -7,6 +7,7 @@ using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Customers;
 using RestX.Models.Customers;
 using RestX.Models.Identity;
+using RestX.Models.Tenants;
 using System.Data;
 using System.Text;
 
@@ -20,8 +21,10 @@ namespace RestX.BLL.Services
 
         public CustomerService(
             IRepository repo,
+            IRedisService redisService,
             UserManager<ApplicationUser> userManager,
-            RoleManager<IdentityRole<Guid>> roleManager) : base(repo)
+            RoleManager<IdentityRole<Guid>> roleManager,
+            IEnumerable<ActiveTenant> tenant = null) : base(repo, redisService, tenant)
         {
             this.repo = repo;
             this.userManager = userManager;

@@ -1,4 +1,5 @@
-﻿using RestX.BLL.DataSeeders;
+﻿using RestX.AdminDAL.Context;
+using RestX.BLL.DataSeeders;
 using RestX.BLL.Interfaces;
 using RestX.Models.Tenants;
 using Serilog;
@@ -7,9 +8,11 @@ namespace RestX.BLL.Services
 {
     public class TenantService : BaseService, ITenantService
     {
+        private readonly RestxAdminContext adminContext;
         private readonly IRepository adminRepo;
-        public TenantService(IRepository repo) : base(repo)
+        public TenantService(RestxAdminContext restxAdminContext, IRepository repo, IRedisService redisService, IEnumerable<ActiveTenant> tenant = null) : base(repo, redisService, tenant)
         {
+            this.adminContext = restxAdminContext;
             this.adminRepo = repo;
         }
 

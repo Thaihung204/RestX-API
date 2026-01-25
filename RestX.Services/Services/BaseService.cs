@@ -1,40 +1,26 @@
 ﻿using RestX.AdminDAL.Context;
 using RestX.BLL.Interfaces;
 using RestX.DAL.Context;
+using RestX.Models.Tenants;
 
 
 namespace RestX.BLL.Services
 {
     public class BaseService
     {
-        protected readonly IRepository Repo;
-        private RestxAdminContext? Restxadmincontext;
+        public readonly IRepository Repo;
+        public IRedisService RedisService;
+        public readonly ActiveTenant CurrentTenant;
 
-        //protected RestxAdminContext Restxadmincontext
-        //{
-        //    get
-        //    {
-        //        if (Restxadmincontext == null)
-        //        {
-        //            Restxadmincontext = _httpContextAccessor.HttpContext?.Items["RestaurantContext"] as RestaurantContext ?? new RestaurantContext();
-        //        }
-        //        return restaurantContext;
-        //    }
-        //}
-
-        //protected Guid OwnerId => RestaurantContext.OwnerId;
-        //protected Guid? StaffId => RestaurantContext.StaffId;
-        //protected int TableId => RestaurantContext.TableId;
-
-        public BaseService(IRepository repo)
+        public BaseService(IRepository repo, IRedisService redisService, IEnumerable<ActiveTenant> tenant = null)
         {
-            Repo = repo;
+            this.Repo = repo;
+            this.RedisService = redisService;
+            this.CurrentTenant = tenant?.FirstOrDefault();
         }
 
-        //public BaseService(IRepository repo, IHttpContextAccessor httpContextAccessor)
-        //{
-        //    this.Repo = repo;
-        //    _httpContextAccessor = httpContextAccessor;
-        //}
+        public BaseService()
+        {
+        }
     }
 }

@@ -1,40 +1,73 @@
-﻿using RestX.BLL.Interfaces;
+﻿using Microsoft.AspNetCore.Mvc.Rendering;
+using Newtonsoft.Json;
+using RestX.BLL.Interfaces;
 using RestX.Models.Menu;
+using RestX.Models.Tenants;
+using StackExchange.Redis;
 
 namespace RestX.BLL.Services
 {
     public class CategoryService : BaseService, ICategoryService
     {
-        private readonly IRepository repo;
-
-        public CategoryService(IRepository repo) : base(repo)
+        public CategoryService(
+            IRepository repo,
+            IRedisService redisService,
+            IEnumerable<ActiveTenant> tenant = null
+        ) : base(repo, redisService, tenant)
         {
-            this.repo = repo;
         }
+
+        private string GetCacheKey()
+            => $"{CurrentTenant?.Id}:category";
 
         public async Task<IEnumerable<Category>> GetAllCategories()
         {
-            return await repo.GetAllAsync<Category>(
-                orderBy: q => q.OrderBy(c => c.Name),
-                includeProperties: "ParentCategory,SubCategories");
+            var cacheKey = GetCacheKey();
+
+            try
+            {
+                var cachedData = await RedisService.GetAsync<List<Category>>(cacheKey);
+ 
+                if (cachedData == null)
+                {
+                    cachedData = await Repo.GetAllAsync<Category>(
+                    orderBy: q => q.OrderBy(c => c.Name),
+                    includeProperties: "ParentCategory,SubCategories"
+                );
+                }
+
+                await RedisService.SetStringAsync(
+                    cacheKey,
+                    JsonConvert.SerializeObject(categories),
+                    TimeSpan.FromMinutes(10)
+                );
+
+                return categories;
+            }
+            catch
+            {
+                return await Repo.GetAllAsync<Category>(
+                    orderBy: q => q.OrderBy(c => c.Name),
+                    includeProperties: "ParentCategory,SubCategories"
+                );
+            }
         }
 
         public async Task<Category?> GetCategoryById(Guid id)
         {
-            return await repo.GetOneAsync<Category>(
+            return await Repo.GetOneAsync<Category>(
                 filter: c => c.Id == id,
-                includeProperties: "ParentCategory,SubCategories");
+                includeProperties: "ParentCategory,SubCategories"
+            );
         }
 
         public async Task<Category> UpsertCategory(Category model)
         {
             if (model.Id != Guid.Empty)
             {
-                var category = await repo.GetByIdAsync<Category>(model.Id);
+                var category = await Repo.GetByIdAsync<Category>(model.Id);
                 if (category == null)
-                {
                     throw new InvalidOperationException("Category not found");
-                }
 
                 category.Name = model.Name;
                 category.Description = model.Description;
@@ -42,26 +75,32 @@ namespace RestX.BLL.Services
                 category.ParentId = model.ParentId;
                 category.IsActive = model.IsActive;
 
-                repo.Update(category);
-                await repo.SaveAsync();
+                Repo.Update(category);
+                await Repo.SaveAsync();
+
+                await RedisService.RemoveAsync(GetCacheKey());
 
                 return category;
             }
 
-            await repo.CreateAsync(model);
+            await Repo.CreateAsync(model);
+            await Repo.SaveAsync();
+
+            await RedisService.RemoveAsync(GetCacheKey());
+
             return model;
         }
 
         public async Task DeleteCategory(Guid id)
         {
-            var category = await repo.GetByIdAsync<Category>(id);
+            var category = await Repo.GetByIdAsync<Category>(id);
             if (category == null)
-            {
                 return;
-            }
 
-            repo.Delete<Category>(id);
-            await repo.SaveAsync();
+            Repo.Delete<Category>(id);
+            await Repo.SaveAsync();
+
+            await RedisService.RemoveAsync(GetCacheKey());
         }
     }
 }

@@ -3,6 +3,7 @@ using Microsoft.Data.SqlClient;
 using RestX.BLL.Interfaces;
 using RestX.Models.Enum;
 using RestX.Models.Menu;
+using RestX.Models.Tenants;
 using System.Data;
 using System.Text;
 
@@ -10,11 +11,9 @@ namespace RestX.BLL.Services
 {
     public class DishService : BaseService, IDishService
     {
-        private readonly IRepository repo;
 
-        public DishService(IRepository repo) : base(repo)
+        public DishService(IRepository repo, IRedisService redisService, IEnumerable<ActiveTenant> tenant = null) : base(repo, redisService, tenant)
         {
-            this.repo = repo;
         }
 
         public async Task<DishSearchResult> GetAllDishes(DishSearch model)
@@ -182,7 +181,7 @@ namespace RestX.BLL.Services
 
         public async Task<DishItem> GetDishById(Guid id)
         {
-            var dish = (await repo.GetAsync<Dish>(
+            var dish = (await Repo.GetAsync<Dish>(
                     filter: d => d.Id == id,
                     includeProperties: "Category,DishImages",
                     take: 1))
@@ -212,7 +211,7 @@ namespace RestX.BLL.Services
         {
             if (model.Id != Guid.Empty)
             {
-                var dish = await repo.GetByIdAsync<Dish>(model.Id);
+                var dish = await Repo.GetByIdAsync<Dish>(model.Id);
                 if (dish == null)
                 {
                     throw new InvalidOperationException("Dish not found");
@@ -230,13 +229,13 @@ namespace RestX.BLL.Services
                 dish.IsActive = model.IsActive;
                 dish.AutoDisableByStock = model.AutoDisableByStock;
 
-                repo.Update(dish);
-                await repo.SaveAsync();
+                Repo.Update(dish);
+                await Repo.SaveAsync();
 
                 return dish;
             }
 
-            await repo.CreateAsync(model);
+            await Repo.CreateAsync(model);
             return model;
         }
 
@@ -245,8 +244,8 @@ namespace RestX.BLL.Services
             var dish = await GetDishById(id);
             if (dish != null)
             {
-                repo.Delete<Dish>(id);
-                await repo.SaveAsync();
+                Repo.Delete<Dish>(id);
+                await Repo.SaveAsync();
             }
         }
     }

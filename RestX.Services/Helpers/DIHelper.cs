@@ -10,6 +10,7 @@ namespace RestX.BLL.Helpers
         {
             services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
             
+
         }
     }
 }

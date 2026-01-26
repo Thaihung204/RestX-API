@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc.Rendering;
 using Newtonsoft.Json;
+using RestX.BLL.Extensions;
 using RestX.BLL.Interfaces;
 using RestX.Models.Menu;
 using RestX.Models.Tenants;
@@ -22,35 +23,18 @@ namespace RestX.BLL.Services
 
         public async Task<IEnumerable<Category>> GetAllCategories()
         {
-            var cacheKey = GetCacheKey();
-
-            try
+            var categories = await this.RedisService.GetAsync<List<Category>>(GetCacheKey());
+            if (categories == null)
             {
-                var cachedData = await RedisService.GetAsync<List<Category>>(cacheKey);
- 
-                if (cachedData == null)
-                {
-                    cachedData = await Repo.GetAllAsync<Category>(
-                    orderBy: q => q.OrderBy(c => c.Name),
-                    includeProperties: "ParentCategory,SubCategories"
-                );
-                }
+                categories = (await Repo.GetAllAsync<Category>(
+                        orderBy: q => q.OrderBy(c => c.Name),
+                        includeProperties: "ParentCategory,SubCategories"
+                    )).ToList();
 
-                await RedisService.SetStringAsync(
-                    cacheKey,
-                    JsonConvert.SerializeObject(categories),
-                    TimeSpan.FromMinutes(10)
-                );
+                await this.RedisService.SetAsync(GetCacheKey(), categories);
+            }
 
-                return categories;
-            }
-            catch
-            {
-                return await Repo.GetAllAsync<Category>(
-                    orderBy: q => q.OrderBy(c => c.Name),
-                    includeProperties: "ParentCategory,SubCategories"
-                );
-            }
+            return categories;
         }
 
         public async Task<Category?> GetCategoryById(Guid id)

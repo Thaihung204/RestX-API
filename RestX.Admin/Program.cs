@@ -39,7 +39,7 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddScoped<IRepository, EntityFrameworkRepository<RestxAdminContext>>();
 builder.Services.AddScoped<ITenantService, TenantService>();
 builder.Services.AddScoped<IExceptionHandler, ExceptionHandler>();
-
+builder.Services.AddScoped<IRedisService, RedisService>();
 builder.Services.AddIdentity<Admin, IdentityRole>().AddEntityFrameworkStores<RestxAdminContext>().AddDefaultTokenProviders();
 
 var app = builder.Build();

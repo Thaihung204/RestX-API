@@ -1,6 +1,9 @@
-﻿using Microsoft.Data.SqlClient;
+﻿using AutoMapper;
+using Microsoft.Data.SqlClient;
 using RestX.BLL.Interfaces;
+using RestX.Models.Enum;
 using RestX.Models.Menu;
+using RestX.Models.Tenants;
 using System.Data;
 using System.Text;
 
@@ -8,11 +11,9 @@ namespace RestX.BLL.Services
 {
     public class DishService : BaseService, IDishService
     {
-        private readonly IRepository repo;
 
-        public DishService(IRepository repo) : base(repo)
+        public DishService(IRepository repo, IRedisService redisService, IEnumerable<ActiveTenant> tenant = null) : base(repo, redisService, tenant)
         {
-            this.repo = repo;
         }
 
         public async Task<DishSearchResult> GetAllDishes(DishSearch model)
@@ -24,6 +25,14 @@ namespace RestX.BLL.Services
                 SELECT #SELECT#
                 FROM dbo.Dishes d
                 JOIN dbo.Categories c ON d.CategoryId = c.Id
+                OUTER APPLY (
+                    SELECT TOP (1) di.ImageUrl
+                    FROM dbo.DishImages di
+                    WHERE di.DishId = d.Id
+                      AND di.IsActive = 1
+                      AND di.ImageType = 0
+                    ORDER BY di.DisplayOrder ASC, di.Id ASC
+                ) mainImg
                 WHERE 1 = 1
             ");
 
@@ -135,11 +144,13 @@ namespace RestX.BLL.Services
             // SELECT list
             var selectItems = @"
                 DISTINCT
+                d.Id,
                 d.Name,
                 c.Name AS CategoryName,
                 d.Price,
                 d.IsActive,
-                d.CreatedDate
+                d.CreatedDate,
+                mainImg.ImageUrl AS MainImageUrl
             ";
 
             var mainQuery = countQuery.Replace(
@@ -168,16 +179,39 @@ namespace RestX.BLL.Services
             return result;
         }
 
-        public async Task<Dish?> GetDishById(Guid id)
+        public async Task<DishItem> GetDishById(Guid id)
         {
-            return await repo.GetByIdAsync<Dish>(id);
+            var dish = (await Repo.GetAsync<Dish>(
+                    filter: d => d.Id == id,
+                    includeProperties: "Category,DishImages",
+                    take: 1))
+                .FirstOrDefault();
+
+            var mainImageUrl = dish.DishImages?
+                .Where(x => x.IsActive && x.ImageType == DishImageType.Main)
+                .OrderBy(x => x.DisplayOrder)
+                .ThenBy(x => x.Id)
+                .Select(x => x.ImageUrl)
+                .FirstOrDefault();
+
+            return new DishItem
+            {
+                Id = dish.Id,
+                Name = dish.Name,
+                CategoryName = dish.Category?.Name ?? string.Empty,
+                Price = dish.Price,
+                IsActive = dish.IsActive,
+                CreatedDate = dish.CreatedDate,
+                Description = dish.Description,
+                MainImageUrl = mainImageUrl
+            };
         }
 
         public async Task<Dish> UpsertDish(Dish model)
         {
             if (model.Id != Guid.Empty)
             {
-                var dish = await repo.GetByIdAsync<Dish>(model.Id);
+                var dish = await Repo.GetByIdAsync<Dish>(model.Id);
                 if (dish == null)
                 {
                     throw new InvalidOperationException("Dish not found");
@@ -195,13 +229,13 @@ namespace RestX.BLL.Services
                 dish.IsActive = model.IsActive;
                 dish.AutoDisableByStock = model.AutoDisableByStock;
 
-                repo.Update(dish);
-                await repo.SaveAsync();
+                Repo.Update(dish);
+                await Repo.SaveAsync();
 
                 return dish;
             }
 
-            await repo.CreateAsync(model);
+            await Repo.CreateAsync(model);
             return model;
         }
 
@@ -210,8 +244,8 @@ namespace RestX.BLL.Services
             var dish = await GetDishById(id);
             if (dish != null)
             {
-                repo.Delete<Dish>(id);
-                await repo.SaveAsync();
+                Repo.Delete<Dish>(id);
+                await Repo.SaveAsync();
             }
         }
     }

@@ -291,7 +291,7 @@ namespace RestX.DAL.Context
                 entity.HasKey(e => e.Id);
 
                 entity.Property(e => e.ImageUrl).HasMaxLength(500).IsRequired();
-                entity.Property(e => e.TypeId).HasMaxLength(20);
+                entity.Property(e => e.ImageType).HasMaxLength(20);
 
                 entity.HasOne<Dish>(e => e.Dish)
                     .WithMany(d => d.DishImages)

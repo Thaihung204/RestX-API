@@ -1,4 +1,5 @@
 ﻿using RestX.Models.BaseModel;
+using RestX.Models.Enum;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
@@ -19,7 +20,7 @@ namespace RestX.Models.Menu
 
         [Required]
         [MaxLength(20)]
-        public string TypeId { get; set; } = string.Empty;
+        public DishImageType ImageType { get; set; }
 
         [Range(0, 999)]
         public int DisplayOrder { get; set; } = 0;

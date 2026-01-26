@@ -10,6 +10,7 @@ using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Employees;
 using RestX.Models.HR;
 using RestX.Models.Identity;
+using RestX.Models.Tenants;
 using System.Data;
 using System.Text;
 
@@ -17,19 +18,19 @@ namespace RestX.BLL.Services
 {
     public class EmployeeService : BaseService, IEmployeeService
     {
-        private readonly IRepository repo;
         private readonly UserManager<ApplicationUser> userManager;
         private readonly RoleManager<IdentityRole<Guid>> roleManager;
         private readonly AppSettings appSettings;
         private readonly IEmailService emailService;
 
         public EmployeeService(
-            IRepository repo,
+            IRepository Repo,
+            IRedisService redisService,
             UserManager<ApplicationUser> userManager,
             RoleManager<IdentityRole<Guid>> roleManager, IEmailService emailService,
-            IOptions<AppSettings> appSettings) : base(repo)
+            IOptions<AppSettings> appSettings,
+            IEnumerable<ActiveTenant> tenant = null) : base(Repo, redisService, tenant)
         {
-            this.repo = repo;
             this.userManager = userManager;
             this.roleManager = roleManager;
             this.emailService = emailService;
@@ -94,7 +95,7 @@ namespace RestX.BLL.Services
 
             // Count query - execute at DB level
             var countQuery = query.ToString().Replace("#SELECT#", "COUNT(DISTINCT e.Id)");
-            int totalCount = await repo.ExecuteSqlCommandAsync<int>(countQuery, countParameters.ToArray());
+            int totalCount = await Repo.ExecuteSqlCommandAsync<int>(countQuery, countParameters.ToArray());
 
             // Pagination calculation
             int skip = filter.PageNumber == 1 ? 0 : (filter.PageNumber - 1) * filter.PageSize;
@@ -120,7 +121,7 @@ namespace RestX.BLL.Services
             // Apply pagination at DB level - OFFSET/FETCH
             mainQuery += $" OFFSET {skip} ROWS FETCH NEXT {filter.PageSize} ROWS ONLY";
 
-            var items = await repo.ExecuteSqlSelectAsync<EmployeeListItemDto>(mainQuery, queryParameters.ToArray());
+            var items = await Repo.ExecuteSqlSelectAsync<EmployeeListItemDto>(mainQuery, queryParameters.ToArray());
 
 
             return new PaginatedResult<EmployeeListItemDto>(items, totalCount, filter.PageNumber, filter.PageSize);
@@ -144,7 +145,7 @@ namespace RestX.BLL.Services
 
         public async Task<EmployeeResponseDto?> GetEmployeeById(Guid id)
         {
-            var employee = await repo.GetFirstAsync<Employee>(e => e.Id == id);
+            var employee = await Repo.GetFirstAsync<Employee>(e => e.Id == id);
             if (employee == null) return null;
 
             var user = await userManager.Users
@@ -200,7 +201,7 @@ namespace RestX.BLL.Services
                 IsActive = true
             };
 
-            await repo.CreateAsync(employee);
+            await Repo.CreateAsync(employee);
             var randomPassword = GenerateRandomPassword();
             var user = new ApplicationUser
             {
@@ -217,8 +218,8 @@ namespace RestX.BLL.Services
             var createResult = await userManager.CreateAsync(user, randomPassword);
             if (!createResult.Succeeded)
             {
-                repo.Delete<Employee>(employee);
-                await repo.SaveAsync();
+                Repo.Delete<Employee>(employee);
+                await Repo.SaveAsync();
 
                 var errors = string.Join(", ", createResult.Errors.Select(e => e.Description));
                 throw new InvalidOperationException($"Failed to create user: {errors}");
@@ -265,7 +266,7 @@ namespace RestX.BLL.Services
 
         public async Task<EmployeeResponseDto?> UpdateEmployee(Guid id, UpdateEmployeeDto dto)
         {
-            var employee = await repo.GetFirstAsync<Employee>(filter: e => e.Id == id);
+            var employee = await Repo.GetFirstAsync<Employee>(filter: e => e.Id == id);
 
             if (employee == null) return null;
 
@@ -278,8 +279,8 @@ namespace RestX.BLL.Services
             if (!string.IsNullOrEmpty(dto.SalaryType)) employee.SalaryType = dto.SalaryType;
             if (dto.IsActive.HasValue) employee.IsActive = dto.IsActive.Value;
 
-            repo.Update(employee);
-            await repo.SaveAsync();
+            Repo.Update(employee);
+            await Repo.SaveAsync();
 
             var user = userManager.Users.FirstOrDefault(u => u.MemberId == id);
             if (user != null)
@@ -288,7 +289,7 @@ namespace RestX.BLL.Services
                 if (!string.IsNullOrEmpty(dto.PhoneNumber)) user.PhoneNumber = dto.PhoneNumber;
                 user.LastModified = DateTime.UtcNow;
                 await userManager.UpdateAsync(user);
-                await repo.SaveAsync();
+                await Repo.SaveAsync();
 
             }
 
@@ -317,15 +318,15 @@ namespace RestX.BLL.Services
 
         public async Task<bool> DeleteEmployee(Guid id)
         {
-            var employee = await repo.GetFirstAsync<Employee>(filter: e => e.Id == id);
+            var employee = await Repo.GetFirstAsync<Employee>(filter: e => e.Id == id);
 
             if (employee == null) return false;
 
             employee.IsActive = false;
             employee.TerminationDate = DateTime.UtcNow;
 
-           repo.Update(employee);
-            await repo.SaveAsync();
+           Repo.Update(employee);
+            await Repo.SaveAsync();
             var user = employee.ApplicationUser;
             if (user != null)
             {
@@ -348,7 +349,7 @@ namespace RestX.BLL.Services
         WHERE Code LIKE 'RTX%'
     ";
 
-            var lastCode = await repo.ExecuteSqlCommandAsync<string>(query);
+            var lastCode = await Repo.ExecuteSqlCommandAsync<string>(query);
 
             if (string.IsNullOrWhiteSpace(lastCode))
                 return "RTX001";

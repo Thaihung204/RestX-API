@@ -1,6 +1,7 @@
 ﻿using AutoMapper;
 using RestX.Models.Enum;
 using RestX.Models.Menu;
+using RestX.Models.Tenants;
 using System.Globalization;
 
 namespace RestX.BLL.Helpers
@@ -25,6 +26,7 @@ namespace RestX.BLL.Helpers
                             .ThenBy(x => x.Id)
                             .Select(x => x.ImageUrl)
                             .FirstOrDefault()));
+            CreateMap<Tenant, TenantItem>().ReverseMap();
         }
     }
 }

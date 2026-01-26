@@ -1,4 +1,5 @@
-﻿using RestX.AdminDAL.Context;
+﻿using AutoMapper;
+using RestX.AdminDAL.Context;
 using RestX.BLL.DataSeeders;
 using RestX.BLL.Interfaces;
 using RestX.Models.Tenants;
@@ -34,10 +35,10 @@ namespace RestX.BLL.Services
             );
         }
 
-        public async Task<Tenant> UpsertTenant(Tenant model)
+        public async Task<Tenant> UpsertTenant(TenantItem model)
         {
-            var tenant = new Tenant();
-            if (model.Id != Guid.Empty)
+            Tenant tenant;
+            if (model.Id != null)
             {
                 tenant = await adminRepo.GetByIdAsync<Tenant>(model.Id);
                 tenant.Prefix = model.Prefix;
@@ -60,9 +61,52 @@ namespace RestX.BLL.Services
             }
             else
             {
-                await adminRepo.CreateAsync(model);
-                tenant = model;
+                tenant = new Tenant
+                {
+                    // Core
+                    Name = model.Name,
+                    Status = model.Status,
+                    Hostname = model.Hostname,
 
+                    // System / Identity
+                    Prefix = model.Prefix ?? "TENANT",
+                    NetworkIp = model.NetworkIp ?? string.Empty,
+                    ConnectionString = model.ConnectionString ?? string.Empty,
+
+                    // Theme / UI
+                    BaseColor = model.BaseColor ?? "#ffffff",
+                    PrimaryColor = model.PrimaryColor ?? "#000000",
+                    SecondaryColor = model.SecondaryColor ?? "#cccccc",
+                    HeaderColor = model.HeaderColor ?? "#ffffff",
+                    FooterColor = model.FooterColor ?? "#ffffff",
+
+                    LogoUrl = model.LogoUrl ?? string.Empty,
+                    FaviconUrl = model.FaviconUrl ?? string.Empty,
+                    BackgroundUrl = model.BackgroundUrl ?? string.Empty,
+
+                    // Expiry
+                    ExpiredAt = model.ExpiredAt == default
+                        ? DateTime.UtcNow.AddYears(1)
+                        : model.ExpiredAt,
+
+                    // Business
+                    BusinessName = model.BusinessName,
+                    BusinessAddressLine1 = model.BusinessAddressLine1,
+                    BusinessAddressLine2 = model.BusinessAddressLine2,
+                    BusinessAddressLine3 = model.BusinessAddressLine3,
+                    BusinessAddressLine4 = model.BusinessAddressLine4,
+                    BusinessCounty = model.BusinessCounty ?? string.Empty,
+                    BusinessPostCode = model.BusinessPostCode ?? string.Empty,
+                    BusinessCountry = model.BusinessCountry ?? string.Empty,
+                    BusinessPrimaryPhone = model.BusinessPrimaryPhone,
+                    BusinessSecondaryPhone = model.BusinessSecondaryPhone ?? string.Empty,
+                    BusinessEmailAddress = model.BusinessEmailAddress,
+                    BusinessCompanyNumber = model.BusinessCompanyNumber ?? string.Empty,
+                    BusinessOpeningHours = model.BusinessOpeningHours ?? string.Empty
+                };
+
+
+                await Repo.CreateAsync(tenant);
                 await SeedTenantDataAsync(tenant);
             }
             return tenant;

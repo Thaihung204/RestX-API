@@ -1,8 +1,11 @@
+using AutoMapper;
 using Hangfire;
 using Hangfire.SqlServer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using RestX.AdminDAL.Context;
+using RestX.BLL.Helpers;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Services;
 using RestX.DAL.Context;
@@ -34,6 +37,7 @@ builder.Services.AddHangfireServer();
 
 // Add services to the container.
 builder.Services.AddControllers();
+//builder.Services.AddAutoMapper(typeof(AutoMapperProfile));
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddScoped<IRepository, EntityFrameworkRepository<RestxAdminContext>>();

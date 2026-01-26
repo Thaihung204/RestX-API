@@ -8,19 +8,16 @@ namespace RestX.BLL.DataSeeders
     public class LoyaltySeeder
     {
         private readonly TenantDbContext context;
-
         public LoyaltySeeder(TenantDbContext context)
         {
             this.context = context;
         }
-
         public async Task SeedAsync()
         {
             if (await context.LoyaltyPointBands.AnyAsync())
             {
                 return;
             }
-
             var bands = new List<LoyaltyPointBand>
             {
                 new LoyaltyPointBand
@@ -64,7 +61,6 @@ namespace RestX.BLL.DataSeeders
                     IsActive = true
                 }
             };
-
             await context.LoyaltyPointBands.AddRangeAsync(bands);
             await context.SaveChangesAsync();
         }

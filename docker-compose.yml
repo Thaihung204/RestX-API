@@ -1,38 +1,15 @@
 version: "3.8"
 
 services:
-
-  sqlserver:
-      image: mcr.microsoft.com/mssql/server:2022-latest
-      container_name: sqlserver
-      ports:
-        - "1433:1433"
-      networks:
-        - restx-net
-      volumes:
-        - sql_data:/var/opt/mssql
-      environment:
-        ACCEPT_EULA: "Y"
-        SA_PASSWORD: "RestX@12345"
-        MSSQL_PID: "Developer"
-      restart: unless-stopped
-      
-  redis:
-    image: redis:7-alpine
-    container_name: restx-redis
+  proxy:
+    build: ./ReverseProxy
     ports:
-      - "6379:6379"
+      - "80:80"
     networks:
       - restx-net
-    volumes:
-      - redis_data:/data
-    command: redis-server --appendonly yes
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-    restart: unless-stopped
+    depends_on:
+      - web
+      - admin
 
   admin:
     build:
@@ -47,8 +24,7 @@ services:
       - ASPNETCORE_URLS=http://+:4999
       - ASPNETCORE_ENVIRONMENT=Production
     depends_on:
-        - sqlserver
-    restart: unless-stopped
+      - sqlserver
 
   web:
     build:
@@ -56,7 +32,7 @@ services:
       dockerfile: RestX.WebApp/Dockerfile
     container_name: restx-webapp
     ports:
-      - "5000:5000"
+    - "5000:5000"
     networks:
       - restx-net
     environment:
@@ -64,10 +40,33 @@ services:
       - ASPNETCORE_ENVIRONMENT=Production
       - ConnectionStrings__RedisConnection=redis:6379
     depends_on:
-         - sqlserver
+      - sqlserver
     volumes:
       - ./RestX.WebApp/wwwroot/Uploads:/app/wwwroot/Uploads
-    restart: unless-stopped
+
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: restx-sqlserver
+    ports:
+    - "1433:1433"
+    networks:
+      - restx-net
+    volumes:
+      - sql_data:/var/opt/mssql
+    environment:
+      ACCEPT_EULA: "Y"
+      SA_PASSWORD: "Passw0r1!"
+      MSSQL_PID: "Developer"
+
+  redis:
+    image: redis:7-alpine
+    container_name: restx-redis
+    ports:
+    - "6379:6379"
+    networks:
+      - restx-net
+    volumes:
+      - redis_data:/data
 
 networks:
   restx-net:

@@ -3,13 +3,14 @@ using RestX.BLL.Interfaces;
 
 namespace RestX.WebApp.Controllers.BaseControllers
     {
-    public class BaseController : Controller
-    {
-        public readonly IExceptionHandler exceptionHandler;
-
-        public BaseController(IExceptionHandler exceptionHandler)
+        public class BaseController : Controller
         {
-            this.exceptionHandler = exceptionHandler;
+            public readonly IExceptionHandler exceptionHandler;
+
+            public BaseController(IExceptionHandler exceptionHandler)
+            {
+                this.exceptionHandler = exceptionHandler;
+            }
         }
     }
 }

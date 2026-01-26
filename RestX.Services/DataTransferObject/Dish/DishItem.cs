@@ -1,0 +1,8 @@
+﻿public class DishItem
+{
+    public string Name { get; set; }
+    public string CategoryName { get; set; }
+    public decimal Price { get; set; }
+    public bool IsActive { get; set; }
+    public DateTime CreatedDate { get; set; }
+}

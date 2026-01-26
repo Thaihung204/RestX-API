@@ -8,6 +8,7 @@ namespace RestX.BLL.Helpers
     using RestX.BLL.Interfaces.Customers;
     using RestX.BLL.Interfaces.Employees;
     using RestX.BLL.Services;
+    using RestX.DAL.Context;
 
     public static class DIHelper
     {
@@ -19,6 +20,9 @@ namespace RestX.BLL.Helpers
             services.AddScoped<IAuthService, AuthService>();
             services.AddScoped<IEmailService, EmailService>();
 
+            services.AddScoped<IRepository, EntityFrameworkRepository<TenantDbContext>>();
+            services.AddScoped<IExceptionHandler, ExceptionHandler>();
+            services.AddScoped<IDishService, DishService>();            
         }
     }
 }

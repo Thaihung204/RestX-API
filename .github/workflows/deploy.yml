@@ -35,4 +35,3 @@ jobs:
         push: true
         tags: |
           ${{ secrets.DOCKER_USERNAME }}/restx-app:latest
-          version: "3.8"

@@ -66,21 +66,21 @@ builder.Services.AddIdentity<Admin, IdentityRole>().AddEntityFrameworkStores<Res
 var app = builder.Build();
 app.UseCors("MultiTenantCors");
 
-//using (var scope = app.Services.CreateScope())
-//{
-//    var services = scope.ServiceProvider;
-//    try
-//    {
-//        var context = services.GetRequiredService<RestxAdminContext>();
-//        await context.Database.MigrateAsync();
-//        Console.WriteLine("Database migration completed successfully");
-//    }
-//    catch (Exception ex)
-//    {
-//        Console.WriteLine($"An error occurred while migrating the database: {ex.Message}");
-//        throw;
-//    }
-//}
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+    try
+    {
+        var context = services.GetRequiredService<RestxAdminContext>();
+        await context.Database.MigrateAsync();
+        Console.WriteLine("Database migration completed successfully");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"An error occurred while migrating the database: {ex.Message}");
+        throw;
+    }
+}
 
 app.UseHangfireDashboard("/hangfire");
 app.UseSwagger();

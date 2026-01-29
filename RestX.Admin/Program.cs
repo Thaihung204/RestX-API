@@ -32,6 +32,27 @@ builder.Services.AddHangfire(config =>
 });
 builder.Services.AddHangfireServer();
 
+//Add Cors
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("MultiTenantCors", policy =>
+    {
+        policy
+            .SetIsOriginAllowed(origin =>
+            {
+                if (Uri.TryCreate(origin, UriKind.Absolute, out var uri))
+                {
+                    return uri.Host.EndsWith(".restx.food");
+                }
+                return false;
+            })
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials();
+    });
+});
+
+
 // Add services to the container.
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -43,6 +64,7 @@ builder.Services.AddScoped<IRedisService, RedisService>();
 builder.Services.AddIdentity<Admin, IdentityRole>().AddEntityFrameworkStores<RestxAdminContext>().AddDefaultTokenProviders();
 
 var app = builder.Build();
+app.UseCors("MultiTenantCors");
 
 //using (var scope = app.Services.CreateScope())
 //{
@@ -61,13 +83,8 @@ var app = builder.Build();
 //}
 
 app.UseHangfireDashboard("/hangfire");
-
-// Configure the HTTP request pipeline.
-//if (app.Environment.IsDevelopment())
-//{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-//}
+app.UseSwagger();
+app.UseSwaggerUI();
 
 if (app.Environment.IsDevelopment())
 {

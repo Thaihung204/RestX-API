@@ -1,0 +1,37 @@
+name: Build & Push RestX
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Login Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+    - name: Build & Push Admin
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: RestX.Admin/Dockerfile
+        push: true
+        tags: |
+          ${{ secrets.DOCKER_USERNAME }}/restx-admin:latest
+
+    - name: Build & Push App
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: RestX.WebApp/Dockerfile
+        push: true
+        tags: |
+          ${{ secrets.DOCKER_USERNAME }}/restx-app:latest

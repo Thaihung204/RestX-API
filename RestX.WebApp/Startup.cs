@@ -5,6 +5,7 @@ using Microsoft.ApplicationInsights.Extensibility;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.HttpLogging;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.EntityFrameworkCore;
@@ -288,7 +289,12 @@ namespace RestX.WebApp
                     Environment.GetEnvironmentVariable("APPSETTING_AppServiceId") ?? "Not Available");
                 return next.Invoke();
             });
-
+            app.UseForwardedHeaders(new ForwardedHeadersOptions
+            {
+                ForwardedHeaders =
+                ForwardedHeaders.XForwardedHost |
+                ForwardedHeaders.XForwardedProto
+            });
             app.UseRouting();
             app.UseAuthentication();
             app.UseAuthorization();

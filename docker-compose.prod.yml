@@ -1,0 +1,16 @@
+version: "3.8"
+
+services:
+  admin:
+    image: hunghuynh5724/restx-admin:latest
+    container_name: restx-admin
+    restart: always
+    ports:
+      - "4999:4999"
+
+  app:
+    image: hunghuynh5724/restx-app:latest
+    container_name: restx-app
+    restart: always
+    ports:
+      - "5000:5000"

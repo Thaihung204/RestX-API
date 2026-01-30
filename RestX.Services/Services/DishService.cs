@@ -1,5 +1,6 @@
 ﻿using AutoMapper;
 using Microsoft.Data.SqlClient;
+using RestX.BLL.DataTranferObjects.Dish;
 using RestX.BLL.Interfaces;
 using RestX.Models.Enum;
 using RestX.Models.Menu;
@@ -11,9 +12,11 @@ namespace RestX.BLL.Services
 {
     public class DishService : BaseService, IDishService
     {
+        private readonly ICloudinaryService cloudinaryService;
 
-        public DishService(IRepository repo, IRedisService redisService, IEnumerable<ActiveTenant> tenant = null) : base(repo, redisService, tenant)
+        public DishService(ICloudinaryService cloudinaryService, IRepository repo, IRedisService redisService, IEnumerable<ActiveTenant> tenant = null) : base(repo, redisService, tenant)
         {
+            this.cloudinaryService = cloudinaryService;
         }
 
         public async Task<DishSearchResult> GetAllDishes(DishSearch model)
@@ -207,15 +210,14 @@ namespace RestX.BLL.Services
             };
         }
 
-        public async Task<Dish> UpsertDish(Dish model)
+        public async Task<DishItem> UpsertDish(DishUpsert model)
         {
-            if (model.Id != Guid.Empty)
+            Dish dish;
+            var isUpdate = model.Id.HasValue;
+
+            if (isUpdate)
             {
-                var dish = await Repo.GetByIdAsync<Dish>(model.Id);
-                if (dish == null)
-                {
-                    throw new InvalidOperationException("Dish not found");
-                }
+                dish = await Repo.GetByIdAsync<Dish>(model.Id!.Value);
 
                 dish.CategoryId = model.CategoryId;
                 dish.Name = model.Name;
@@ -230,14 +232,326 @@ namespace RestX.BLL.Services
                 dish.AutoDisableByStock = model.AutoDisableByStock;
 
                 Repo.Update(dish);
-                await Repo.SaveAsync();
+            }
+            else
+            {
+                dish = new Dish
+                {
+                    Id = Guid.NewGuid(),
+                    CategoryId = model.CategoryId,
+                    Name = model.Name,
+                    Description = model.Description,
+                    Price = model.Price,
+                    Unit = model.Unit,
+                    Quantity = model.Quantity,
+                    IsVegetarian = model.IsVegetarian,
+                    IsSpicy = model.IsSpicy,
+                    IsBestSeller = model.IsBestSeller,
+                    IsActive = model.IsActive,
+                    AutoDisableByStock = model.AutoDisableByStock,
+                    CreatedDate = DateTime.UtcNow
+                };
 
-                return dish;
+                await Repo.CreateAsync(dish);
             }
 
-            await Repo.CreateAsync(model);
-            return model;
+            //Main Image
+            if (model.MainImage != null && model.MainImage.Length > 0)
+            {
+                var oldImages = await Repo.GetAsync<DishImage>(
+                    x => x.DishId == dish.Id &&
+                         x.ImageType == DishImageType.Main &&
+                         x.IsActive
+                );
+
+                foreach (var img in oldImages)
+                {
+                    img.IsActive = false;
+                    Repo.Update(img);
+                }
+
+                var uploadResult = await cloudinaryService.WriteAsync(
+                    model.MainImage,
+                    folder: $"dishes/{dish.Id}",
+                    publicId: "main"
+                );
+
+                var dishImage = new DishImage
+                {
+                    Id = Guid.NewGuid(),
+                    DishId = dish.Id,
+                    ImageUrl = uploadResult.Url,
+                    PublicId = uploadResult.PublicId,
+                    ImageType = DishImageType.Main,
+                    DisplayOrder = 1,
+                    IsActive = true,
+                    CreatedDate = DateTime.UtcNow
+                };
+
+                await Repo.CreateAsync(dishImage);
+            }
+
+            // ======================
+            // SUB IMAGES
+            // ======================
+            if (model.SubImages != null && model.SubImages.Any())
+            {
+                foreach (var file in model.SubImages)
+                {
+                    var upload = await cloudinaryService.WriteAsync(
+                        file,
+                        folder: $"dishes/{dish.Id}"
+                    );
+
+                    await Repo.CreateAsync(new DishImage
+                    {
+                        Id = Guid.NewGuid(),
+                        DishId = dish.Id,
+                        ImageUrl = upload.Url,
+                        PublicId = upload.PublicId,
+                        ImageType = DishImageType.Sub,
+                        IsActive = true,
+                        CreatedDate = DateTime.UtcNow
+                    });
+                }
+            }
+
+            await Repo.SaveAsync();
+            return await GetDishById(dish.Id);
         }
+        public async Task<DishItem> UpsertDish(DishUpsert model)
+        {
+            Dish dish;
+            var isUpdate = model.Id.HasValue;
+
+            if (isUpdate)
+            {
+                dish = await Repo.GetByIdAsync<Dish>(model.Id!.Value);
+                if (dish == null)
+                    throw new InvalidOperationException("Dish not found");
+
+                dish.CategoryId = model.CategoryId;
+                dish.Name = model.Name;
+                dish.Description = model.Description;
+                dish.Price = model.Price;
+                dish.Unit = model.Unit;
+                dish.Quantity = model.Quantity;
+                dish.IsVegetarian = model.IsVegetarian;
+                dish.IsSpicy = model.IsSpicy;
+                dish.IsBestSeller = model.IsBestSeller;
+                dish.IsActive = model.IsActive;
+                dish.AutoDisableByStock = model.AutoDisableByStock;
+
+                Repo.Update(dish);
+            }
+            else
+            {
+                dish = new Dish
+                {
+                    Id = Guid.NewGuid(),
+                    CategoryId = model.CategoryId,
+                    Name = model.Name,
+                    Description = model.Description,
+                    Price = model.Price,
+                    Unit = model.Unit,
+                    Quantity = model.Quantity,
+                    IsVegetarian = model.IsVegetarian,
+                    IsSpicy = model.IsSpicy,
+                    IsBestSeller = model.IsBestSeller,
+                    IsActive = model.IsActive,
+                    AutoDisableByStock = model.AutoDisableByStock,
+                    CreatedDate = DateTime.UtcNow
+                };
+
+                await Repo.CreateAsync(dish);
+            }
+
+            await Repo.SaveAsync(); // đảm bảo có Dish.Id
+
+            // ======================
+            // MAIN IMAGE
+            // ======================
+            if (model.MainImage != null && model.MainImage.Length > 0)
+            {
+                // deactivate old main images
+                var oldImages = await Repo.GetAsync<DishImage>(
+                    x => x.DishId == dish.Id &&
+                         x.ImageType == DishImageType.Main &&
+                         x.IsActive
+                );
+
+                foreach (var img in oldImages)
+                {
+                    img.IsActive = false;
+                    Repo.Update(img);
+                }
+
+                var uploadResult = await cloudinaryService.WriteAsync(
+                    model.MainImage,
+                    folder: $"dishes/{dish.Id}",
+                    publicId: "main"
+                );
+
+                var dishImage = new DishImage
+                {
+                    Id = Guid.NewGuid(),
+                    DishId = dish.Id,
+                    ImageUrl = uploadResult.Url,
+                    PublicId = uploadResult.PublicId,
+                    ImageType = DishImageType.Main,
+                    DisplayOrder = 1,
+                    IsActive = true,
+                    CreatedDate = DateTime.UtcNow
+                };
+
+                await Repo.CreateAsync(dishImage);
+            }
+
+            // ======================
+            // SUB IMAGES
+            // ======================
+            if (model.SubImages != null && model.SubImages.Any())
+            {
+                foreach (var file in model.SubImages)
+                {
+                    var upload = await cloudinaryService.WriteAsync(
+                        file,
+                        folder: $"dishes/{dish.Id}"
+                    );
+
+                    await Repo.CreateAsync(new DishImage
+                    {
+                        Id = Guid.NewGuid(),
+                        DishId = dish.Id,
+                        ImageUrl = upload.Url,
+                        PublicId = upload.PublicId,
+                        ImageType = DishImageType.Sub,
+                        IsActive = true,
+                        CreatedDate = DateTime.UtcNow
+                    });
+                }
+            }
+
+            await Repo.SaveAsync();
+            return await GetDishById(dish.Id);
+        }
+        public async Task<DishItem> UpsertDish(DishUpsert model)
+        {
+            Dish dish;
+            var isUpdate = model.Id.HasValue;
+
+            if (isUpdate)
+            {
+                dish = await Repo.GetByIdAsync<Dish>(model.Id!.Value);
+                if (dish == null)
+                    throw new InvalidOperationException("Dish not found");
+
+                dish.CategoryId = model.CategoryId;
+                dish.Name = model.Name;
+                dish.Description = model.Description;
+                dish.Price = model.Price;
+                dish.Unit = model.Unit;
+                dish.Quantity = model.Quantity;
+                dish.IsVegetarian = model.IsVegetarian;
+                dish.IsSpicy = model.IsSpicy;
+                dish.IsBestSeller = model.IsBestSeller;
+                dish.IsActive = model.IsActive;
+                dish.AutoDisableByStock = model.AutoDisableByStock;
+
+                Repo.Update(dish);
+            }
+            else
+            {
+                dish = new Dish
+                {
+                    Id = Guid.NewGuid(),
+                    CategoryId = model.CategoryId,
+                    Name = model.Name,
+                    Description = model.Description,
+                    Price = model.Price,
+                    Unit = model.Unit,
+                    Quantity = model.Quantity,
+                    IsVegetarian = model.IsVegetarian,
+                    IsSpicy = model.IsSpicy,
+                    IsBestSeller = model.IsBestSeller,
+                    IsActive = model.IsActive,
+                    AutoDisableByStock = model.AutoDisableByStock,
+                    CreatedDate = DateTime.UtcNow
+                };
+
+                await Repo.CreateAsync(dish);
+            }
+
+            await Repo.SaveAsync(); // đảm bảo có Dish.Id
+
+            // ======================
+            // MAIN IMAGE
+            // ======================
+            if (model.MainImage != null && model.MainImage.Length > 0)
+            {
+                // deactivate old main images
+                var oldImages = await Repo.GetAsync<DishImage>(
+                    x => x.DishId == dish.Id &&
+                         x.ImageType == DishImageType.Main &&
+                         x.IsActive
+                );
+
+                foreach (var img in oldImages)
+                {
+                    img.IsActive = false;
+                    Repo.Update(img);
+                }
+
+                var uploadResult = await cloudinaryService.WriteAsync(
+                    model.MainImage,
+                    folder: $"dishes/{dish.Id}",
+                    publicId: "main"
+                );
+
+                var dishImage = new DishImage
+                {
+                    Id = Guid.NewGuid(),
+                    DishId = dish.Id,
+                    ImageUrl = uploadResult.Url,
+                    PublicId = uploadResult.PublicId,
+                    ImageType = DishImageType.Main,
+                    DisplayOrder = 1,
+                    IsActive = true,
+                    CreatedDate = DateTime.UtcNow
+                };
+
+                await Repo.CreateAsync(dishImage);
+            }
+
+            // ======================
+            // SUB IMAGES
+            // ======================
+            if (model.SubImages != null && model.SubImages.Any())
+            {
+                foreach (var file in model.SubImages)
+                {
+                    var upload = await cloudinaryService.WriteAsync(
+                        file,
+                        folder: $"dishes/{dish.Id}"
+                    );
+
+                    await Repo.CreateAsync(new DishImage
+                    {
+                        Id = Guid.NewGuid(),
+                        DishId = dish.Id,
+                        ImageUrl = upload.Url,
+                        PublicId = upload.PublicId,
+                        ImageType = DishImageType.Sub,
+                        IsActive = true,
+                        CreatedDate = DateTime.UtcNow
+                    });
+                }
+            }
+
+            await Repo.SaveAsync();
+            return await GetDishById(dish.Id);
+        }
+
 
         public async Task DeleteDish(Guid id)
         {

@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using RestX.BLL.DataTranferObjects.Dish;
 using RestX.BLL.Interfaces;
 using RestX.Models.Menu;
 using RestX.WebApp.Controllers.BaseControllers;
@@ -49,7 +50,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpPut("{id}")]
-        public async Task<IActionResult> EditDish([Required] Guid id, [FromBody] Dish dish)
+        public async Task<IActionResult> EditDish([Required] Guid id, [FromForm] DishUpsert dish)
         {
             try
             {
@@ -64,7 +65,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpPost]
-        public async Task<ActionResult<Dish>> AddDish([FromBody] Dish dish)
+        public async Task<ActionResult<Dish>> AddDish([FromForm] DishUpsert dish)
         {
             try
             {

@@ -114,7 +114,7 @@ namespace RestX.BLL.Services
                 }
                 else
                 {
-                    RedisDatabase.GetDatabase().StringSet(key, value, (Expiration)cacheTime);
+                    RedisDatabase.GetDatabase().StringSet(key, value, cacheTime);
                 }
             }
             catch (Exception ex)
@@ -176,7 +176,7 @@ namespace RestX.BLL.Services
                 }
                 else
                 {
-                    await RedisDatabase.GetDatabase().StringSetAsync(key, value, (Expiration)cacheTime);
+                    await RedisDatabase.GetDatabase().StringSetAsync(key, value, cacheTime);
                 }
             }
             catch (Exception ex)
@@ -242,10 +242,10 @@ namespace RestX.BLL.Services
             }
 
             var transaction = RedisDatabase.GetDatabase().CreateTransaction();
-            transaction.StringSetAsync(key, "chunk_count:" + chunks.Count.ToString(), (Expiration)cacheTime);
+            transaction.StringSetAsync(key, "chunk_count:" + chunks.Count.ToString(), cacheTime);
             for (int chunkIndex = 0; chunkIndex < chunks.Count; chunkIndex++)
             {
-                transaction.StringSetAsync(key + ":chunk_" + chunkIndex.ToString(), Encoding.UTF8.GetString(chunks[chunkIndex]), (Expiration)cacheTime);
+                transaction.StringSetAsync(key + ":chunk_" + chunkIndex.ToString(), Encoding.UTF8.GetString(chunks[chunkIndex]), cacheTime);
             }
             transaction.ExecuteAsync();
         }
@@ -301,10 +301,10 @@ namespace RestX.BLL.Services
             var redisDb = RedisDatabase.GetDatabase();
             var transaction = redisDb.CreateTransaction();
 
-            transaction.StringSetAsync(key, "chunk_count:" + chunks.Count.ToString(), (Expiration)cacheTime);
+            transaction.StringSetAsync(key, "chunk_count:" + chunks.Count.ToString(), cacheTime);
             for (int chunkIndex = 0; chunkIndex < chunks.Count; chunkIndex++)
             {
-                transaction.StringSetAsync(key + ":chunk_" + chunkIndex.ToString(), Encoding.UTF8.GetString(chunks[chunkIndex]), (Expiration)cacheTime);
+                transaction.StringSetAsync(key + ":chunk_" + chunkIndex.ToString(), Encoding.UTF8.GetString(chunks[chunkIndex]), cacheTime);
             }
 
             bool success = await transaction.ExecuteAsync();

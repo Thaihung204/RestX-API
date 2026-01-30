@@ -5,7 +5,7 @@ on:
     branches: [ "main" ]
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
@@ -35,3 +35,18 @@ jobs:
         push: true
         tags: |
           ${{ secrets.DOCKER_USERNAME }}/restx-app:latest
+
+    # ======================
+    # CD: Deploy to VPS
+    # ======================
+    - name: Deploy to VPS
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.VPS_HOST }}
+        username: ${{ secrets.VPS_USER }}
+        key: ${{ secrets.VPS_SSH_KEY }}
+        script: |
+          cd /opt/restx
+          docker compose pull
+          docker compose up -d
+          docker image prune -f

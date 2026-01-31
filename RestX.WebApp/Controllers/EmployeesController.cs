@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
-using RestX.BLL.DTOs.Employee;
+using RestX.BLL.DataTranferObjects.Employee;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Employees;
 using RestX.WebApp.Controllers.BaseControllers;
@@ -12,12 +12,10 @@ namespace RestX.WebApp.Controllers
     public class EmployeesController : BaseController
     {
         private readonly IEmployeeService employeeService;
-
         public EmployeesController(IEmployeeService employeeService, IExceptionHandler exceptionHandler) : base(exceptionHandler)
         {
             this.employeeService = employeeService;
         }
-
         [HttpGet]
         public async Task<IActionResult> GetAllEmployees([FromQuery] EmployeeFilterParams filter)
         {
@@ -32,7 +30,6 @@ namespace RestX.WebApp.Controllers
                 return BadRequest(new { success = false, message = "An internal error occurred" });
             }
         }
-
         [HttpGet("{id}")]
         public async Task<IActionResult> GetEmployeeById([Required] Guid id)
         {
@@ -51,9 +48,8 @@ namespace RestX.WebApp.Controllers
                 return BadRequest(new { success = false, message = "An internal error occurred" });
             }
         }
-
         [HttpPost]
-        public async Task<IActionResult> CreateEmployee([FromBody] CreateEmployeeDto dto)
+        public async Task<IActionResult> CreateEmployee([FromBody] CreateEmployee dto)
         {
             try
             {
@@ -61,7 +57,6 @@ namespace RestX.WebApp.Controllers
                 {
                     return BadRequest(new { success = false, message = "Invalid data", errors = ModelState });
                 }
-
                 var result = await employeeService.CreateEmployee(dto);
                 return Ok(new { success = true, message = "Employee created successfully", data = result });
             }
@@ -75,9 +70,8 @@ namespace RestX.WebApp.Controllers
                 return BadRequest(new { success = false, message = "An internal error occurred" });
             }
         }
-
         [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateEmployee([Required] Guid id, [FromBody] UpdateEmployeeDto dto)
+        public async Task<IActionResult> UpdateEmployee([Required] Guid id, [FromBody] UpdateEmployee dto)
         {
             try
             {
@@ -85,7 +79,6 @@ namespace RestX.WebApp.Controllers
                 {
                     return BadRequest(new { success = false, message = "Invalid data", errors = ModelState });
                 }
-
                 var result = await employeeService.UpdateEmployee(id, dto);
                 if (result == null)
                 {
@@ -103,7 +96,6 @@ namespace RestX.WebApp.Controllers
                 return BadRequest(new { success = false, message = "An internal error occurred" });
             }
         }
-
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteEmployee([Required] Guid id)
         {

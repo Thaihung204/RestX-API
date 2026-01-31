@@ -1,11 +1,9 @@
-using Azure.Core;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
-using RestX.BLL.DTOs.Auth;
-using RestX.BLL.DTOs.Common;
-using RestX.BLL.DTOs.Employee;
+using RestX.BLL.DataTranferObjects.Common;
+using RestX.BLL.DataTranferObjects.Employee;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Employees;
 using RestX.Models.HR;
@@ -20,25 +18,21 @@ namespace RestX.BLL.Services
     {
         private readonly UserManager<ApplicationUser> userManager;
         private readonly RoleManager<IdentityRole<Guid>> roleManager;
-        private readonly AppSettings appSettings;
         private readonly IEmailService emailService;
-
         public EmployeeService(
             IRepository Repo,
             IRedisService redisService,
             UserManager<ApplicationUser> userManager,
-            RoleManager<IdentityRole<Guid>> roleManager, IEmailService emailService,
+            RoleManager<IdentityRole<Guid>> roleManager,
+            IEmailService emailService,
             IOptions<AppSettings> appSettings,
             IEnumerable<ActiveTenant> tenant = null) : base(Repo, redisService, tenant)
         {
             this.userManager = userManager;
             this.roleManager = roleManager;
             this.emailService = emailService;
-            this.appSettings = appSettings.Value;
-
         }
-
-        public async Task<PaginatedResult<EmployeeListItemDto>> GetAllEmployeesPaginated(EmployeeFilterParams filter)
+        public async Task<PaginatedResult<EmployeeListItem>> GetAllEmployeesPaginated(EmployeeFilterParams filter)
         {
             var query = new StringBuilder();
             query.Append(@"
@@ -47,40 +41,32 @@ namespace RestX.BLL.Services
                 LEFT JOIN AspNetUsers u ON e.Id = u.MemberId
                 WHERE 1 = 1
             ");
-
             var countParameters = new List<SqlParameter>();
             var queryParameters = new List<SqlParameter>();
-
-            // Apply filters
             if (filter.IsActive.HasValue)
             {
                 query.Append(" AND e.IsActive = @IsActive ");
                 countParameters.Add(new SqlParameter("IsActive", SqlDbType.Bit) { Value = filter.IsActive.Value });
                 queryParameters.Add(new SqlParameter("IsActive", SqlDbType.Bit) { Value = filter.IsActive.Value });
             }
-
             if (!string.IsNullOrEmpty(filter.Position))
             {
                 query.Append(" AND e.Position LIKE '%' + @Position + '%' ");
                 countParameters.Add(new SqlParameter("Position", SqlDbType.NVarChar) { Value = filter.Position });
                 queryParameters.Add(new SqlParameter("Position", SqlDbType.NVarChar) { Value = filter.Position });
             }
-
             if (filter.HireDateFrom.HasValue)
             {
                 query.Append(" AND e.HireDate >= @HireDateFrom ");
                 countParameters.Add(new SqlParameter("HireDateFrom", SqlDbType.DateTime) { Value = filter.HireDateFrom.Value });
                 queryParameters.Add(new SqlParameter("HireDateFrom", SqlDbType.DateTime) { Value = filter.HireDateFrom.Value });
             }
-
             if (filter.HireDateTo.HasValue)
             {
                 query.Append(" AND e.HireDate <= @HireDateTo ");
                 countParameters.Add(new SqlParameter("HireDateTo", SqlDbType.DateTime) { Value = filter.HireDateTo.Value });
                 queryParameters.Add(new SqlParameter("HireDateTo", SqlDbType.DateTime) { Value = filter.HireDateTo.Value });
             }
-
-            // Apply search
             if (!string.IsNullOrEmpty(filter.Search))
             {
                 query.Append(@" AND (
@@ -92,15 +78,9 @@ namespace RestX.BLL.Services
                 countParameters.Add(new SqlParameter("Search", SqlDbType.NVarChar) { Value = filter.Search });
                 queryParameters.Add(new SqlParameter("Search", SqlDbType.NVarChar) { Value = filter.Search });
             }
-
-            // Count query - execute at DB level
             var countQuery = query.ToString().Replace("#SELECT#", "COUNT(DISTINCT e.Id)");
             int totalCount = await Repo.ExecuteSqlCommandAsync<int>(countQuery, countParameters.ToArray());
-
-            // Pagination calculation
             int skip = filter.PageNumber == 1 ? 0 : (filter.PageNumber - 1) * filter.PageSize;
-
-            // Select columns
             var selectColumns = @"
                                 DISTINCT
                                 e.Id,
@@ -112,25 +92,15 @@ namespace RestX.BLL.Services
                                 e.HireDate,
                                 e.CreatedDate
                             ";
-
             var mainQuery = query.ToString().Replace("#SELECT#", selectColumns);
-
-            // Apply sorting
             mainQuery += GetSortClause(filter.SortBy, filter.SortDescending);
-
-            // Apply pagination at DB level - OFFSET/FETCH
             mainQuery += $" OFFSET {skip} ROWS FETCH NEXT {filter.PageSize} ROWS ONLY";
-
-            var items = await Repo.ExecuteSqlSelectAsync<EmployeeListItemDto>(mainQuery, queryParameters.ToArray());
-
-
-            return new PaginatedResult<EmployeeListItemDto>(items, totalCount, filter.PageNumber, filter.PageSize);
+            var items = await Repo.ExecuteSqlSelectAsync<EmployeeListItem>(mainQuery, queryParameters.ToArray());
+            return new PaginatedResult<EmployeeListItem>(items, totalCount, filter.PageNumber, filter.PageSize);
         }
-
         private static string GetSortClause(string? sortBy, bool sortDescending)
         {
             var direction = sortDescending ? "DESC" : "ASC";
-
             return (sortBy?.ToLower()) switch
             {
                 "code" => $" ORDER BY e.Code {direction}",
@@ -142,8 +112,7 @@ namespace RestX.BLL.Services
                 _ => $" ORDER BY e.CreatedDate {direction}"
             };
         }
-
-        public async Task<EmployeeResponseDto?> GetEmployeeById(Guid id)
+        public async Task<EmployeeResponse?> GetEmployeeById(Guid id)
         {
             var employee = await Repo.GetFirstAsync<Employee>(e => e.Id == id);
             if (employee == null) return null;
@@ -151,12 +120,10 @@ namespace RestX.BLL.Services
             var user = await userManager.Users
                 .AsNoTracking()
                 .FirstOrDefaultAsync(u => u.MemberId == id);
-
             var roles = user != null
                 ? await userManager.GetRolesAsync(user)
                 : new List<string>();
-
-            return new EmployeeResponseDto
+            return new EmployeeResponse
             {
                 Id = employee.Id,
                 Code = employee.Code,
@@ -169,7 +136,6 @@ namespace RestX.BLL.Services
                 IsActive = employee.IsActive,
                 CreatedDate = employee.CreatedDate,
                 ModifiedDate = employee.ModifiedDate,
-
                 UserId = user?.Id ?? Guid.Empty,
                 Email = user?.Email ?? string.Empty,
                 FullName = user?.UserName ?? string.Empty,
@@ -178,16 +144,13 @@ namespace RestX.BLL.Services
                 Roles = roles.ToList()
             };
         }
-
-
-        public async Task<EmployeeResponseDto> CreateEmployee(CreateEmployeeDto dto)
+        public async Task<EmployeeResponse> CreateEmployee(CreateEmployee dto)
         {
             var existingUser = await userManager.FindByEmailAsync(dto.Email);
             if (existingUser != null)
             {
                 throw new InvalidOperationException("Email already exists");
             }
-
             var employeeCode = await GenerateEmployeeCodeAsync();
             var employee = new Employee
             {
@@ -214,36 +177,24 @@ namespace RestX.BLL.Services
                 MemberId = employee.Id,
                 RefreshToken = string.Empty
             };
-
             var createResult = await userManager.CreateAsync(user, randomPassword);
             if (!createResult.Succeeded)
             {
                 Repo.Delete<Employee>(employee);
                 await Repo.SaveAsync();
-
                 var errors = string.Join(", ", createResult.Errors.Select(e => e.Description));
                 throw new InvalidOperationException($"Failed to create user: {errors}");
             }
-
             if (!await roleManager.RoleExistsAsync(dto.Role))
             {
                 await roleManager.CreateAsync(new IdentityRole<Guid>(dto.Role));
             }
             await userManager.AddToRoleAsync(user, dto.Role);
-
             var resetToken = await userManager.GeneratePasswordResetTokenAsync(user);
-            var encodedToken = Uri.EscapeDataString(resetToken);
-            var encodedEmail = Uri.EscapeDataString(user.Email!);
-
-            var resetLink =
-        $"{appSettings.FrontendUrl}/reset-password?email={encodedEmail}&token={encodedToken}";
-           
-                await emailService.SendPasswordResetLinkAsync(user.Email, resetLink);
-           
-
+            var welcomeLink = BuildWelcomeLink(user.Email!, resetToken);
+            await emailService.SendWelcomeEmployeeAsync(user.Email!, dto.FullName, welcomeLink);
             var roles = await userManager.GetRolesAsync(user);
-
-            return new EmployeeResponseDto
+            return new EmployeeResponse
             {
                 Id = employee.Id,
                 Code = employee.Code,
@@ -263,13 +214,10 @@ namespace RestX.BLL.Services
                 Roles = roles.ToList()
             };
         }
-
-        public async Task<EmployeeResponseDto?> UpdateEmployee(Guid id, UpdateEmployeeDto dto)
+        public async Task<EmployeeResponse?> UpdateEmployee(Guid id, UpdateEmployee dto)
         {
             var employee = await Repo.GetFirstAsync<Employee>(filter: e => e.Id == id);
-
             if (employee == null) return null;
-
             if (!string.IsNullOrEmpty(dto.Code)) employee.Code = dto.Code;
             if (dto.Address != null) employee.Address = dto.Address;
             if (!string.IsNullOrEmpty(dto.Position)) employee.Position = dto.Position;
@@ -278,10 +226,8 @@ namespace RestX.BLL.Services
             if (dto.Salary.HasValue) employee.Salary = dto.Salary.Value;
             if (!string.IsNullOrEmpty(dto.SalaryType)) employee.SalaryType = dto.SalaryType;
             if (dto.IsActive.HasValue) employee.IsActive = dto.IsActive.Value;
-
             Repo.Update(employee);
             await Repo.SaveAsync();
-
             var user = userManager.Users.FirstOrDefault(u => u.MemberId == id);
             if (user != null)
             {
@@ -292,10 +238,8 @@ namespace RestX.BLL.Services
                 await Repo.SaveAsync();
 
             }
-
             var roles = user != null ? await userManager.GetRolesAsync(user) : new List<string>();
-
-            return new EmployeeResponseDto
+            return new EmployeeResponse
             {
                 Id = employee.Id,
                 Code = employee.Code,
@@ -315,17 +259,13 @@ namespace RestX.BLL.Services
                 Roles = roles.ToList()
             };
         }
-
         public async Task<bool> DeleteEmployee(Guid id)
         {
             var employee = await Repo.GetFirstAsync<Employee>(filter: e => e.Id == id);
-
             if (employee == null) return false;
-
             employee.IsActive = false;
             employee.TerminationDate = DateTime.UtcNow;
-
-           Repo.Update(employee);
+            Repo.Update(employee);
             await Repo.SaveAsync();
             var user = employee.ApplicationUser;
             if (user != null)
@@ -333,39 +273,38 @@ namespace RestX.BLL.Services
                 user.LockoutEnabled = true;
                 user.LockoutEnd = DateTimeOffset.MaxValue;
                 user.LastModified = DateTime.UtcNow;
-
                 await userManager.UpdateAsync(user);
             }
             return true;
         }
-
         private async Task<string> GenerateEmployeeCodeAsync()
         {
             const string prefix = "RTX";
-
             var query = @"
-        SELECT ISNULL(MAX(Code), '')
-        FROM Employees
-        WHERE Code LIKE 'RTX%'
-    ";
+                            SELECT ISNULL(MAX(Code), '')
+                            FROM Employees
+                            WHERE Code LIKE 'RTX%'
+                        ";
 
             var lastCode = await Repo.ExecuteSqlCommandAsync<string>(query);
 
             if (string.IsNullOrWhiteSpace(lastCode))
                 return "RTX001";
-
             var numberPart = lastCode.Substring(prefix.Length);
-
             if (!int.TryParse(numberPart, out int lastNumber))
                 throw new InvalidOperationException("Invalid employee code format in database.");
-
             return $"{prefix}{(lastNumber + 1):D3}";
         }
         private static string GenerateRandomPassword()
         {
             return $"Rx@{Guid.NewGuid():N}".Substring(0, 12);
         }
-
-
+        private string BuildWelcomeLink(string email, string token)
+        {
+            var baseUrl = $"https://{CurrentTenant?.Hostname ?? "localhost"}";
+            var encodedEmail = Uri.EscapeDataString(email);
+            var encodedToken = Uri.EscapeDataString(token);
+            return $"{baseUrl}/set-password?email={encodedEmail}&token={encodedToken}";
+        }
     }
 }

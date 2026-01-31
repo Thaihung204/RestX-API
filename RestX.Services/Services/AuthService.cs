@@ -1,7 +1,8 @@
+using AutoMapper;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
-using RestX.BLL.DTOs.Auth;
+using RestX.BLL.DataTranferObjects.Auth;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Auth;
 using RestX.Models.Customers;
@@ -20,12 +21,11 @@ namespace RestX.BLL.Services
         private readonly SignInManager<ApplicationUser> signInManager;
         private readonly RoleManager<IdentityRole<Guid>> roleManager;
         private readonly IEmailService emailService;
+        private readonly IMapper mapper;
         private readonly AppSettings appSettings;
-
-        private const int PASSWORD_RESET_TOKEN_EXPIRY_MINUTES = 15;
         private const int ACCESS_TOKEN_EXPIRY_HOURS = 1;
         private const int REFRESH_TOKEN_EXPIRY_DAYS = 7;
-
+        private const string CUSTOMER_ROLE = "Customer";
         public AuthService(
             IRepository repo,
             UserManager<ApplicationUser> userManager,
@@ -33,6 +33,7 @@ namespace RestX.BLL.Services
             RoleManager<IdentityRole<Guid>> roleManager,
             IEmailService emailService,
             IRedisService redisService,
+            IMapper mapper,
             IOptions<AppSettings> appSettings,
             IEnumerable<ActiveTenant> tenant = null) : base(repo, redisService, tenant)
         {
@@ -40,61 +41,28 @@ namespace RestX.BLL.Services
             this.signInManager = signInManager;
             this.roleManager = roleManager;
             this.emailService = emailService;
+            this.mapper = mapper;
             this.appSettings = appSettings.Value;
         }
-
         public async Task<AuthResponse> LoginAsync(LoginRequest request)
         {
             var user = await userManager.FindByEmailAsync(request.Email);
             if (user == null)
-            {
                 return AuthResponse.FailureResponse("Invalid email or password");
-            }
-
             var result = await signInManager.CheckPasswordSignInAsync(user, request.Password, lockoutOnFailure: true);
             if (!result.Succeeded)
             {
-                if (result.IsLockedOut)
-                {
-                    return AuthResponse.FailureResponse("Account is locked. Please try again later.");
-                }
-                return AuthResponse.FailureResponse("Invalid email or password");
+                return result.IsLockedOut
+                    ? AuthResponse.FailureResponse("Account is locked. Please try again later.")
+                    : AuthResponse.FailureResponse("Invalid email or password");
             }
-
-            var roles = await userManager.GetRolesAsync(user);
-            var accessToken = GenerateJwtToken(user, roles);
-            var refreshToken = GenerateRefreshToken();
-
-            user.RefreshToken = refreshToken;
-            user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(REFRESH_TOKEN_EXPIRY_DAYS);
-            user.LastLoginTime = DateTime.UtcNow;
-            await userManager.UpdateAsync(user);
-
-            var response = new LoginResponse
-            {
-                AccessToken = accessToken,
-                RefreshToken = refreshToken,
-                ExpiresAt = DateTime.UtcNow.AddHours(ACCESS_TOKEN_EXPIRY_HOURS),
-                User = new UserInfoDto
-                {
-                    Id = user.Id,
-                    Email = user.Email ?? string.Empty,
-                    FullName = user.UserName ?? string.Empty,
-                    PhoneNumber = user.PhoneNumber,
-                    Roles = roles.ToList()
-                }
-            };
-
-            return AuthResponse.SuccessResponse("Login successful", response);
+            return await GenerateAuthResponseAsync(user, "Login successful");
         }
-
         public async Task<AuthResponse> LogoutAsync(Guid userId)
         {
             var user = await userManager.FindByIdAsync(userId.ToString());
             if (user == null)
-            {
                 return AuthResponse.FailureResponse("User not found");
-            }
 
             user.RefreshToken = null!;
             user.RefreshTokenExpiryTime = null;
@@ -102,42 +70,27 @@ namespace RestX.BLL.Services
 
             return AuthResponse.SuccessResponse("Logout successful");
         }
-
         public async Task<AuthResponse> ChangePasswordAsync(Guid userId, ChangePasswordRequest request)
         {
             var user = await userManager.FindByIdAsync(userId.ToString());
             if (user == null)
-            {
                 return AuthResponse.FailureResponse("User not found");
-            }
-
             var result = await userManager.ChangePasswordAsync(user, request.CurrentPassword, request.NewPassword);
             if (!result.Succeeded)
-            {
-                var errors = string.Join(", ", result.Errors.Select(e => e.Description));
-                return AuthResponse.FailureResponse($"Failed to change password: {errors}");
-            }
+                return AuthResponse.FailureResponse($"Failed to change password: {GetIdentityErrors(result)}");
 
             user.LastModified = DateTime.UtcNow;
             await userManager.UpdateAsync(user);
 
             return AuthResponse.SuccessResponse("Password changed successfully");
         }
-
         public async Task<AuthResponse> ForgotPasswordAsync(ForgotPasswordRequest request)
         {
             var user = await userManager.FindByEmailAsync(request.Email);
             if (user == null)
-            {
                 return AuthResponse.SuccessResponse("If the email exists, a password reset link has been sent");
-            }
-
             var resetToken = await userManager.GeneratePasswordResetTokenAsync(user);
-            var encodedToken = Uri.EscapeDataString(resetToken);
-            var encodedEmail = Uri.EscapeDataString(request.Email);
-
-            var resetLink = $"{appSettings.FrontendUrl}/reset-password?email={encodedEmail}&token={encodedToken}";
-
+            var resetLink = BuildTenantLink("reset-password", request.Email, resetToken);
             try
             {
                 await emailService.SendPasswordResetLinkAsync(request.Email, resetLink);
@@ -147,158 +100,161 @@ namespace RestX.BLL.Services
                 return AuthResponse.FailureResponse("Failed to send password reset email. Please try again later.");
             }
 
-            return AuthResponse.SuccessResponse(
-        "A password reset link has been sent to your email",
-        new
-        {
-            Email = request.Email,
-            Token = encodedToken
+            return AuthResponse.SuccessResponse("A password reset link has been sent to your email");
         }
-    );
-        }
-
         public async Task<AuthResponse> ResetPasswordAsync(ResetPasswordRequest request)
         {
             var user = await userManager.FindByEmailAsync(request.Email);
             if (user == null)
-            {
                 return AuthResponse.FailureResponse("Invalid reset link");
-            }
-
             var decodedToken = Uri.UnescapeDataString(request.Token);
             var result = await userManager.ResetPasswordAsync(user, decodedToken, request.NewPassword);
-
             if (!result.Succeeded)
             {
-                var errors = string.Join(", ", result.Errors.Select(e => e.Description));
-                if (errors.Contains("Invalid token"))
-                {
-                    return AuthResponse.FailureResponse("The reset link has expired or is invalid. Please request a new one.");
-                }
-                return AuthResponse.FailureResponse($"Failed to reset password: {errors}");
+                var errors = GetIdentityErrors(result);
+                return errors.Contains("Invalid token")
+                    ? AuthResponse.FailureResponse("The reset link has expired or is invalid. Please request a new one.")
+                    : AuthResponse.FailureResponse($"Failed to reset password: {errors}");
             }
-
             user.LastModified = DateTime.UtcNow;
             await userManager.UpdateAsync(user);
-
             return AuthResponse.SuccessResponse("Password reset successfully");
         }
-
-        public async Task<AuthResponse> RegisterCustomerAsync(RegisterCustomerRequest request)
+        public async Task<AuthResponse> RefreshTokenAsync(string refreshToken)
         {
-            var existingUser = await userManager.FindByEmailAsync(request.Email);
-            if (existingUser != null)
-            {
-                return AuthResponse.FailureResponse("Email already exists");
-            }
+            var user = await GetUserByRefreshTokenAsync(refreshToken);
+            if (user == null || user.RefreshTokenExpiryTime <= DateTime.UtcNow)
+                return AuthResponse.FailureResponse("Invalid or expired refresh token");
 
+            return await GenerateAuthResponseAsync(user, "Token refreshed successfully");
+        }
+        public async Task<CheckPhoneResponse> CheckPhoneNumberAsync(string phoneNumber)
+        {
+            var normalizedPhone = NormalizePhoneNumber(phoneNumber);
+            var user = userManager.Users.FirstOrDefault(u => u.PhoneNumber == normalizedPhone);
+            if (user == null)
+            {
+                return new CheckPhoneResponse
+                {
+                    Exists = false,
+                    CustomerName = null,
+                    CustomerId = null
+                };
+            }
+            var customer = await Repo.GetFirstAsync<Customer>(c => c.ApplicationUserId == user.Id);
+            return new CheckPhoneResponse
+            {
+                Exists = true,
+                CustomerName = user.UserName,
+                CustomerId = customer?.Id
+            };
+        }
+        public async Task<AuthResponse> CustomerPhoneLoginAsync(CustomerPhoneLoginRequest request)
+        {
+            var normalizedPhone = NormalizePhoneNumber(request.PhoneNumber);
+            var user = userManager.Users.FirstOrDefault(u => u.PhoneNumber == normalizedPhone);
+            if (user == null)
+                return AuthResponse.FailureResponse("Phone number not registered");
+            var customer = await Repo.GetFirstAsync<Customer>(c => c.ApplicationUserId == user.Id);
+            if (customer == null || !customer.IsActive)
+                return AuthResponse.FailureResponse("Customer account is inactive or not found");
+
+            return await GenerateAuthResponseAsync(user, "Login successful", customer.Id);
+        }
+        public async Task<AuthResponse> CustomerPhoneRegisterAsync(CustomerPhoneRegisterRequest request)
+        {
+            var normalizedPhone = NormalizePhoneNumber(request.PhoneNumber);
+            var existingUser = userManager.Users.FirstOrDefault(u => u.PhoneNumber == normalizedPhone);
+            if (existingUser != null)
+                return AuthResponse.FailureResponse("Phone number already registered");
             var user = new ApplicationUser
             {
                 Id = Guid.NewGuid(),
-                UserName = request.Email,
-                Email = request.Email,
-                PhoneNumber = request.PhoneNumber,
-                EmailConfirmed = true,
+                UserName = request.FullName,
+                NormalizedUserName = request.FullName.ToUpper(),
+                PhoneNumber = normalizedPhone,
+                PhoneNumberConfirmed = true,
+                EmailConfirmed = false,
                 LastModified = DateTime.UtcNow,
-                RefreshToken = string.Empty
+                RefreshToken = string.Empty,
+                SecurityStamp = Guid.NewGuid().ToString()
             };
-
-            var result = await userManager.CreateAsync(user, request.Password);
+            var result = await userManager.CreateAsync(user);
             if (!result.Succeeded)
+                return AuthResponse.FailureResponse($"Failed to create user: {GetIdentityErrors(result)}");
+            await EnsureRoleAndAssignAsync(user, CUSTOMER_ROLE);
+            var customer = await CreateCustomerAsync(user.Id);
+            return await GenerateAuthResponseAsync(user, "Registration and login successful", customer.Id);
+        }
+        private async Task<AuthResponse> GenerateAuthResponseAsync(ApplicationUser user, string message, Guid? customerId = null)
+        {
+            var roles = await userManager.GetRolesAsync(user);
+            var accessToken = GenerateJwtToken(user, roles);
+            var refreshToken = GenerateRefreshToken();
+            await UpdateUserTokensAsync(user, refreshToken);
+            var userInfo = mapper.Map<UserInfo>(user);
+            userInfo.Roles = roles.ToList();
+            userInfo.CustomerId = customerId;
+            var response = new LoginResponse
             {
-                var errors = string.Join(", ", result.Errors.Select(e => e.Description));
-                return AuthResponse.FailureResponse($"Failed to create user: {errors}");
-            }
+                AccessToken = accessToken,
+                RefreshToken = refreshToken,
+                ExpiresAt = DateTime.UtcNow.AddHours(ACCESS_TOKEN_EXPIRY_HOURS),
+                User = userInfo
+            };
+            return AuthResponse.SuccessResponse(message, response);
+        }
+        private async Task UpdateUserTokensAsync(ApplicationUser user, string refreshToken)
+        {
+            user.RefreshToken = refreshToken;
+            user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(REFRESH_TOKEN_EXPIRY_DAYS);
+            user.LastLoginTime = DateTime.UtcNow;
+            await userManager.UpdateAsync(user);
+        }
+        private async Task EnsureRoleAndAssignAsync(ApplicationUser user, string roleName)
+        {
+            if (!await roleManager.RoleExistsAsync(roleName))
+                await roleManager.CreateAsync(new IdentityRole<Guid>(roleName));
 
-            const string customerRole = "Customer";
-            if (!await roleManager.RoleExistsAsync(customerRole))
-            {
-                await roleManager.CreateAsync(new IdentityRole<Guid>(customerRole));
-            }
-            await userManager.AddToRoleAsync(user, customerRole);
-
+            await userManager.AddToRoleAsync(user, roleName);
+        }
+        private async Task<Customer> CreateCustomerAsync(Guid userId)
+        {
             var customer = new Customer
             {
                 Id = Guid.NewGuid(),
-                ApplicationUserId = user.Id,
+                ApplicationUserId = userId,
                 MembershipLevel = "BRONZE",
                 LoyaltyPoints = 0,
                 IsActive = true,
                 CreatedDate = DateTime.UtcNow,
                 ModifiedDate = DateTime.UtcNow
             };
-
             try
             {
                 await Repo.CreateAsync(customer);
+                return customer;
             }
             catch
             {
-                await userManager.DeleteAsync(user);
+                var user = await userManager.FindByIdAsync(userId.ToString());
+                if (user != null)
+                    await userManager.DeleteAsync(user);
                 throw;
             }
-
-
-            return AuthResponse.SuccessResponse("Registration successful", new
-            {
-                UserId = user.Id,
-                Email = user.Email,
-                FullName = request.FullName
-            });
         }
-
-        public async Task<AuthResponse> RefreshTokenAsync(string refreshToken)
-        {
-            var user = await GetUserByRefreshToken(refreshToken);
-            if (user == null || user.RefreshTokenExpiryTime <= DateTime.UtcNow)
-            {
-                return AuthResponse.FailureResponse("Invalid or expired refresh token");
-            }
-
-            var roles = await userManager.GetRolesAsync(user);
-            var newAccessToken = GenerateJwtToken(user, roles);
-            var newRefreshToken = GenerateRefreshToken();
-
-            user.RefreshToken = newRefreshToken;
-            user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(REFRESH_TOKEN_EXPIRY_DAYS);
-            await userManager.UpdateAsync(user);
-
-            var response = new LoginResponse
-            {
-                AccessToken = newAccessToken,
-                RefreshToken = newRefreshToken,
-                ExpiresAt = DateTime.UtcNow.AddHours(ACCESS_TOKEN_EXPIRY_HOURS),
-                User = new UserInfoDto
-                {
-                    Id = user.Id,
-                    Email = user.Email ?? string.Empty,
-                    FullName = user.UserName ?? string.Empty,
-                    PhoneNumber = user.PhoneNumber,
-                    Roles = roles.ToList()
-                }
-            };
-
-            return AuthResponse.SuccessResponse("Token refreshed successfully", response);
-        }
-
         private string GenerateJwtToken(ApplicationUser user, IList<string> roles)
         {
             var claims = new List<Claim>
             {
-                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-                new Claim(ClaimTypes.Email, user.Email ?? string.Empty),
-                new Claim(ClaimTypes.Name, user.UserName ?? string.Empty),
-                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+                new(ClaimTypes.NameIdentifier, user.Id.ToString()),
+                new(ClaimTypes.Email, user.Email ?? string.Empty),
+                new(ClaimTypes.Name, user.UserName ?? string.Empty),
+                new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
             };
-
-            foreach (var role in roles)
-            {
-                claims.Add(new Claim(ClaimTypes.Role, role));
-            }
-
+            claims.AddRange(roles.Select(role => new Claim(ClaimTypes.Role, role)));
             var key = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(appSettings.Secret));
             var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-
             var token = new JwtSecurityToken(
                 issuer: null,
                 audience: null,
@@ -306,10 +262,8 @@ namespace RestX.BLL.Services
                 expires: DateTime.UtcNow.AddHours(ACCESS_TOKEN_EXPIRY_HOURS),
                 signingCredentials: credentials
             );
-
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
-
         private static string GenerateRefreshToken()
         {
             var randomNumber = new byte[64];
@@ -317,11 +271,21 @@ namespace RestX.BLL.Services
             rng.GetBytes(randomNumber);
             return Convert.ToBase64String(randomNumber);
         }
-
-        private async Task<ApplicationUser?> GetUserByRefreshToken(string refreshToken)
+        private async Task<ApplicationUser?> GetUserByRefreshTokenAsync(string refreshToken)
         {
-            var users = userManager.Users.Where(u => u.RefreshToken == refreshToken).ToList();
-            return await Task.FromResult(users.FirstOrDefault());
+            var user = userManager.Users.FirstOrDefault(u => u.RefreshToken == refreshToken);
+            return await Task.FromResult(user);
         }
+        private string BuildTenantLink(string path, string email, string token)
+        {
+            var baseUrl = $"https://{CurrentTenant?.Hostname ?? "localhost"}";
+            var encodedEmail = Uri.EscapeDataString(email);
+            var encodedToken = Uri.EscapeDataString(token);
+            return $"{baseUrl}/{path}?email={encodedEmail}&token={encodedToken}";
+        }
+        private static string NormalizePhoneNumber(string phoneNumber)
+            => phoneNumber.Replace(" ", "").Replace("-", "").Replace("(", "").Replace(")", "");
+        private static string GetIdentityErrors(IdentityResult result)
+            => string.Join(", ", result.Errors.Select(e => e.Description));
     }
 }

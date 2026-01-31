@@ -1,16 +1,16 @@
-namespace RestX.BLL.DTOs.Auth
+namespace RestX.BLL.DataTranferObjects.Auth
 {
     public class LoginResponse
     {
         public string AccessToken { get; set; } = string.Empty;
         public string RefreshToken { get; set; } = string.Empty;
         public DateTime ExpiresAt { get; set; }
-        public UserInfoDto User { get; set; } = null!;
+        public UserInfo User { get; set; } = null!;
     }
-
-    public class UserInfoDto
+    public class UserInfo
     {
         public Guid Id { get; set; }
+        public Guid? CustomerId { get; set; }
         public string Email { get; set; } = string.Empty;
         public string FullName { get; set; } = string.Empty;
         public string? PhoneNumber { get; set; }

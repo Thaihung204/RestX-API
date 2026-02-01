@@ -1,4 +1,5 @@
 ﻿using AutoMapper;
+using RestX.BLL.DataTranferObjects.Tenants;
 using RestX.Models.Enum;
 using RestX.Models.Menu;
 using RestX.Models.Tenants;
@@ -26,6 +27,7 @@ namespace RestX.BLL.Helpers
                             .ThenBy(x => x.Id)
                             .Select(x => x.ImageUrl)
                             .FirstOrDefault()));
+            this.CreateMap<Tenant, TenantOverview>().ReverseMap();
             CreateMap<Tenant, TenantItem>().ReverseMap();
         }
     }

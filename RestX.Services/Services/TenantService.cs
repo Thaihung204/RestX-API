@@ -1,9 +1,13 @@
 ﻿using AutoMapper;
+using Newtonsoft.Json;
 using RestX.AdminDAL.Context;
 using RestX.BLL.DataSeeders;
+using RestX.BLL.DataTranferObjects.Tenants;
+using RestX.BLL.Extensions;
 using RestX.BLL.Interfaces;
 using RestX.Models.Tenants;
 using Serilog;
+using static Pipelines.Sockets.Unofficial.SocketConnection;
 
 namespace RestX.BLL.Services
 {
@@ -11,10 +15,12 @@ namespace RestX.BLL.Services
     {
         private readonly RestxAdminContext adminContext;
         private readonly IRepository adminRepo;
-        public TenantService(RestxAdminContext restxAdminContext, IRepository repo, IRedisService redisService, IEnumerable<ActiveTenant> tenant = null) : base(repo, redisService, tenant)
+        private readonly IMapper mapper;
+        public TenantService(RestxAdminContext restxAdminContext, IRepository repo, IRedisService redisService, IMapper mapper, IEnumerable<ActiveTenant> tenant = null) : base(repo, redisService, tenant)
         {
             this.adminContext = restxAdminContext;
             this.adminRepo = repo;
+            this.mapper = mapper;
         }
 
         public async Task<IEnumerable<Tenant>> GetAllTenants()
@@ -23,16 +29,44 @@ namespace RestX.BLL.Services
             return tenants.ToList();
         }
 
-        public async Task<Tenant> GetTenantByIdOrHostname(string data)
+        public async Task<TenantOverview> GetTenantByIdOrHostname(string data)
         {
-            if (Guid.TryParse(data, out var tenantId))
+            if (string.IsNullOrWhiteSpace(data))
+                return null;
+
+            Tenant? tenant = null;
+            var cacheKey = $"tenant:{data.ToLower()}";
+
+            var cachedTenant = await RedisService.GetStringAsync(cacheKey);
+            if (!string.IsNullOrEmpty(cachedTenant))
             {
-                return await adminRepo.GetByIdAsync<Tenant>(tenantId);
+                tenant = JsonConvert.DeserializeObject<Tenant>(cachedTenant);
             }
 
-            return await adminRepo.GetOneAsync<Tenant>(
-                t => t.Hostname == data
-            );
+            if (tenant == null)
+            {
+                if (Guid.TryParse(data, out var tenantId))
+                {
+                    tenant = await adminRepo.GetByIdAsync<Tenant>(tenantId);
+                }
+                else
+                {
+                    tenant = await adminRepo.GetOneAsync<Tenant>(t => t.Hostname == data);
+                }
+
+                if (tenant != null)
+                {
+                    await RedisService.SetStringAsync(
+                        cacheKey,
+                        JsonConvert.SerializeObject(tenant)
+                    );
+                }
+            }
+
+            if (tenant == null)
+                return null;
+
+            return mapper.Map<TenantOverview>(tenant);
         }
 
         public async Task<Tenant> UpsertTenant(TenantItem model)

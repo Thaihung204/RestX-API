@@ -1,16 +1,22 @@
-version: "3.8"
-
 services:
   proxy:
     build: ./ReverseProxy
     ports:
+      - "443:443"
       - "80:80"
+    container_name: restx-proxy
     networks:
       - restx-net
-    depends_on:
-      - web
-      - admin
 
+  frontend:
+    build:
+      context: ../RestX-FE
+      dockerfile: Dockerfile
+    container_name: restx-frontend
+    ports:
+      - "3000:3000"
+    networks:
+      - restx-net
   admin:
     build:
       context: .

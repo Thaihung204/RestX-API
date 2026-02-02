@@ -20,7 +20,8 @@ namespace RestX.BLL.Helpers
             services.AddScoped<IAuthService, AuthService>();
             services.AddScoped<IEmailService, EmailService>();
             services.AddScoped<IUserAccountService, UserAccountService>();
-
+            services.AddScoped<ITokenService, TokenService>();
+            services.AddScoped<IAuthLinkService, AuthLinkService>();       
             services.AddScoped<IRepository, EntityFrameworkRepository<TenantDbContext>>();
             services.AddScoped<IExceptionHandler, ExceptionHandler>();
             services.AddScoped<IDishService, DishService>();  

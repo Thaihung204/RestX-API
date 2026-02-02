@@ -1,7 +1,9 @@
+using Microsoft.Extensions.Logging;
 using RestX.BLL.DataTranferObjects.Common;
 using RestX.BLL.DataTranferObjects.Employee;
 using RestX.BLL.Helpers;
 using RestX.BLL.Interfaces;
+using RestX.BLL.Interfaces.Auth;
 using RestX.BLL.Interfaces.Employees;
 using RestX.Models.HR;
 using RestX.Models.Identity;
@@ -11,18 +13,26 @@ namespace RestX.BLL.Services
 {
     public class EmployeeService : BaseService, IEmployeeService
     {
-        private readonly IUserAccountService _userAccountService;
-        private readonly IEmailService _emailService;
+        private readonly IUserAccountService userAccountService;
+        private readonly IAuthLinkService authLinkService;
+        private readonly IEmailService emailService;
+        private readonly ILogger<EmployeeService>? logger;
+
         public EmployeeService(
             IRepository repo,
             IRedisService redisService,
             IUserAccountService userAccountService,
+            IAuthLinkService authLinkService,
             IEmailService emailService,
-            IEnumerable<ActiveTenant> tenant = null) : base(repo, redisService, tenant)
+            ILogger<EmployeeService>? logger = null,
+            IEnumerable<ActiveTenant> tenant = null!) : base(repo, redisService, tenant)
         {
-            _userAccountService = userAccountService;
-            _emailService = emailService;
+            this.userAccountService = userAccountService;
+            this.authLinkService = authLinkService;
+            this.emailService = emailService;
+            this.logger = logger;
         }
+
         public async Task<PaginatedResult<EmployeeListItem>> GetAllEmployeesPaginated(EmployeeFilterParams filter)
         {
             var queryBuilder = new PaginationQueryBuilder(@"
@@ -40,6 +50,7 @@ namespace RestX.BLL.Services
                     new[] { "e.Code", "e.Position", "u.UserName", "u.Email" },
                     "Search",
                     filter.Search);
+
             var (countQuery, countParams) = queryBuilder.BuildCountQuery("COUNT(DISTINCT e.Id)");
             int totalCount = await Repo.ExecuteSqlCommandAsync<int>(countQuery, countParams);
 
@@ -50,31 +61,36 @@ namespace RestX.BLL.Services
                 GetSortClause(filter.SortBy, filter.SortDescending),
                 filter.PageNumber,
                 filter.PageSize);
+
             var items = await Repo.ExecuteSqlSelectAsync<EmployeeListItem>(dataQuery, dataParams);
             return new PaginatedResult<EmployeeListItem>(items, totalCount, filter.PageNumber, filter.PageSize);
         }
+
         public async Task<EmployeeResponse?> GetEmployeeById(Guid id)
         {
             var employee = await Repo.GetFirstAsync<Employee>(e => e.Id == id);
             if (employee == null) return null;
-            var user = await _userAccountService.GetUserByMemberIdAsync(id);
+
+            var user = await userAccountService.GetUserByMemberIdAsync(id);
             var roles = user != null
-                ? await _userAccountService.GetUserRolesAsync(user)
+                ? await userAccountService.GetUserRolesAsync(user)
                 : new List<string>();
+
             return MapToResponse(employee, user, roles);
         }
+
         public async Task<EmployeeResponse> CreateEmployee(CreateEmployee dto)
         {
-            if (await _userAccountService.EmailExistsAsync(dto.Email))
-            {
+            if (await userAccountService.EmailExistsAsync(dto.Email))
                 throw new InvalidOperationException("Email already exists");
-            }
+
             var employee = await CreateEmployeeEntityAsync(dto);
             await Repo.CreateAsync(employee);
+
             ApplicationUser user;
             try
             {
-                user = await _userAccountService.CreateUserAsync(new CreateUserRequest
+                user = await userAccountService.CreateUserAsync(new CreateUserRequest
                 {
                     FullName = dto.FullName,
                     Email = dto.Email,
@@ -90,31 +106,38 @@ namespace RestX.BLL.Services
                 await Repo.SaveAsync();
                 throw;
             }
-            await SendWelcomeEmailAsync(user, dto.FullName);
-            var roles = await _userAccountService.GetUserRolesAsync(user);
+            await TrySendWelcomeEmailAsync(user, dto.FullName);
+
+            var roles = await userAccountService.GetUserRolesAsync(user);
             return MapToResponse(employee, user, roles);
         }
+
         public async Task<EmployeeResponse?> UpdateEmployee(Guid id, UpdateEmployee dto)
         {
             var employee = await Repo.GetFirstAsync<Employee>(filter: e => e.Id == id);
             if (employee == null) return null;
-            UpdateEmployeeFields(employee, dto);
-            var user = await _userAccountService.GetUserByMemberIdAsync(id);
+
+            var user = await userAccountService.GetUserByMemberIdAsync(id);
             if (user != null && HasUserUpdates(dto))
             {
-                user = await _userAccountService.UpdateUserAsync(user.Id, new UpdateUserRequest
+                user = await userAccountService.UpdateUserAsync(user.Id, new UpdateUserRequest
                 {
                     FullName = dto.FullName,
                     PhoneNumber = dto.PhoneNumber
                 });
             }
+
+            UpdateEmployeeFields(employee, dto);
             Repo.Update(employee);
             await Repo.SaveAsync();
+
             var roles = user != null
-                ? await _userAccountService.GetUserRolesAsync(user)
+                ? await userAccountService.GetUserRolesAsync(user)
                 : new List<string>();
+
             return MapToResponse(employee, user, roles);
         }
+
         public async Task<bool> DeleteEmployee(Guid id)
         {
             var employee = await Repo.GetFirstAsync<Employee>(
@@ -128,14 +151,14 @@ namespace RestX.BLL.Services
             Repo.Update(employee);
 
             if (employee.ApplicationUser != null)
-            {
-                await _userAccountService.DeactivateUserAsync(employee.ApplicationUser);
-            }
+                await userAccountService.DeactivateUserAsync(employee.ApplicationUser);
+
             await Repo.SaveAsync();
             return true;
         }
 
         #region Private Methods
+
         private static string GetSortClause(string? sortBy, bool sortDescending)
         {
             var direction = sortDescending ? "DESC" : "ASC";
@@ -150,6 +173,7 @@ namespace RestX.BLL.Services
                 _ => $" ORDER BY e.CreatedDate {direction}"
             };
         }
+
         private async Task<Employee> CreateEmployeeEntityAsync(CreateEmployee dto)
         {
             var code = await GenerateEmployeeCodeAsync();
@@ -166,24 +190,41 @@ namespace RestX.BLL.Services
                 IsActive = true
             };
         }
+
         private async Task<string> GenerateEmployeeCodeAsync()
         {
             const string prefix = "RTX";
             var query = @"SELECT ISNULL(MAX(Code), '') FROM Employees WHERE Code LIKE 'RTX%'";
             var lastCode = await Repo.ExecuteSqlCommandAsync<string>(query);
+
             if (string.IsNullOrWhiteSpace(lastCode))
                 return "RTX001";
+
             var numberPart = lastCode[prefix.Length..];
             if (!int.TryParse(numberPart, out int lastNumber))
                 throw new InvalidOperationException("Invalid employee code format in database.");
+
             return $"{prefix}{(lastNumber + 1):D3}";
         }
-        private async Task SendWelcomeEmailAsync(ApplicationUser user, string fullName)
+
+        private async Task TrySendWelcomeEmailAsync(ApplicationUser user, string fullName)
         {
-            var baseUrl = $"https://{CurrentTenant?.Hostname ?? "localhost"}";
-            var welcomeLink = await _userAccountService.GenerateWelcomeLinkAsync(user, baseUrl);
-            await _emailService.SendWelcomeEmployeeAsync(user.Email!, fullName, welcomeLink);
+            try
+            {
+                var baseUrl = GetTenantBaseUrl();
+                var welcomeLink = await authLinkService.GenerateWelcomeLinkAsync(user, baseUrl);
+                await emailService.SendWelcomeEmployeeAsync(user.Email!, fullName, welcomeLink);
+            }
+            catch (Exception ex)
+            {
+                // Log but don't fail - employee is already created, email can be resent later
+                logger?.LogWarning(ex, "Failed to send welcome email to {Email}", user.Email);
+            }
         }
+
+        private string GetTenantBaseUrl()
+            => $"https://{CurrentTenant?.Hostname ?? "localhost"}";
+
         private static void UpdateEmployeeFields(Employee employee, UpdateEmployee dto)
         {
             if (!string.IsNullOrEmpty(dto.Code))
@@ -203,11 +244,13 @@ namespace RestX.BLL.Services
             if (dto.IsActive.HasValue)
                 employee.IsActive = dto.IsActive.Value;
         }
+
         private static bool HasUserUpdates(UpdateEmployee dto)
         {
             return !string.IsNullOrEmpty(dto.FullName) ||
                    !string.IsNullOrEmpty(dto.PhoneNumber);
         }
+
         private static EmployeeResponse MapToResponse(
             Employee employee,
             ApplicationUser? user,
@@ -233,6 +276,7 @@ namespace RestX.BLL.Services
                 Roles = roles.ToList()
             };
         }
+
         #endregion
     }
 }

@@ -1,27 +1,34 @@
+using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.SqlClient;
 using RestX.BLL.DataTranferObjects.Common;
 using RestX.BLL.DataTranferObjects.Customer;
 using RestX.BLL.Helpers;
 using RestX.BLL.Interfaces;
+using RestX.BLL.Interfaces.Auth;
 using RestX.BLL.Interfaces.Customers;
 using RestX.Models.Customers;
+using RestX.Models.Identity;
 using RestX.Models.Tenants;
 
 namespace RestX.BLL.Services
 {
     public class CustomerService : BaseService, ICustomerService
     {
-        private readonly IUserAccountService _userAccountService;
-        private const string CUSTOMER_ROLE = "Customer";
+        private readonly IUserAccountService userAccountService;
+        private readonly UserManager<ApplicationUser> userManager;
+        private const string CustomerRole = "Customer";
 
         public CustomerService(
             IRepository repo,
             IRedisService redisService,
             IUserAccountService userAccountService,
-            IEnumerable<ActiveTenant> tenant = null) : base(repo, redisService, tenant)
+            UserManager<ApplicationUser> userManager,
+            IEnumerable<ActiveTenant> tenant = null!) : base(repo, redisService, tenant)
         {
-            _userAccountService = userAccountService;
+            this.userAccountService = userAccountService;
+            this.userManager = userManager;
         }
+
         public async Task<PaginatedResult<CustomerListItem>> GetAllCustomers(CustomerFilterParams filter)
         {
             var queryBuilder = new PaginationQueryBuilder(@"
@@ -42,6 +49,7 @@ namespace RestX.BLL.Services
 
             var (countQuery, countParams) = queryBuilder.BuildCountQuery("COUNT(DISTINCT c.Id)");
             int totalCount = await Repo.ExecuteSqlCommandAsync<int>(countQuery, countParams);
+
             var selectColumns = @"DISTINCT c.Id, u.UserName AS FullName, u.Email, u.PhoneNumber,
                                   c.MembershipLevel, c.LoyaltyPoints, c.IsActive, c.CreatedDate";
             var (dataQuery, dataParams) = queryBuilder.BuildDataQuery(
@@ -49,9 +57,11 @@ namespace RestX.BLL.Services
                 GetSortClause(filter.SortBy, filter.SortDescending),
                 filter.PageNumber,
                 filter.PageSize);
+
             var items = await Repo.ExecuteSqlSelectAsync<CustomerListItem>(dataQuery, dataParams);
             return new PaginatedResult<CustomerListItem>(items, totalCount, filter.PageNumber, filter.PageSize);
         }
+
         public async Task<CustomerResponse?> GetCustomerById(Guid id)
         {
             var customer = await Repo.GetFirstAsync<Customer>(
@@ -61,24 +71,24 @@ namespace RestX.BLL.Services
             if (customer == null) return null;
 
             var stats = await GetCustomerStatsAsync(id);
-
             return MapToResponse(customer, stats);
         }
+
         public async Task<CustomerResponse> CreateCustomer(CreateCustomer dto)
         {
-            if (await _userAccountService.EmailExistsAsync(dto.Email))
-            {
+            if (await userAccountService.EmailExistsAsync(dto.Email))
                 throw new InvalidOperationException("Email already exists");
-            }
-            var user = await _userAccountService.CreateUserAsync(new CreateUserRequest
+
+            var user = await userAccountService.CreateUserAsync(new CreateUserRequest
             {
                 FullName = dto.FullName,
                 Email = dto.Email,
                 PhoneNumber = dto.PhoneNumber,
                 Password = dto.Password,
-                Role = CUSTOMER_ROLE,
+                Role = CustomerRole,
                 GenerateRandomPassword = false
             });
+
             var customer = new Customer
             {
                 Id = Guid.NewGuid(),
@@ -87,9 +97,20 @@ namespace RestX.BLL.Services
                 LoyaltyPoints = dto.LoyaltyPoints,
                 IsActive = true
             };
-            await Repo.CreateAsync(customer);
+
+            try
+            {
+                await Repo.CreateAsync(customer);
+            }
+            catch
+            {
+                await userManager.DeleteAsync(user);
+                throw;
+            }
+
             return MapToResponse(customer, user, (0, 0));
         }
+
         public async Task<CustomerResponse?> UpdateCustomer(Guid id, UpdateCustomer dto)
         {
             var customer = await Repo.GetFirstAsync<Customer>(
@@ -97,36 +118,42 @@ namespace RestX.BLL.Services
                 includeProperties: "ApplicationUser");
 
             if (customer == null) return null;
-            UpdateCustomerFields(customer, dto);
             var user = customer.ApplicationUser;
             if (user != null && HasUserUpdates(dto))
             {
-                await _userAccountService.UpdateUserAsync(user.Id, new UpdateUserRequest
+                await userAccountService.UpdateUserAsync(user.Id, new UpdateUserRequest
                 {
                     FullName = dto.FullName,
                     PhoneNumber = dto.PhoneNumber
                 });
             }
+
+            UpdateCustomerFields(customer, dto);
             Repo.Update(customer);
             await Repo.SaveAsync();
+
             var stats = await GetCustomerStatsAsync(id);
             return MapToResponse(customer, stats);
         }
+
         public async Task<bool> DeleteCustomer(Guid id)
         {
             var customer = await Repo.GetFirstAsync<Customer>(
                 c => c.Id == id,
                 includeProperties: "ApplicationUser");
+
             if (customer == null) return false;
+
             customer.IsActive = false;
             Repo.Update(customer);
+
             if (customer.ApplicationUser != null)
-            {
-                await _userAccountService.DeactivateUserAsync(customer.ApplicationUser);
-            }
+                await userAccountService.DeactivateUserAsync(customer.ApplicationUser);
+
             await Repo.SaveAsync();
             return true;
         }
+
         #region Private Methods
 
         private static string GetSortClause(string? sortBy, bool desc)
@@ -143,6 +170,7 @@ namespace RestX.BLL.Services
                 _ => $" ORDER BY c.CreatedDate {direction}"
             };
         }
+
         private async Task<(int TotalOrders, int TotalReservations)> GetCustomerStatsAsync(Guid customerId)
         {
             var totalOrders = await Repo.ExecuteSqlCommandAsync<int>(
@@ -155,6 +183,7 @@ namespace RestX.BLL.Services
 
             return (totalOrders, totalReservations);
         }
+
         private static void UpdateCustomerFields(Customer customer, UpdateCustomer dto)
         {
             if (!string.IsNullOrEmpty(dto.MembershipLevel))
@@ -166,21 +195,23 @@ namespace RestX.BLL.Services
             if (dto.IsActive.HasValue)
                 customer.IsActive = dto.IsActive.Value;
         }
+
         private static bool HasUserUpdates(UpdateCustomer dto)
         {
             return !string.IsNullOrWhiteSpace(dto.FullName) ||
                    !string.IsNullOrWhiteSpace(dto.PhoneNumber);
         }
+
         private static CustomerResponse MapToResponse(
             Customer customer,
             (int TotalOrders, int TotalReservations) stats)
         {
-            var user = customer.ApplicationUser;
-            return MapToResponse(customer, user, stats);
+            return MapToResponse(customer, customer.ApplicationUser, stats);
         }
+
         private static CustomerResponse MapToResponse(
             Customer customer,
-            Models.Identity.ApplicationUser? user,
+            ApplicationUser? user,
             (int TotalOrders, int TotalReservations) stats)
         {
             return new CustomerResponse
@@ -199,6 +230,7 @@ namespace RestX.BLL.Services
                 TotalReservations = stats.TotalReservations
             };
         }
+
         #endregion
     }
 }

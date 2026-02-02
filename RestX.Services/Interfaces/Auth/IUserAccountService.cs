@@ -1,7 +1,7 @@
 using RestX.BLL.DataTranferObjects.Common;
 using RestX.Models.Identity;
 
-namespace RestX.BLL.Interfaces
+namespace RestX.BLL.Interfaces.Auth
 {
     public interface IUserAccountService
     {
@@ -11,6 +11,5 @@ namespace RestX.BLL.Interfaces
         Task<bool> EmailExistsAsync(string email);
         Task<ApplicationUser?> GetUserByMemberIdAsync(Guid memberId);
         Task<IList<string>> GetUserRolesAsync(ApplicationUser user);
-        Task<string> GenerateWelcomeLinkAsync(ApplicationUser user, string baseUrl);
     }
 }

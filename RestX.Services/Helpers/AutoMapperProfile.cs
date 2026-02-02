@@ -48,6 +48,7 @@ namespace RestX.BLL.Helpers
                 )
             );
             this.CreateMap<Tenant, TenantOverview>().ReverseMap();
+            CreateMap<Tenant, TenantItem>().ReverseMap();
             CreateMap<Category, CategoryItem>()
                 .ForMember(
                     dest => dest.CategoryChildrens,

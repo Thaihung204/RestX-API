@@ -1,29 +1,36 @@
 using Microsoft.EntityFrameworkCore;
 using RestX.DAL.Context;
 using RestX.Models.Loyalty;
+using Serilog;
 
-namespace RestX.BLL.DataSeeders
+namespace RestX.DAL.DataSeeders
 {
-
-    public class LoyaltySeeder
+    public class LoyaltySeeder : IDataSeeder
     {
         private readonly TenantDbContext context;
-
         public LoyaltySeeder(TenantDbContext context)
         {
             this.context = context;
         }
-
+        public int Order => 5;
         public async Task SeedAsync()
         {
+            Log.Information("[LoyaltySeeder] Seeding loyalty point bands...");
             if (await context.LoyaltyPointBands.AnyAsync())
             {
+                Log.Information("[LoyaltySeeder] Loyalty bands already exist, skipping...");
                 return;
             }
-
-            var bands = new List<LoyaltyPointBand>
+            var bands = CreateLoyaltyBands();
+            await context.LoyaltyPointBands.AddRangeAsync(bands);
+            await context.SaveChangesAsync();
+            Log.Information("[LoyaltySeeder] Loyalty point bands seeded successfully");
+        }
+        private static List<LoyaltyPointBand> CreateLoyaltyBands()
+        {
+            return new List<LoyaltyPointBand>
             {
-                new LoyaltyPointBand
+                new()
                 {
                     Id = Guid.NewGuid(),
                     Name = "Bronze",
@@ -33,7 +40,7 @@ namespace RestX.BLL.DataSeeders
                     BenefitDescription = "Thành viên cơ bản - Tích điểm cho mọi giao dịch",
                     IsActive = true
                 },
-                new LoyaltyPointBand
+                new()
                 {
                     Id = Guid.NewGuid(),
                     Name = "Silver",
@@ -43,7 +50,7 @@ namespace RestX.BLL.DataSeeders
                     BenefitDescription = "Giảm 5% cho mọi đơn hàng - Ưu đãi sinh nhật",
                     IsActive = true
                 },
-                new LoyaltyPointBand
+                new()
                 {
                     Id = Guid.NewGuid(),
                     Name = "Gold",
@@ -53,20 +60,17 @@ namespace RestX.BLL.DataSeeders
                     BenefitDescription = "Giảm 10% cho mọi đơn hàng - Ưu tiên đặt bàn - Voucher sinh nhật",
                     IsActive = true
                 },
-                new LoyaltyPointBand
+                new()
                 {
                     Id = Guid.NewGuid(),
                     Name = "Platinum",
                     Min = 10001,
-                    Max = null, 
+                    Max = null,
                     DiscountPercentage = 15,
                     BenefitDescription = "Giảm 15% cho mọi đơn hàng - VIP treatment - Phòng riêng - Quà sinh nhật cao cấp",
                     IsActive = true
                 }
             };
-
-            await context.LoyaltyPointBands.AddRangeAsync(bands);
-            await context.SaveChangesAsync();
         }
     }
 }

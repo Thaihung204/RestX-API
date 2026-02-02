@@ -1,4 +1,5 @@
 ﻿using AutoMapper;
+using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
 using RestX.AdminDAL.Context;
 using RestX.BLL.DataSeeders;
@@ -7,6 +8,7 @@ using RestX.BLL.Extensions;
 using RestX.BLL.Interfaces;
 using RestX.Models.Tenants;
 using Serilog;
+using System.Text.RegularExpressions;
 using static Pipelines.Sockets.Unofficial.SocketConnection;
 
 namespace RestX.BLL.Services
@@ -16,11 +18,13 @@ namespace RestX.BLL.Services
         private readonly RestxAdminContext adminContext;
         private readonly IRepository adminRepo;
         private readonly IMapper mapper;
-        public TenantService(RestxAdminContext restxAdminContext, IRepository repo, IRedisService redisService, IMapper mapper, IEnumerable<ActiveTenant> tenant = null) : base(repo, redisService, tenant)
+        private readonly IConfiguration configuration;
+        public TenantService(RestxAdminContext restxAdminContext, IRepository repo, IRedisService redisService, IMapper mapper, IConfiguration configuration, IEnumerable<ActiveTenant> tenant = null) : base(repo, redisService, tenant)
         {
             this.adminContext = restxAdminContext;
             this.adminRepo = repo;
             this.mapper = mapper;
+            this.configuration = configuration;
         }
 
         public async Task<IEnumerable<Tenant>> GetAllTenants()
@@ -95,6 +99,27 @@ namespace RestX.BLL.Services
             }
             else
             {
+                var databaseName = Regex.Replace(model.Name.Replace(" ", ""), "[^A-Za-z0-9 _]", "").ToLower();
+                if (databaseName.Length > 15)
+                {
+                    databaseName = databaseName.Substring(0, 15);
+                }
+
+                var count = 1;
+                var found = true;
+                var name = databaseName;
+                while (found)
+                {
+                    found = await this.adminRepo.GetExistsAsync<Tenant>(t => t.ConnectionString.Contains(name));
+                    if (found)
+                    {
+                        count++;
+                        name = $"{databaseName}{count}";
+                    }
+                }
+
+                string tenantConnectionString = configuration["TenantConnectionStringTemplate"].Replace("{NAME}", name);
+
                 tenant = new Tenant
                 {
                     // Core
@@ -103,16 +128,16 @@ namespace RestX.BLL.Services
                     Hostname = model.Hostname,
 
                     // System / Identity
-                    Prefix = model.Prefix ?? "TENANT",
+                    Prefix = string.Join("", model.Name.Split(" ", System.StringSplitOptions.RemoveEmptyEntries).Select(w => w.Substring(0, 1).ToUpper()).ToList()),
                     NetworkIp = model.NetworkIp ?? string.Empty,
-                    ConnectionString = model.ConnectionString ?? string.Empty,
+                    ConnectionString = model.ConnectionString ?? tenantConnectionString,
 
                     // Theme / UI
-                    BaseColor = model.BaseColor ?? "#ffffff",
-                    PrimaryColor = model.PrimaryColor ?? "#000000",
-                    SecondaryColor = model.SecondaryColor ?? "#cccccc",
-                    HeaderColor = model.HeaderColor ?? "#ffffff",
-                    FooterColor = model.FooterColor ?? "#ffffff",
+                    BaseColor = model.BaseColor ?? "#FF380B",
+                    PrimaryColor = model.PrimaryColor ?? "#6b7280",
+                    SecondaryColor = model.SecondaryColor ?? "#9ca3af",
+                    HeaderColor = model.HeaderColor ?? "#141927",
+                    FooterColor = model.FooterColor ?? "#141927",
 
                     LogoUrl = model.LogoUrl ?? string.Empty,
                     FaviconUrl = model.FaviconUrl ?? string.Empty,
@@ -138,7 +163,6 @@ namespace RestX.BLL.Services
                     BusinessCompanyNumber = model.BusinessCompanyNumber ?? string.Empty,
                     BusinessOpeningHours = model.BusinessOpeningHours ?? string.Empty
                 };
-
 
                 await Repo.CreateAsync(tenant);
                 await SeedTenantDataAsync(tenant);

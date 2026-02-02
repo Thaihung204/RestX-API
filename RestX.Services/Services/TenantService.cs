@@ -6,6 +6,7 @@ using RestX.BLL.DataSeeders;
 using RestX.BLL.DataTranferObjects.Tenants;
 using RestX.BLL.Extensions;
 using RestX.BLL.Interfaces;
+using RestX.DAL.DataSeeders;
 using RestX.Models.Tenants;
 using Serilog;
 using System.Text.RegularExpressions;

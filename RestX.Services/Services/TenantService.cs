@@ -2,7 +2,6 @@
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
 using RestX.AdminDAL.Context;
-using RestX.BLL.DataSeeders;
 using RestX.BLL.DataTranferObjects.Tenants;
 using RestX.BLL.Extensions;
 using RestX.BLL.Interfaces;

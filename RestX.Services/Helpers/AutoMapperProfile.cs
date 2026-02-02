@@ -1,4 +1,5 @@
 ﻿using AutoMapper;
+using RestX.BLL.DataTranferObjects.Category;
 using RestX.BLL.DataTranferObjects.Tenants;
 using RestX.Models.Enum;
 using RestX.Models.Menu;
@@ -28,6 +29,14 @@ namespace RestX.BLL.Helpers
                             .Select(x => x.ImageUrl)
                             .FirstOrDefault()));
             this.CreateMap<Tenant, TenantOverview>().ReverseMap();
+            CreateMap<Category, CategoryItem>()
+                .ForMember(
+                    dest => dest.CategoryChildrens,
+                    opt => opt.MapFrom(src =>
+                        src.SubCategories
+                            .Where(c => c.IsActive)
+                    )
+                );
         }
     }
 }

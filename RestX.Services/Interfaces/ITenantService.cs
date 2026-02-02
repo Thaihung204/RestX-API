@@ -7,7 +7,7 @@ namespace RestX.BLL.Interfaces
     {
         Task<IEnumerable<Tenant>> GetAllTenants();
         Task<TenantOverview> GetTenantByIdOrHostname(string id);
-        Task<Tenant> UpsertTenant(Tenant model);
+        Task<Tenant> UpsertTenant(TenantItem model);
         Task DeleteTenant(string id);
     }
 }

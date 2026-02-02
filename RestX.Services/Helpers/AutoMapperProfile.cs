@@ -29,6 +29,7 @@ namespace RestX.BLL.Helpers
                             .Select(x => x.ImageUrl)
                             .FirstOrDefault()));
             this.CreateMap<Tenant, TenantOverview>().ReverseMap();
+            CreateMap<Tenant, TenantItem>().ReverseMap();
             CreateMap<Category, CategoryItem>()
                 .ForMember(
                     dest => dest.CategoryChildrens,

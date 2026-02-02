@@ -1,4 +1,4 @@
-namespace RestX.BLL.DataTranferObjects.Auth
+namespace RestX.BLL.DataTranferObjects.Authentication
 {
     public class LoginResponse
     {

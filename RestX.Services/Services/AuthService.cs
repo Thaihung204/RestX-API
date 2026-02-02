@@ -2,7 +2,7 @@ using AutoMapper;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
-using RestX.BLL.DataTranferObjects.Auth;
+using RestX.BLL.DataTranferObjects.Authentication;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Auth;
 using RestX.Models.Customers;

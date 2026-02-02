@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using RestX.BLL.DataTranferObjects.Auth;
+using RestX.BLL.DataTranferObjects.Authentication;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Auth;
 using RestX.WebApp.Controllers.BaseControllers;

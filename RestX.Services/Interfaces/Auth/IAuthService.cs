@@ -1,4 +1,4 @@
-using RestX.BLL.DataTranferObjects.Auth;
+using RestX.BLL.DataTranferObjects.Authentication;
 namespace RestX.BLL.Interfaces.Auth
 {
     public interface IAuthService

@@ -22,7 +22,8 @@ namespace RestX.BLL.Helpers
 
             services.AddScoped<IRepository, EntityFrameworkRepository<TenantDbContext>>();
             services.AddScoped<IExceptionHandler, ExceptionHandler>();
-            services.AddScoped<IDishService, DishService>();  
+            services.AddScoped<IDishService, DishService>();
+            services.AddScoped<ICategoryService, CategoryService>();
         }
     }
 }

@@ -15,7 +15,7 @@ app.UseForwardedHeaders(new ForwardedHeadersOptions
         ForwardedHeaders.XForwardedHost
 });
 
-app.UseHttpsRedirection();
+//app.UseHttpsRedirection();
 
 app.MapReverseProxy();
 

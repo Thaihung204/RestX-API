@@ -1,4 +1,5 @@
-﻿using RestX.Models.Menu;
+﻿using RestX.BLL.DataTranferObjects.Dish;
+using RestX.Models.Menu;
 
 namespace RestX.BLL.Interfaces
 {
@@ -8,5 +9,6 @@ namespace RestX.BLL.Interfaces
         Task<DishItem> GetDishById(Guid id);
         Task<Dish> UpsertDish(Dish model);
         Task DeleteDish(Guid id);
+        Task<List<MenuCategory>> GetMenu();
     }
 }

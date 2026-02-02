@@ -1,5 +1,7 @@
 ﻿using AutoMapper;
 using Microsoft.Data.SqlClient;
+using RestX.BLL.DataTranferObjects.Dish;
+using RestX.BLL.Extensions;
 using RestX.BLL.Interfaces;
 using RestX.Models.Enum;
 using RestX.Models.Menu;
@@ -11,9 +13,10 @@ namespace RestX.BLL.Services
 {
     public class DishService : BaseService, IDishService
     {
-
-        public DishService(IRepository repo, IRedisService redisService, IEnumerable<ActiveTenant> tenant = null) : base(repo, redisService, tenant)
+        private readonly IMapper mapper;
+        public DishService(IMapper mapper, IRepository repo, IRedisService redisService, IEnumerable<ActiveTenant> tenant = null) : base(repo, redisService, tenant)
         {
+            this.mapper = mapper;
         }
 
         public async Task<DishSearchResult> GetAllDishes(DishSearch model)
@@ -248,5 +251,41 @@ namespace RestX.BLL.Services
                 await Repo.SaveAsync();
             }
         }
+
+        public async Task<List<MenuCategory>> GetMenu()
+        {
+            var cacheKey = $"MENU:ACTIVE";
+
+            var cachedMenu = await RedisService.GetAsync<List<MenuCategory>>(cacheKey);
+            if (cachedMenu != null)
+                return cachedMenu;
+
+            var dishes = await Repo.GetAsync<Dish>(
+                filter: d => d.IsActive,
+                includeProperties: "Category"
+            );
+
+            var menuItems = mapper.Map<List<MenuItem>>(dishes);
+
+            var menu = menuItems
+                .GroupBy(x => new { x.CategoryId, x.CategoryName })
+                .Select(g => new MenuCategory
+                {
+                    CategoryId = g.Key.CategoryId,
+                    CategoryName = g.Key.CategoryName,
+                    Items = g.ToList()
+                })
+                .OrderBy(c => c.CategoryName)
+                .ToList();
+
+            await RedisService.SetAsync(
+                cacheKey,
+                menu,
+                TimeSpan.FromMinutes(10)
+            );
+
+            return menu;
+        }
+
     }
 }

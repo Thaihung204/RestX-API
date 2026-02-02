@@ -254,7 +254,7 @@ namespace RestX.BLL.Services
 
         public async Task<List<MenuCategory>> GetMenu()
         {
-            var cacheKey = $"MENU:ACTIVE";
+            var cacheKey = $"Menu:tenantId";
 
             var cachedMenu = await RedisService.GetAsync<List<MenuCategory>>(cacheKey);
             if (cachedMenu != null)

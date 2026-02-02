@@ -417,10 +417,3 @@ FodyWeavers.xsd
 *.msm
 *.msp
 
-# Ignore appsettings (local environment)
-RestX.Admin/appsettings.json
-RestX.WebApp/appsettings.json
-
-# Ignore DbContext files (local/dev specific)
-RestX.AdminDAL/Context/RestxAdminContext.cs
-RestX.DAL/Context/TenantDbContext.cs

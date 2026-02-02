@@ -1,49 +1,52 @@
 ﻿using CloudinaryDotNet;
 using CloudinaryDotNet.Actions;
 using Microsoft.Extensions.Configuration;
+using System.Net;
 
-namespace RestX.API.Services.Implementations
+public class CloudinaryService : ICloudinaryService
 {
-    public class CloudinaryService : ICloudinaryService
+    private readonly Cloudinary _cloudinary;
+
+    public CloudinaryService(IConfiguration configuration)
     {
-        private readonly Cloudinary _cloudinary;
+        var account = new Account(
+            configuration["Cloudinary:CloudName"],
+            configuration["Cloudinary:ApiKey"],
+            configuration["Cloudinary:ApiSecret"]
+        );
 
-        public CloudinaryService(IConfiguration configuration)
+        _cloudinary = new Cloudinary(account);
+    }
+
+    public async Task<CloudinaryUploadResult> UploadAsync(
+        Stream fileStream,
+        string fileName,
+        string folder,
+        string? publicId = null,
+        bool overwrite = false)
+    {
+        var uploadParams = new ImageUploadParams
         {
-            var account = new Account(
-                configuration["Cloudinary:CloudName"],
-                configuration["Cloudinary:ApiKey"],
-                configuration["Cloudinary:ApiSecret"]
-            );
+            File = new FileDescription(fileName, fileStream),
+            Folder = folder,
+            PublicId = publicId,
+            Overwrite = overwrite,
+            UseFilename = publicId == null,
+            UniqueFilename = publicId == null
+        };
 
-            _cloudinary = new Cloudinary(account);
-        }
+        var result = await _cloudinary.UploadAsync(uploadParams);
 
-        public async Task<string> UploadImageAsync(
-            Stream fileStream,
-            string fileName,
-            string folder)
+        return new CloudinaryUploadResult
         {
-            var uploadParams = new ImageUploadParams
-            {
-                File = new FileDescription(fileName, fileStream),
-                Folder = folder,
-                UseFilename = true,
-                UniqueFilename = true,
-                Overwrite = false
-            };
+            Url = result.SecureUrl.ToString(),
+            PublicId = result.PublicId
+        };
+    }
 
-            var result = await _cloudinary.UploadAsync(uploadParams);
-
-            if (result.StatusCode != System.Net.HttpStatusCode.OK)
-                throw new Exception("Upload image to Cloudinary failed");
-
-            return result.SecureUrl.ToString();
-        }
-
-        public async Task DeleteImageAsync(string publicId)
-        {
-            await _cloudinary.DestroyAsync(new DeletionParams(publicId));
-        }
+    public async Task DeleteAsync(string publicId)
+    {
+        if (string.IsNullOrWhiteSpace(publicId)) return;
+        await _cloudinary.DestroyAsync(new DeletionParams(publicId));
     }
 }

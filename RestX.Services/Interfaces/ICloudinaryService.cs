@@ -1,10 +1,12 @@
 ﻿public interface ICloudinaryService
 {
-    Task<string> UploadImageAsync(
+    Task<CloudinaryUploadResult> UploadAsync(
         Stream fileStream,
         string fileName,
-        string folder
+        string folder,
+        string? publicId = null,
+        bool overwrite = false
     );
 
-    Task DeleteImageAsync(string publicId);
+    Task DeleteAsync(string publicId);
 }

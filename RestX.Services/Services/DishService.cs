@@ -12,11 +12,11 @@ namespace RestX.BLL.Services
 {
     public class DishService : BaseService, IDishService
     {
-        private readonly ICloudinaryService cloudinaryService;
+        private readonly IDishImageService dishImageService;
 
-        public DishService(ICloudinaryService cloudinaryService, IRepository repo, IRedisService redisService, IEnumerable<ActiveTenant> tenant = null) : base(repo, redisService, tenant)
+        public DishService(IDishImageService dishImageService, IRepository repo, IRedisService redisService, IEnumerable<ActiveTenant> tenant = null) : base(repo, redisService, tenant)
         {
-            this.cloudinaryService = cloudinaryService;
+            this.dishImageService = dishImageService;
         }
 
         public async Task<DishSearchResult> GetAllDishes(DishSearch model)
@@ -181,7 +181,6 @@ namespace RestX.BLL.Services
 
             return result;
         }
-
         public async Task<DishItem> GetDishById(Guid id)
         {
             var dish = (await Repo.GetAsync<Dish>(
@@ -217,11 +216,13 @@ namespace RestX.BLL.Services
             Dish dish;
             var isUpdate = model.Id.HasValue && model.Id != Guid.Empty;
 
+            // ======================
+            // UPSERT DISH
+            // ======================
             if (isUpdate)
             {
-                dish = await Repo.GetByIdAsync<Dish>(model.Id!.Value);
-                if (dish == null)
-                    throw new InvalidOperationException("Dish not found");
+                dish = await Repo.GetByIdAsync<Dish>(model.Id!.Value)
+                    ?? throw new InvalidOperationException("Dish not found");
 
                 dish.CategoryId = model.CategoryId;
                 dish.Name = model.Name;
@@ -259,91 +260,25 @@ namespace RestX.BLL.Services
                 await Repo.CreateAsync(dish);
             }
 
-            var folder = $"dishes/{dish.Id}";
-
-            if (model.MainImage != null && model.MainImage.Length > 0)
-            {
-                // deactivate old main images (DB)
-                var oldMainImages = await Repo.GetAsync<DishImage>(
-                    x => x.DishId == dish.Id &&
-                         x.ImageType == DishImageType.Main &&
-                         x.IsActive
-                );
-
-                foreach (var img in oldMainImages)
-                {
-                    img.IsActive = false;
-                    Repo.Update(img);
-                }
-
-                using var stream = model.MainImage.OpenReadStream();
-
-                var uploadResult = await cloudinaryService.UploadAsync(
-                    fileStream: stream,
-                    fileName: model.MainImage.FileName,
-                    folder: folder,
-                    publicId: "main",
-                    overwrite: true
-                );
-
-                var mainImage = new DishImage
-                {
-                    Id = Guid.NewGuid(),
-                    DishId = dish.Id,
-                    ImageUrl = uploadResult.Url,
-                    PublicId = uploadResult.PublicId,
-                    ImageType = DishImageType.Main,
-                    DisplayOrder = 1,
-                    IsActive = true,
-                    CreatedDate = DateTime.UtcNow
-                };
-
-                await Repo.CreateAsync(mainImage);
-            }
-
-            if (model.SubImages != null && model.SubImages.Any())
-            {
-                foreach (var file in model.SubImages)
-                {
-                    if (file == null || file.Length == 0)
-                        continue;
-
-                    using var stream = file.OpenReadStream();
-
-                    var uploadResult = await cloudinaryService.UploadAsync(
-                        fileStream: stream,
-                        fileName: file.FileName,
-                        folder: folder
-                    );
-
-                    var subImage = new DishImage
-                    {
-                        Id = Guid.NewGuid(),
-                        DishId = dish.Id,
-                        ImageUrl = uploadResult.Url,
-                        PublicId = uploadResult.PublicId,
-                        ImageType = DishImageType.Sub,
-                        IsActive = true,
-                        CreatedDate = DateTime.UtcNow
-                    };
-
-                    await Repo.CreateAsync(subImage);
-                }
-            }
+            // ======================
+            // HANDLE IMAGES 
+            // ======================
+            await dishImageService.HandleDishImagesAsync(model, dish);
 
             return await GetDishById(dish.Id);
         }
 
-
-
         public async Task DeleteDish(Guid id)
         {
-            var dish = await GetDishById(id);
-            if (dish != null)
-            {
-                Repo.Delete<Dish>(id);
-                await Repo.SaveAsync();
-            }
+            var dish = await Repo.GetByIdAsync<Dish>(id);
+            if (dish == null)
+                return;
+
+            await dishImageService.DeleteAllByDishIdAsync(dish.Id);
+            Repo.Delete(dish);
+
+            await Repo.SaveAsync();
         }
+
     }
 }

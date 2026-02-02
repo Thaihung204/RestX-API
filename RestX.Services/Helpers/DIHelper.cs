@@ -4,7 +4,6 @@ namespace RestX.BLL.Helpers
     using CloudinaryDotNet;
     using Microsoft.AspNetCore.Http;
     using Microsoft.Extensions.DependencyInjection;
-    using RestX.API.Services.Implementations;
     using RestX.BLL.Interfaces;
     using RestX.BLL.Interfaces.Auth;
     using RestX.BLL.Interfaces.Customers;
@@ -22,11 +21,12 @@ namespace RestX.BLL.Helpers
             services.AddScoped<IAuthService, AuthService>();
             services.AddScoped<IEmailService, EmailService>();
 
+            services.AddScoped<ICloudinaryService, CloudinaryService>();
+            services.AddScoped<IDishImageService, DishImageService>();
             services.AddScoped<IRepository, EntityFrameworkRepository<TenantDbContext>>();
             services.AddScoped<IExceptionHandler, ExceptionHandler>();
             services.AddScoped<IDishService, DishService>();
             services.AddScoped<ICategoryService, CategoryService>();
-            services.AddScoped<ICloudinaryService, CloudinaryService>();
         }
     }
 }

@@ -62,7 +62,13 @@ namespace RestX.BLL.MultiTenancy
         public override Task<TenantContext<ActiveTenant>> ResolveAsync(HttpContext context)
         {
             TenantContext<ActiveTenant> tenantContext = null;
-            var hostname = context.Request.Host.Value.ToLower();
+            var hostname = context.Request.Headers["X-Forwarded-Host"].FirstOrDefault() ?? context.Request.Host.Value;
+            log.LogInformation("Host: {Host}", context.Request.Host.Value);
+            log.LogInformation("X-Forwarded-Host: {XFH}",
+                context.Request.Headers["X-Forwarded-Host"].FirstOrDefault());
+
+            hostname = hostname.ToLower();
+
             var hostnameWithPath = "";
             try
             {

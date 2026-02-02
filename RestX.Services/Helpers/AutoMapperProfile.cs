@@ -1,7 +1,10 @@
 ﻿using AutoMapper;
+using RestX.BLL.DataTranferObjects.Category;
+using RestX.BLL.DataTranferObjects.Tenants;
 using RestX.BLL.DataTranferObjects.Dish;
 using RestX.Models.Enum;
 using RestX.Models.Menu;
+using RestX.Models.Tenants;
 using System.Globalization;
 
 namespace RestX.BLL.Helpers
@@ -44,6 +47,15 @@ namespace RestX.BLL.Helpers
                         .FirstOrDefault()
                 )
             );
+            this.CreateMap<Tenant, TenantOverview>().ReverseMap();
+            CreateMap<Category, CategoryItem>()
+                .ForMember(
+                    dest => dest.CategoryChildrens,
+                    opt => opt.MapFrom(src =>
+                        src.SubCategories
+                            .Where(c => c.IsActive)
+                    )
+                );
         }
     }
 }

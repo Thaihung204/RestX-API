@@ -10,8 +10,8 @@ namespace RestX.DAL.DataSeeders
         private readonly TenantDbContext context;
         private static readonly string[] DefaultRoles =
         {
-            "Admin",
-            "Owner",
+            "System Admin",
+            "Tenant Admin",
             "Kitchen Staff",
             "Waiter",
             "Customer"

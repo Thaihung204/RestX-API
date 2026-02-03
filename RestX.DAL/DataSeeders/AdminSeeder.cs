@@ -7,7 +7,7 @@ namespace RestX.DAL.DataSeeders
     {
         private const string DEFAULT_PASSWORD = "Admin@123";
         private const string DEFAULT_USERNAME = "TenantAdmin";
-        private const string DEFAULT_ROLE = "Admin";
+        private const string DEFAULT_ROLE = "Tenant Admin";
         private readonly string _sanitizedHostname;
         public AdminSeeder(TenantDbContext context, string tenantHostname) : base(context)
         {

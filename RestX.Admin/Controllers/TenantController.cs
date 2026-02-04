@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using AutoMapper;
+using Microsoft.AspNetCore.Mvc;
 using RestX.Admin.Controllers.BaseControllers;
 using RestX.BLL.Interfaces;
 using RestX.Models.Tenants;
@@ -12,7 +13,6 @@ namespace RestX.Admin.Controllers
     {
         private readonly ITenantService tenantService;
         public readonly IExceptionHandler exceptionHandler;
-
         public TenantController(ITenantService tenantService, IExceptionHandler exceptionHandler) : base(exceptionHandler)
         {
             this.tenantService = tenantService;
@@ -48,7 +48,7 @@ namespace RestX.Admin.Controllers
         }
 
         [HttpPut("{id}")]
-        public async Task<IActionResult> EditTenant([Required] Guid id, [FromBody] Tenant tenant)
+        public async Task<IActionResult> EditTenant([Required] Guid id, [FromBody] TenantItem tenant)
         {
             try
             {
@@ -62,7 +62,7 @@ namespace RestX.Admin.Controllers
         }
 
         [HttpPost]
-        public async Task<ActionResult<Tenant>> AddTenant([FromBody] Tenant tenant)
+        public async Task<ActionResult<TenantItem>> AddTenant([FromBody] TenantItem tenant)
         {
             try
             {

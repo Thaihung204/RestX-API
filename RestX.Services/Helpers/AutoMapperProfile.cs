@@ -1,6 +1,7 @@
 ﻿using AutoMapper;
 using RestX.BLL.DataTranferObjects.Category;
 using RestX.BLL.DataTranferObjects.Tenants;
+using RestX.BLL.DataTranferObjects.Dish;
 using RestX.Models.Enum;
 using RestX.Models.Menu;
 using RestX.Models.Tenants;
@@ -28,7 +29,26 @@ namespace RestX.BLL.Helpers
                             .ThenBy(x => x.Id)
                             .Select(x => x.ImageUrl)
                             .FirstOrDefault()));
+            CreateMap<Dish, MenuItem>()
+            .ForMember(
+                dest => dest.CategoryName,
+                opt => opt.MapFrom(src => src.Category != null ? src.Category.Name : string.Empty)
+            )
+            .ForMember(
+                dest => dest.ImageUrl,
+                opt => opt.MapFrom(src =>
+                    src.DishImages
+                        .Where(i =>
+                            i.IsActive &&
+                            i.ImageType == DishImageType.Main
+                        )
+                        .OrderBy(i => i.DisplayOrder)
+                        .Select(i => i.ImageUrl)
+                        .FirstOrDefault()
+                )
+            );
             this.CreateMap<Tenant, TenantOverview>().ReverseMap();
+            CreateMap<Tenant, TenantItem>().ReverseMap();
             CreateMap<Category, CategoryItem>()
                 .ForMember(
                     dest => dest.CategoryChildrens,

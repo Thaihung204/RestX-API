@@ -16,6 +16,7 @@ using Microsoft.OpenApi.Models;
 using RestX.AdminDAL.Context;
 using RestX.App.Helpers;
 using RestX.BLL;
+using RestX.BLL.DataTranferObjects.Common;
 using RestX.BLL.Helpers;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Auth;
@@ -26,6 +27,7 @@ using RestX.BLL.Services;
 using RestX.DAL.Context;
 using RestX.Models.Identity;
 using RestX.Models.Tenants;
+using SaasKit.Multitenancy;
 using SaasKit.Multitenancy.Internal;
 using System.Security.Claims;
 using System.Text;
@@ -65,7 +67,14 @@ namespace RestX.WebApp
             // Add framework services.
             services.AddDbContext<RestxAdminContext>(
                 options => options.UseSqlServer(Configuration.GetConnectionString("AdminDbContext"), options => options.EnableRetryOnFailure()));
-            services.AddDbContext<TenantDbContext>();
+
+            services.AddScoped<TenantDbContext>(serviceProvider =>
+            {
+                var httpContextAccessor = serviceProvider.GetService<IHttpContextAccessor>();
+                var tenantContext = httpContextAccessor?.HttpContext?.GetTenantContext<ActiveTenant>();
+                var tenant = tenantContext?.Tenant;
+                return new TenantDbContext(tenant);
+            });
 
             services.AddIdentity<ApplicationUser, IdentityRole<Guid>>()
                 .AddEntityFrameworkStores<TenantDbContext>()
@@ -163,6 +172,7 @@ namespace RestX.WebApp
             //services.Configure<AzureAdOptions>(Configuration.GetSection("AzureAd"));
             services.Configure<ConnectionStrings>(Configuration.GetSection("ConnectionStrings"));
             services.Configure<EmailSettings>(Configuration.GetSection("EmailSettings"));
+            services.Configure<JwtSettings>(Configuration.GetSection("JwtSettings"));
             services.AddResponseCompression();
 
             SocketsHttpHandler socketsHttpHandler = new SocketsHttpHandler
@@ -276,7 +286,11 @@ namespace RestX.WebApp
             });
 
             app.UseMultitenancy<ActiveTenant>();
+
+            if (env.IsProduction())
+            {
             app.UseMiddleware<TenantUnresolvedRedirectMiddleware<ActiveTenant>>("https://restx.food", false);
+            }
             //app.UseMiddleware<TenantRedirectMiddleware<ActiveTenant>>();
             //app.UseIpRateLimiting();
             app.UseCookiePolicy(new CookiePolicyOptions

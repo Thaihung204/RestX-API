@@ -1,136 +1,167 @@
-using Azure.Core;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.Data.SqlClient;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
-using RestX.BLL.DTOs.Auth;
-using RestX.BLL.DTOs.Common;
-using RestX.BLL.DTOs.Employee;
+using Microsoft.Extensions.Logging;
+using RestX.BLL.DataTranferObjects.Common;
+using RestX.BLL.DataTranferObjects.Employee;
+using RestX.BLL.Helpers;
 using RestX.BLL.Interfaces;
+using RestX.BLL.Interfaces.Auth;
 using RestX.BLL.Interfaces.Employees;
 using RestX.Models.HR;
 using RestX.Models.Identity;
 using RestX.Models.Tenants;
-using System.Data;
-using System.Text;
 
 namespace RestX.BLL.Services
 {
     public class EmployeeService : BaseService, IEmployeeService
     {
-        private readonly UserManager<ApplicationUser> userManager;
-        private readonly RoleManager<IdentityRole<Guid>> roleManager;
-        private readonly AppSettings appSettings;
+        private readonly IUserAccountService userAccountService;
+        private readonly IAuthLinkService authLinkService;
         private readonly IEmailService emailService;
+        private readonly ILogger<EmployeeService>? logger;
 
         public EmployeeService(
-            IRepository Repo,
+            IRepository repo,
             IRedisService redisService,
-            UserManager<ApplicationUser> userManager,
-            RoleManager<IdentityRole<Guid>> roleManager, IEmailService emailService,
-            IOptions<AppSettings> appSettings,
-            IEnumerable<ActiveTenant> tenant = null) : base(Repo, redisService, tenant)
+            IUserAccountService userAccountService,
+            IAuthLinkService authLinkService,
+            IEmailService emailService,
+            ILogger<EmployeeService>? logger = null,
+            IEnumerable<ActiveTenant> tenant = null!) : base(repo, redisService, tenant)
         {
-            this.userManager = userManager;
-            this.roleManager = roleManager;
+            this.userAccountService = userAccountService;
+            this.authLinkService = authLinkService;
             this.emailService = emailService;
-            this.appSettings = appSettings.Value;
-
+            this.logger = logger;
         }
 
-        public async Task<PaginatedResult<EmployeeListItemDto>> GetAllEmployeesPaginated(EmployeeFilterParams filter)
+        public async Task<PaginatedResult<EmployeeListItem>> GetAllEmployeesPaginated(EmployeeFilterParams filter)
         {
-            var query = new StringBuilder();
-            query.Append(@"
+            var queryBuilder = new PaginationQueryBuilder(@"
                 SELECT #SELECT#
                 FROM Employees e
                 LEFT JOIN AspNetUsers u ON e.Id = u.MemberId
-                WHERE 1 = 1
-            ");
+                WHERE 1 = 1");
 
-            var countParameters = new List<SqlParameter>();
-            var queryParameters = new List<SqlParameter>();
+            queryBuilder
+                .AddBoolCondition("e.IsActive = @IsActive", "IsActive", filter.IsActive)
+                .AddLikeCondition("e.Position LIKE '%' + @Position + '%'", "Position", filter.Position)
+                .AddDateCondition("e.HireDate >= @HireDateFrom", "HireDateFrom", filter.HireDateFrom)
+                .AddDateCondition("e.HireDate <= @HireDateTo", "HireDateTo", filter.HireDateTo)
+                .AddSearchCondition(
+                    new[] { "e.Code", "e.Position", "u.UserName", "u.Email" },
+                    "Search",
+                    filter.Search);
 
-            // Apply filters
-            if (filter.IsActive.HasValue)
-            {
-                query.Append(" AND e.IsActive = @IsActive ");
-                countParameters.Add(new SqlParameter("IsActive", SqlDbType.Bit) { Value = filter.IsActive.Value });
-                queryParameters.Add(new SqlParameter("IsActive", SqlDbType.Bit) { Value = filter.IsActive.Value });
-            }
+            var (countQuery, countParams) = queryBuilder.BuildCountQuery("COUNT(DISTINCT e.Id)");
+            int totalCount = await Repo.ExecuteSqlCommandAsync<int>(countQuery, countParams);
 
-            if (!string.IsNullOrEmpty(filter.Position))
-            {
-                query.Append(" AND e.Position LIKE '%' + @Position + '%' ");
-                countParameters.Add(new SqlParameter("Position", SqlDbType.NVarChar) { Value = filter.Position });
-                queryParameters.Add(new SqlParameter("Position", SqlDbType.NVarChar) { Value = filter.Position });
-            }
+            var selectColumns = @"DISTINCT e.Id, e.Code, u.UserName AS FullName, u.Email,
+                                  e.Position, e.IsActive, e.HireDate, e.CreatedDate";
+            var (dataQuery, dataParams) = queryBuilder.BuildDataQuery(
+                selectColumns,
+                GetSortClause(filter.SortBy, filter.SortDescending),
+                filter.PageNumber,
+                filter.PageSize);
 
-            if (filter.HireDateFrom.HasValue)
-            {
-                query.Append(" AND e.HireDate >= @HireDateFrom ");
-                countParameters.Add(new SqlParameter("HireDateFrom", SqlDbType.DateTime) { Value = filter.HireDateFrom.Value });
-                queryParameters.Add(new SqlParameter("HireDateFrom", SqlDbType.DateTime) { Value = filter.HireDateFrom.Value });
-            }
-
-            if (filter.HireDateTo.HasValue)
-            {
-                query.Append(" AND e.HireDate <= @HireDateTo ");
-                countParameters.Add(new SqlParameter("HireDateTo", SqlDbType.DateTime) { Value = filter.HireDateTo.Value });
-                queryParameters.Add(new SqlParameter("HireDateTo", SqlDbType.DateTime) { Value = filter.HireDateTo.Value });
-            }
-
-            // Apply search
-            if (!string.IsNullOrEmpty(filter.Search))
-            {
-                query.Append(@" AND (
-                    e.Code LIKE '%' + @Search + '%'
-                    OR e.Position LIKE '%' + @Search + '%'
-                    OR u.UserName LIKE '%' + @Search + '%'
-                    OR u.Email LIKE '%' + @Search + '%'
-                ) ");
-                countParameters.Add(new SqlParameter("Search", SqlDbType.NVarChar) { Value = filter.Search });
-                queryParameters.Add(new SqlParameter("Search", SqlDbType.NVarChar) { Value = filter.Search });
-            }
-
-            // Count query - execute at DB level
-            var countQuery = query.ToString().Replace("#SELECT#", "COUNT(DISTINCT e.Id)");
-            int totalCount = await Repo.ExecuteSqlCommandAsync<int>(countQuery, countParameters.ToArray());
-
-            // Pagination calculation
-            int skip = filter.PageNumber == 1 ? 0 : (filter.PageNumber - 1) * filter.PageSize;
-
-            // Select columns
-            var selectColumns = @"
-                                DISTINCT
-                                e.Id,
-                                e.Code,
-                                u.UserName AS FullName,
-                                u.Email,
-                                e.Position,
-                                e.IsActive,
-                                e.HireDate,
-                                e.CreatedDate
-                            ";
-
-            var mainQuery = query.ToString().Replace("#SELECT#", selectColumns);
-
-            // Apply sorting
-            mainQuery += GetSortClause(filter.SortBy, filter.SortDescending);
-
-            // Apply pagination at DB level - OFFSET/FETCH
-            mainQuery += $" OFFSET {skip} ROWS FETCH NEXT {filter.PageSize} ROWS ONLY";
-
-            var items = await Repo.ExecuteSqlSelectAsync<EmployeeListItemDto>(mainQuery, queryParameters.ToArray());
-
-
-            return new PaginatedResult<EmployeeListItemDto>(items, totalCount, filter.PageNumber, filter.PageSize);
+            var items = await Repo.ExecuteSqlSelectAsync<EmployeeListItem>(dataQuery, dataParams);
+            return new PaginatedResult<EmployeeListItem>(items, totalCount, filter.PageNumber, filter.PageSize);
         }
+
+        public async Task<EmployeeResponse?> GetEmployeeById(Guid id)
+        {
+            var employee = await Repo.GetFirstAsync<Employee>(e => e.Id == id);
+            if (employee == null) return null;
+
+            var user = await userAccountService.GetUserByMemberIdAsync(id);
+            var roles = user != null
+                ? await userAccountService.GetUserRolesAsync(user)
+                : new List<string>();
+
+            return MapToResponse(employee, user, roles);
+        }
+
+        public async Task<EmployeeResponse> CreateEmployee(CreateEmployee dto)
+        {
+            if (await userAccountService.EmailExistsAsync(dto.Email))
+                throw new InvalidOperationException("Email already exists");
+
+            var employee = await CreateEmployeeEntityAsync(dto);
+            await Repo.CreateAsync(employee);
+
+            ApplicationUser user;
+            try
+            {
+                user = await userAccountService.CreateUserAsync(new CreateUserRequest
+                {
+                    FullName = dto.FullName,
+                    Email = dto.Email,
+                    PhoneNumber = dto.PhoneNumber,
+                    Role = dto.Role,
+                    MemberId = employee.Id,
+                    GenerateRandomPassword = true
+                });
+            }
+            catch
+            {
+                Repo.Delete<Employee>(employee);
+                await Repo.SaveAsync();
+                throw;
+            }
+            await TrySendWelcomeEmailAsync(user, dto.FullName);
+
+            var roles = await userAccountService.GetUserRolesAsync(user);
+            return MapToResponse(employee, user, roles);
+        }
+
+        public async Task<EmployeeResponse?> UpdateEmployee(Guid id, UpdateEmployee dto)
+        {
+            var employee = await Repo.GetFirstAsync<Employee>(filter: e => e.Id == id);
+            if (employee == null) return null;
+
+            var user = await userAccountService.GetUserByMemberIdAsync(id);
+            if (user != null && HasUserUpdates(dto))
+            {
+                user = await userAccountService.UpdateUserAsync(user.Id, new UpdateUserRequest
+                {
+                    FullName = dto.FullName,
+                    PhoneNumber = dto.PhoneNumber
+                });
+            }
+
+            UpdateEmployeeFields(employee, dto);
+            Repo.Update(employee);
+            await Repo.SaveAsync();
+
+            var roles = user != null
+                ? await userAccountService.GetUserRolesAsync(user)
+                : new List<string>();
+
+            return MapToResponse(employee, user, roles);
+        }
+
+        public async Task<bool> DeleteEmployee(Guid id)
+        {
+            var employee = await Repo.GetFirstAsync<Employee>(
+                filter: e => e.Id == id,
+                includeProperties: "ApplicationUser");
+
+            if (employee == null) return false;
+
+            employee.IsActive = false;
+            employee.TerminationDate = DateTime.UtcNow;
+            Repo.Update(employee);
+
+            if (employee.ApplicationUser != null)
+                await userAccountService.DeactivateUserAsync(employee.ApplicationUser);
+
+            await Repo.SaveAsync();
+            return true;
+        }
+
+        #region Private Methods
 
         private static string GetSortClause(string? sortBy, bool sortDescending)
         {
             var direction = sortDescending ? "DESC" : "ASC";
-
             return (sortBy?.ToLower()) switch
             {
                 "code" => $" ORDER BY e.Code {direction}",
@@ -143,56 +174,14 @@ namespace RestX.BLL.Services
             };
         }
 
-        public async Task<EmployeeResponseDto?> GetEmployeeById(Guid id)
+        private async Task<Employee> CreateEmployeeEntityAsync(CreateEmployee dto)
         {
-            var employee = await Repo.GetFirstAsync<Employee>(e => e.Id == id);
-            if (employee == null) return null;
+            var code = await GenerateEmployeeCodeAsync();
 
-            var user = await userManager.Users
-                .AsNoTracking()
-                .FirstOrDefaultAsync(u => u.MemberId == id);
-
-            var roles = user != null
-                ? await userManager.GetRolesAsync(user)
-                : new List<string>();
-
-            return new EmployeeResponseDto
-            {
-                Id = employee.Id,
-                Code = employee.Code,
-                Address = employee.Address,
-                Position = employee.Position,
-                HireDate = employee.HireDate,
-                TerminationDate = employee.TerminationDate,
-                Salary = employee.Salary,
-                SalaryType = employee.SalaryType,
-                IsActive = employee.IsActive,
-                CreatedDate = employee.CreatedDate,
-                ModifiedDate = employee.ModifiedDate,
-
-                UserId = user?.Id ?? Guid.Empty,
-                Email = user?.Email ?? string.Empty,
-                FullName = user?.UserName ?? string.Empty,
-                PhoneNumber = user?.PhoneNumber,
-
-                Roles = roles.ToList()
-            };
-        }
-
-
-        public async Task<EmployeeResponseDto> CreateEmployee(CreateEmployeeDto dto)
-        {
-            var existingUser = await userManager.FindByEmailAsync(dto.Email);
-            if (existingUser != null)
-            {
-                throw new InvalidOperationException("Email already exists");
-            }
-
-            var employeeCode = await GenerateEmployeeCodeAsync();
-            var employee = new Employee
+            return new Employee
             {
                 Id = Guid.NewGuid(),
-                Code = employeeCode,
+                Code = code,
                 Address = dto.Address,
                 Position = dto.Position,
                 HireDate = dto.HireDate,
@@ -200,102 +189,74 @@ namespace RestX.BLL.Services
                 SalaryType = dto.SalaryType,
                 IsActive = true
             };
-
-            await Repo.CreateAsync(employee);
-            var randomPassword = GenerateRandomPassword();
-            var user = new ApplicationUser
-            {
-                Id = Guid.NewGuid(),
-                UserName = dto.Email,
-                Email = dto.Email,
-                PhoneNumber = dto.PhoneNumber,
-                EmailConfirmed = true,
-                LastModified = DateTime.UtcNow,
-                MemberId = employee.Id,
-                RefreshToken = string.Empty
-            };
-
-            var createResult = await userManager.CreateAsync(user, randomPassword);
-            if (!createResult.Succeeded)
-            {
-                Repo.Delete<Employee>(employee);
-                await Repo.SaveAsync();
-
-                var errors = string.Join(", ", createResult.Errors.Select(e => e.Description));
-                throw new InvalidOperationException($"Failed to create user: {errors}");
-            }
-
-            if (!await roleManager.RoleExistsAsync(dto.Role))
-            {
-                await roleManager.CreateAsync(new IdentityRole<Guid>(dto.Role));
-            }
-            await userManager.AddToRoleAsync(user, dto.Role);
-
-            var resetToken = await userManager.GeneratePasswordResetTokenAsync(user);
-            var encodedToken = Uri.EscapeDataString(resetToken);
-            var encodedEmail = Uri.EscapeDataString(user.Email!);
-
-            var resetLink =
-        $"{appSettings.FrontendUrl}/reset-password?email={encodedEmail}&token={encodedToken}";
-           
-                await emailService.SendPasswordResetLinkAsync(user.Email, resetLink);
-           
-
-            var roles = await userManager.GetRolesAsync(user);
-
-            return new EmployeeResponseDto
-            {
-                Id = employee.Id,
-                Code = employee.Code,
-                Address = employee.Address,
-                Position = employee.Position,
-                HireDate = employee.HireDate,
-                TerminationDate = employee.TerminationDate,
-                Salary = employee.Salary,
-                SalaryType = employee.SalaryType,
-                IsActive = employee.IsActive,
-                CreatedDate = employee.CreatedDate,
-                ModifiedDate = employee.ModifiedDate,
-                UserId = user.Id,
-                Email = user.Email ?? string.Empty,
-                FullName = dto.FullName,
-                PhoneNumber = user.PhoneNumber,
-                Roles = roles.ToList()
-            };
         }
 
-        public async Task<EmployeeResponseDto?> UpdateEmployee(Guid id, UpdateEmployeeDto dto)
+        private async Task<string> GenerateEmployeeCodeAsync()
         {
-            var employee = await Repo.GetFirstAsync<Employee>(filter: e => e.Id == id);
+            const string prefix = "RTX";
+            var query = @"SELECT ISNULL(MAX(Code), '') FROM Employees WHERE Code LIKE 'RTX%'";
+            var lastCode = await Repo.ExecuteSqlCommandAsync<string>(query);
 
-            if (employee == null) return null;
+            if (string.IsNullOrWhiteSpace(lastCode))
+                return "RTX001";
 
-            if (!string.IsNullOrEmpty(dto.Code)) employee.Code = dto.Code;
-            if (dto.Address != null) employee.Address = dto.Address;
-            if (!string.IsNullOrEmpty(dto.Position)) employee.Position = dto.Position;
-            if (dto.HireDate.HasValue) employee.HireDate = dto.HireDate.Value;
-            if (dto.TerminationDate.HasValue) employee.TerminationDate = dto.TerminationDate;
-            if (dto.Salary.HasValue) employee.Salary = dto.Salary.Value;
-            if (!string.IsNullOrEmpty(dto.SalaryType)) employee.SalaryType = dto.SalaryType;
-            if (dto.IsActive.HasValue) employee.IsActive = dto.IsActive.Value;
+            var numberPart = lastCode[prefix.Length..];
+            if (!int.TryParse(numberPart, out int lastNumber))
+                throw new InvalidOperationException("Invalid employee code format in database.");
 
-            Repo.Update(employee);
-            await Repo.SaveAsync();
+            return $"{prefix}{(lastNumber + 1):D3}";
+        }
 
-            var user = userManager.Users.FirstOrDefault(u => u.MemberId == id);
-            if (user != null)
+        private async Task TrySendWelcomeEmailAsync(ApplicationUser user, string fullName)
+        {
+            try
             {
-                if (!string.IsNullOrEmpty(dto.FullName)) user.UserName = dto.FullName;
-                if (!string.IsNullOrEmpty(dto.PhoneNumber)) user.PhoneNumber = dto.PhoneNumber;
-                user.LastModified = DateTime.UtcNow;
-                await userManager.UpdateAsync(user);
-                await Repo.SaveAsync();
-
+                var baseUrl = GetTenantBaseUrl();
+                var welcomeLink = await authLinkService.GenerateWelcomeLinkAsync(user, baseUrl);
+                await emailService.SendWelcomeEmployeeAsync(user.Email!, fullName, welcomeLink);
             }
+            catch (Exception ex)
+            {
+                // Log but don't fail - employee is already created, email can be resent later
+                logger?.LogWarning(ex, "Failed to send welcome email to {Email}", user.Email);
+            }
+        }
 
-            var roles = user != null ? await userManager.GetRolesAsync(user) : new List<string>();
+        private string GetTenantBaseUrl()
+            => $"https://{CurrentTenant?.Hostname ?? "localhost"}";
 
-            return new EmployeeResponseDto
+        private static void UpdateEmployeeFields(Employee employee, UpdateEmployee dto)
+        {
+            if (!string.IsNullOrEmpty(dto.Code))
+                employee.Code = dto.Code;
+            if (dto.Address != null)
+                employee.Address = dto.Address;
+            if (!string.IsNullOrEmpty(dto.Position))
+                employee.Position = dto.Position;
+            if (dto.HireDate.HasValue)
+                employee.HireDate = dto.HireDate.Value;
+            if (dto.TerminationDate.HasValue)
+                employee.TerminationDate = dto.TerminationDate;
+            if (dto.Salary.HasValue)
+                employee.Salary = dto.Salary.Value;
+            if (!string.IsNullOrEmpty(dto.SalaryType))
+                employee.SalaryType = dto.SalaryType;
+            if (dto.IsActive.HasValue)
+                employee.IsActive = dto.IsActive.Value;
+        }
+
+        private static bool HasUserUpdates(UpdateEmployee dto)
+        {
+            return !string.IsNullOrEmpty(dto.FullName) ||
+                   !string.IsNullOrEmpty(dto.PhoneNumber);
+        }
+
+        private static EmployeeResponse MapToResponse(
+            Employee employee,
+            ApplicationUser? user,
+            IList<string> roles)
+        {
+            return new EmployeeResponse
             {
                 Id = employee.Id,
                 Code = employee.Code,
@@ -316,56 +277,6 @@ namespace RestX.BLL.Services
             };
         }
 
-        public async Task<bool> DeleteEmployee(Guid id)
-        {
-            var employee = await Repo.GetFirstAsync<Employee>(filter: e => e.Id == id);
-
-            if (employee == null) return false;
-
-            employee.IsActive = false;
-            employee.TerminationDate = DateTime.UtcNow;
-
-           Repo.Update(employee);
-            await Repo.SaveAsync();
-            var user = employee.ApplicationUser;
-            if (user != null)
-            {
-                user.LockoutEnabled = true;
-                user.LockoutEnd = DateTimeOffset.MaxValue;
-                user.LastModified = DateTime.UtcNow;
-
-                await userManager.UpdateAsync(user);
-            }
-            return true;
-        }
-
-        private async Task<string> GenerateEmployeeCodeAsync()
-        {
-            const string prefix = "RTX";
-
-            var query = @"
-        SELECT ISNULL(MAX(Code), '')
-        FROM Employees
-        WHERE Code LIKE 'RTX%'
-    ";
-
-            var lastCode = await Repo.ExecuteSqlCommandAsync<string>(query);
-
-            if (string.IsNullOrWhiteSpace(lastCode))
-                return "RTX001";
-
-            var numberPart = lastCode.Substring(prefix.Length);
-
-            if (!int.TryParse(numberPart, out int lastNumber))
-                throw new InvalidOperationException("Invalid employee code format in database.");
-
-            return $"{prefix}{(lastNumber + 1):D3}";
-        }
-        private static string GenerateRandomPassword()
-        {
-            return $"Rx@{Guid.NewGuid():N}".Substring(0, 12);
-        }
-
-
+        #endregion
     }
 }

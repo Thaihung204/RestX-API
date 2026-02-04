@@ -1,4 +1,3 @@
-﻿
 namespace RestX.BLL.Helpers
 {
     using CloudinaryDotNet;
@@ -8,7 +7,9 @@ namespace RestX.BLL.Helpers
     using RestX.BLL.Interfaces.Auth;
     using RestX.BLL.Interfaces.Customers;
     using RestX.BLL.Interfaces.Employees;
+    using RestX.BLL.Interfaces.Tables;
     using RestX.BLL.Services;
+    using RestX.BLL.Services.Auth;
     using RestX.DAL.Context;
 
     public static class DIHelper
@@ -20,6 +21,9 @@ namespace RestX.BLL.Helpers
             services.AddScoped<IEmployeeService, EmployeeService>();
             services.AddScoped<IAuthService, AuthService>();
             services.AddScoped<IEmailService, EmailService>();
+            services.AddScoped<IUserAccountService, UserAccountService>();
+            services.AddScoped<ITokenService, TokenService>();
+            services.AddScoped<IAuthLinkService, AuthLinkService>();       
 
             services.AddScoped<ICloudinaryService, CloudinaryService>();
             services.AddScoped<IDishImageService, DishImageService>();
@@ -27,6 +31,7 @@ namespace RestX.BLL.Helpers
             services.AddScoped<IExceptionHandler, ExceptionHandler>();
             services.AddScoped<IDishService, DishService>();
             services.AddScoped<ICategoryService, CategoryService>();
+            services.AddScoped<ITableService, TableService>();
         }
     }
 }

@@ -15,6 +15,7 @@ using RestX.Models.Orders;
 using RestX.Models.Promotions;
 using RestX.Models.Reservations;
 using RestX.Models.Tables;
+using RestX.Models.Tenants;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -25,10 +26,15 @@ namespace RestX.DAL.Context
 {
     public partial class TenantDbContext :  IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>
     {
+        private readonly ActiveTenant tenant;
+
         public TenantDbContext()
         {
         }
-
+        public TenantDbContext(ActiveTenant tenant)
+        {
+            this.tenant = tenant;
+        }
         public TenantDbContext(DbContextOptions<TenantDbContext> options)
             : base(options)
         {
@@ -112,8 +118,16 @@ namespace RestX.DAL.Context
         #endregion
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
-            => optionsBuilder.UseSqlServer("Server=restx-sqlserver,1433;Database=demo_tenant;User Id=sa;Password=Passw0r1!;Encrypt=False;TrustServerCertificate=True;");
+        {
+            if (!optionsBuilder.IsConfigured)
+            {
+                var connectionString = tenant == null
+                    ? "Server=restx-sqlserver;Database=demo_tenant;User Id=sa;Password=Passw0r1!;Encrypt=False;TrustServerCertificate=True;"
+                    : tenant.ConnectionString;
+                optionsBuilder.UseSqlServer(connectionString);
+            }
+        }
+
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

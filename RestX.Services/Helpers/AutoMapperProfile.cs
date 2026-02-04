@@ -1,18 +1,19 @@
-﻿using AutoMapper;
+using AutoMapper;
 using RestX.BLL.DataTranferObjects.Category;
+using RestX.BLL.DataTranferObjects.Table;
 using RestX.BLL.DataTranferObjects.Tenants;
 using RestX.BLL.DataTranferObjects.Dish;
 using RestX.Models.Enum;
 using RestX.Models.Menu;
 using RestX.Models.Tenants;
 using System.Globalization;
+using RestX.Models.Tables;
 
 namespace RestX.BLL.Helpers
 {
     public class AutoMapperProfile : Profile
     {
         private TextInfo textInfo = new CultureInfo("en-GB", false).TextInfo;
-
         public AutoMapperProfile()
         {
             // CreateMap<Source, Destination>();
@@ -57,6 +58,12 @@ namespace RestX.BLL.Helpers
                             .Where(c => c.IsActive)
                     )
                 );
+            CreateMap<Table, TableItem>()
+                .ForMember(
+                    dest => dest.TableStatusName,
+                    opt => opt.MapFrom(src => src.TableStatus != null ? src.TableStatus.Name : null)
+                );
+            CreateMap<TableRequest,Table>();
         }
     }
 }

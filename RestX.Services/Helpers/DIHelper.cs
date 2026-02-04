@@ -7,6 +7,7 @@ namespace RestX.BLL.Helpers
     using RestX.BLL.Interfaces.Auth;
     using RestX.BLL.Interfaces.Customers;
     using RestX.BLL.Interfaces.Employees;
+    using RestX.BLL.Interfaces.Tables;
     using RestX.BLL.Services;
     using RestX.DAL.Context;
 
@@ -24,6 +25,7 @@ namespace RestX.BLL.Helpers
             services.AddScoped<IExceptionHandler, ExceptionHandler>();
             services.AddScoped<IDishService, DishService>();
             services.AddScoped<ICategoryService, CategoryService>();
+            services.AddScoped<ITableService, TableService>();
         }
     }
 }

@@ -7,7 +7,7 @@ namespace RestX.DAL.DataSeeders
         private const string SYSTEM_ADMIN_EMAIL = "admin@restx.food";
         private const string SYSTEM_ADMIN_PASSWORD = "Admin@123";
         private const string SYSTEM_ADMIN_USERNAME = "SystemAdmin";
-        private const string SYSTEM_ADMIN_ROLE = "Admin";
+        private const string SYSTEM_ADMIN_ROLE = "System Admin";
 
         public SystemAdminSeeder(TenantDbContext context) : base(context)
         {

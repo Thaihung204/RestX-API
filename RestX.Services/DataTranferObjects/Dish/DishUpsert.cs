@@ -5,8 +5,7 @@ namespace RestX.BLL.DataTranferObjects.Dish
 {
     public class DishUpsert
     {
-        public Guid? Id { get; set; }
-
+        public Guid? Id { get; set; } = null;
         public Guid CategoryId { get; set; }
         public string Name { get; set; } = string.Empty;
         public string? Description { get; set; }

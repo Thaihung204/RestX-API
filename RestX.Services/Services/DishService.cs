@@ -151,13 +151,21 @@ namespace RestX.BLL.Services
             var selectItems = @"
                 DISTINCT
                 d.Id,
+                d.CategoryId,
                 d.Name,
-                c.Name AS CategoryName,
+                d.Description,
                 d.Price,
+                d.Unit,
+                d.Quantity,
                 d.IsActive,
+                d.AutoDisableByStock,
+                d.IsVegetarian,
+                d.IsSpicy,
+                d.IsBestSeller,
                 d.CreatedDate,
                 mainImg.ImageUrl AS MainImageUrl
             ";
+
 
             var mainQuery = countQuery.Replace(
                 "COUNT(DISTINCT d.Id)",
@@ -199,17 +207,8 @@ namespace RestX.BLL.Services
                 .Select(x => x.ImageUrl)
                 .FirstOrDefault();
 
-            return new DishItem
-            {
-                Id = dish.Id,
-                Name = dish.Name,
-                CategoryName = dish.Category?.Name ?? string.Empty,
-                Price = dish.Price,
-                IsActive = dish.IsActive,
-                CreatedDate = dish.CreatedDate,
-                Description = dish.Description,
-                MainImageUrl = mainImageUrl
-            };
+            return mapper.Map<DishItem>(dish);
+
         }
         public async Task<DishItem> UpsertDish(DishUpsert model)
         {

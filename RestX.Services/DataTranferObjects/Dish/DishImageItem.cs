@@ -9,9 +9,9 @@ namespace RestX.BLL.DataTranferObjects.Dish
 {
     public class DishImageItem
     {
-        public Guid? Id { get; set; }      
-        public int DisplayOrder { get; set; } 
-        public IFormFile? File { get; set; }
+        public Guid Id { get; set; }
+        public int DisplayOrder { get; set; }
+        public string? ImageUrl { get; set; }
     }
 
 }

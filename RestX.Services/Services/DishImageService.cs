@@ -98,98 +98,54 @@ namespace RestX.BLL.Services
             Dish dish,
             string folder)
         {
-            var existingImages = (await Repo.GetAsync<DishImage>(
+
+            var oldImages = await Repo.GetAsync<DishImage>(
                 x => x.DishId == dish.Id
                   && x.ImageType == DishImageType.Sub
-                  && x.IsActive
-            )).ToList();
+            );
 
-            if (model.SubImages == null || !model.SubImages.Any())
+            foreach (var img in oldImages)
             {
-                foreach (var oldImage in existingImages)
-                {
-                    await DeleteDishImageAsync(oldImage.Id);
-                    Repo.Delete(oldImage);
-                }
+                await DeleteDishImageAsync(img.Id);
+                Repo.Delete(img);
+            }
 
+            if (model.SubImages == null)
                 return;
-            }
 
-            var incomingIds = model.SubImages
-                .Where(x => x.Id.HasValue)
-                .Select(x => x.Id!.Value)
-                .ToHashSet();
+            int displayOrder = 1;
 
-            foreach (var oldImage in existingImages)
+            foreach (var file in model.SubImages)
             {
-                if (!incomingIds.Contains(oldImage.Id))
+                if (file == null || file.Length == 0)
+                    continue;
+
+                var subImage = new DishImage
                 {
-                    await DeleteDishImageAsync(oldImage.Id);
-                    Repo.Delete(oldImage);
-                }
-            }
+                    Id = Guid.NewGuid(),
+                    DishId = dish.Id,
+                    ImageType = DishImageType.Sub,
+                    DisplayOrder = displayOrder++,
+                    IsActive = true,
+                    CreatedDate = DateTime.UtcNow
+                };
 
-            existingImages = (await Repo.GetAsync<DishImage>(
-                x => x.DishId == dish.Id
-                  && x.ImageType == DishImageType.Sub
-                  && x.IsActive
-            )).ToList();
+                await Repo.CreateAsync(subImage);
 
-            foreach (var item in model.SubImages)
-            {
-                DishImage subImage;
+                using var stream = file.OpenReadStream();
 
-                if (item.Id.HasValue)
-                {
-                    subImage = existingImages.FirstOrDefault(x => x.Id == item.Id.Value);
-                    if (subImage == null) continue;
-                }
+                var upload = await cloudinaryService.UploadAsync(
+                    fileStream: stream,
+                    fileName: file.FileName,
+                    folder: folder,
+                    publicId: subImage.Id.ToString()
+                );
 
-                else
-                {
-                    subImage = new DishImage
-                    {
-                        Id = Guid.NewGuid(),
-                        DishId = dish.Id,
-                        ImageType = DishImageType.Sub,
-                        IsActive = true,
-                        CreatedDate = DateTime.UtcNow
-                    };
-
-                    await Repo.CreateAsync(subImage);
-                    existingImages.Add(subImage);
-                }
-
-                if (item.File != null && item.File.Length > 0)
-                {
-                    using var stream = item.File.OpenReadStream();
-
-                    var upload = await cloudinaryService.UploadAsync(
-                        fileStream: stream,
-                        fileName: item.File.FileName,
-                        folder: folder,
-                        publicId: subImage.Id.ToString(),
-                        overwrite: item.Id.HasValue
-                    );
-
-                    subImage.ImageUrl = upload.Url;
-                }
-
-                subImage.DisplayOrder = item.DisplayOrder;
-
+                subImage.ImageUrl = upload.Url;
                 Repo.Update(subImage);
             }
-
-            var ordered = existingImages
-                .OrderBy(x => x.DisplayOrder)
-                .ToList();
-
-            for (int i = 0; i < ordered.Count; i++)
-            {
-                ordered[i].DisplayOrder = i + 1;
-                Repo.Update(ordered[i]);
-            }
         }
+
 
 
         public async Task DeleteDishImageAsync(Guid dishImageId)

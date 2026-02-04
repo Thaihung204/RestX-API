@@ -1,4 +1,3 @@
-﻿
 namespace RestX.BLL.Helpers
 {
     using Microsoft.AspNetCore.Http;
@@ -9,6 +8,7 @@ namespace RestX.BLL.Helpers
     using RestX.BLL.Interfaces.Employees;
     using RestX.BLL.Interfaces.Tables;
     using RestX.BLL.Services;
+    using RestX.BLL.Services.Auth;
     using RestX.DAL.Context;
 
     public static class DIHelper
@@ -20,7 +20,9 @@ namespace RestX.BLL.Helpers
             services.AddScoped<IEmployeeService, EmployeeService>();
             services.AddScoped<IAuthService, AuthService>();
             services.AddScoped<IEmailService, EmailService>();
-
+            services.AddScoped<IUserAccountService, UserAccountService>();
+            services.AddScoped<ITokenService, TokenService>();
+            services.AddScoped<IAuthLinkService, AuthLinkService>();       
             services.AddScoped<IRepository, EntityFrameworkRepository<TenantDbContext>>();
             services.AddScoped<IExceptionHandler, ExceptionHandler>();
             services.AddScoped<IDishService, DishService>();

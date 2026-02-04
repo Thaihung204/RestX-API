@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
-using RestX.BLL.DTOs.Customer;
+using RestX.BLL.DataTranferObjects.Customer;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Customers;
 using RestX.WebApp.Controllers.BaseControllers;
@@ -12,14 +12,11 @@ namespace RestX.WebApp.Controllers
     public class CustomerController : BaseController
     {
         private readonly ICustomerService customerService;
-
         public CustomerController(ICustomerService customerService, IExceptionHandler exceptionHandler) : base(exceptionHandler)
         {
             this.customerService = customerService;
             this.customerService = customerService;
         }
-
-
         [HttpGet]
         public async Task<IActionResult> GetAllCustomers([FromQuery] CustomerFilterParams filter)
         {
@@ -34,8 +31,6 @@ namespace RestX.WebApp.Controllers
                 return BadRequest(new { success = false, message = "An internal error occurred" });
             }
         }
-
-
         [HttpGet("{id}")]
         public async Task<IActionResult> GetCustomerById([Required] Guid id)
         {
@@ -54,9 +49,8 @@ namespace RestX.WebApp.Controllers
                 return BadRequest(new { success = false, message = "An internal error occurred" });
             }
         }
-
         [HttpPost]
-        public async Task<IActionResult> CreateCustomer([FromBody] CreateCustomerDto dto)
+        public async Task<IActionResult> CreateCustomer([FromBody] CreateCustomer dto)
         {
             try
             {
@@ -64,7 +58,6 @@ namespace RestX.WebApp.Controllers
                 {
                     return BadRequest(new { success = false, message = "Invalid data", errors = ModelState });
                 }
-
                 var result = await customerService.CreateCustomer(dto);
                 return Ok(new { success = true, message = "Customer created successfully", data = result });
             }
@@ -78,10 +71,8 @@ namespace RestX.WebApp.Controllers
                 return BadRequest(new { success = false, message = "An internal error occurred" });
             }
         }
-
-
         [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateCustomer([Required] Guid id, [FromBody] UpdateCustomerDto dto)
+        public async Task<IActionResult> UpdateCustomer([Required] Guid id, [FromBody] UpdateCustomer dto)
         {
             try
             {
@@ -89,7 +80,6 @@ namespace RestX.WebApp.Controllers
                 {
                     return BadRequest(new { success = false, message = "Invalid data", errors = ModelState });
                 }
-
                 var result = await customerService.UpdateCustomer(id, dto);
                 if (result == null)
                 {
@@ -107,7 +97,6 @@ namespace RestX.WebApp.Controllers
                 return BadRequest(new { success = false, message = "An internal error occurred" });
             }
         }
-
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteCustomer([Required] Guid id)
         {

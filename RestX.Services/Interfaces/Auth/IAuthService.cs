@@ -1,5 +1,4 @@
-using RestX.BLL.DTOs.Auth;
-
+using RestX.BLL.DataTranferObjects.Authentication;
 namespace RestX.BLL.Interfaces.Auth
 {
     public interface IAuthService
@@ -9,7 +8,9 @@ namespace RestX.BLL.Interfaces.Auth
         Task<AuthResponse> ChangePasswordAsync(Guid userId, ChangePasswordRequest request);
         Task<AuthResponse> ForgotPasswordAsync(ForgotPasswordRequest request);
         Task<AuthResponse> ResetPasswordAsync(ResetPasswordRequest request);
-        Task<AuthResponse> RegisterCustomerAsync(RegisterCustomerRequest request);
         Task<AuthResponse> RefreshTokenAsync(string refreshToken);
+        Task<CheckPhoneResponse> CheckPhoneNumberAsync(string phoneNumber);
+        Task<AuthResponse> CustomerPhoneLoginAsync(CustomerPhoneLoginRequest request);
+        Task<AuthResponse> CustomerPhoneRegisterAsync(CustomerPhoneRegisterRequest request);
     }
 }

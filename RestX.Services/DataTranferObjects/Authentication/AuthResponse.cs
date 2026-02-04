@@ -1,11 +1,10 @@
-namespace RestX.BLL.DTOs.Auth
+namespace RestX.BLL.DataTranferObjects.Authentication
 {
     public class AuthResponse
     {
         public bool Success { get; set; }
         public string Message { get; set; } = string.Empty;
         public object? Data { get; set; }
-
         public static AuthResponse SuccessResponse(string message, object? data = null)
         {
             return new AuthResponse
@@ -15,7 +14,6 @@ namespace RestX.BLL.DTOs.Auth
                 Data = data
             };
         }
-
         public static AuthResponse FailureResponse(string message)
         {
             return new AuthResponse

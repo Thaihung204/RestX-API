@@ -1,126 +1,146 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.SqlClient;
-using Microsoft.EntityFrameworkCore;
-using RestX.BLL.DTOs.Common;
-using RestX.BLL.DTOs.Customer;
+using RestX.BLL.DataTranferObjects.Common;
+using RestX.BLL.DataTranferObjects.Customer;
+using RestX.BLL.Helpers;
 using RestX.BLL.Interfaces;
+using RestX.BLL.Interfaces.Auth;
 using RestX.BLL.Interfaces.Customers;
 using RestX.Models.Customers;
 using RestX.Models.Identity;
 using RestX.Models.Tenants;
-using System.Data;
-using System.Text;
 
 namespace RestX.BLL.Services
 {
     public class CustomerService : BaseService, ICustomerService
     {
-        private readonly IRepository repo;
+        private readonly IUserAccountService userAccountService;
         private readonly UserManager<ApplicationUser> userManager;
-        private readonly RoleManager<IdentityRole<Guid>> roleManager;
-
+        private const string CustomerRole = "Customer";
         public CustomerService(
             IRepository repo,
             IRedisService redisService,
+            IUserAccountService userAccountService,
             UserManager<ApplicationUser> userManager,
-            RoleManager<IdentityRole<Guid>> roleManager,
-            IEnumerable<ActiveTenant> tenant = null) : base(repo, redisService, tenant)
+            IEnumerable<ActiveTenant> tenant = null!) : base(repo, redisService, tenant)
         {
-            this.repo = repo;
+            this.userAccountService = userAccountService;
             this.userManager = userManager;
-            this.roleManager = roleManager;
         }
-
-        public async Task<PaginatedResult<CustomerListItemDto>> GetAllCustomers(CustomerFilterParams filter)
+        public async Task<PaginatedResult<CustomerListItem>> GetAllCustomers(CustomerFilterParams filter)
         {
-            var query = new StringBuilder();
-            query.Append(@"
+            var queryBuilder = new PaginationQueryBuilder(@"
                 SELECT #SELECT#
                 FROM Customers c
                 LEFT JOIN AspNetUsers u ON c.ApplicationUserId = u.Id
-                WHERE 1 = 1
-            ");
-
-            var countParameters = new List<SqlParameter>();
-            var queryParameters = new List<SqlParameter>();
-
-            // Apply filters
-            if (filter.IsActive.HasValue)
-            {
-                query.Append(" AND c.IsActive = @IsActive ");
-                countParameters.Add(new SqlParameter("IsActive", SqlDbType.Bit) { Value = filter.IsActive.Value });
-                queryParameters.Add(new SqlParameter("IsActive", SqlDbType.Bit) { Value = filter.IsActive.Value });
-            }
-
-            if (!string.IsNullOrEmpty(filter.MembershipLevel))
-            {
-                query.Append(" AND c.MembershipLevel = @MembershipLevel ");
-                countParameters.Add(new SqlParameter("MembershipLevel", SqlDbType.NVarChar) { Value = filter.MembershipLevel });
-                queryParameters.Add(new SqlParameter("MembershipLevel", SqlDbType.NVarChar) { Value = filter.MembershipLevel });
-            }
-
-            if (filter.MinLoyaltyPoints.HasValue)
-            {
-                query.Append(" AND c.LoyaltyPoints >= @MinLoyaltyPoints ");
-                countParameters.Add(new SqlParameter("MinLoyaltyPoints", SqlDbType.Int) { Value = filter.MinLoyaltyPoints.Value });
-                queryParameters.Add(new SqlParameter("MinLoyaltyPoints", SqlDbType.Int) { Value = filter.MinLoyaltyPoints.Value });
-            }
-
-            if (filter.MaxLoyaltyPoints.HasValue)
-            {
-                query.Append(" AND c.LoyaltyPoints <= @MaxLoyaltyPoints ");
-                countParameters.Add(new SqlParameter("MaxLoyaltyPoints", SqlDbType.Int) { Value = filter.MaxLoyaltyPoints.Value });
-                queryParameters.Add(new SqlParameter("MaxLoyaltyPoints", SqlDbType.Int) { Value = filter.MaxLoyaltyPoints.Value });
-            }
-
-            // Apply search
-            if (!string.IsNullOrEmpty(filter.Search))
-            {
-                query.Append(@" AND (
-                    u.UserName LIKE '%' + @Search + '%'
-                    OR u.Email LIKE '%' + @Search + '%'
-                    OR u.PhoneNumber LIKE '%' + @Search + '%'
-                    OR c.MembershipLevel LIKE '%' + @Search + '%'
-                ) ");
-                countParameters.Add(new SqlParameter("Search", SqlDbType.NVarChar) { Value = filter.Search });
-                queryParameters.Add(new SqlParameter("Search", SqlDbType.NVarChar) { Value = filter.Search });
-            }
-
-            var countQuery = query.ToString().Replace("#SELECT#", "COUNT(DISTINCT c.Id)");
-            int totalCount = await repo.ExecuteSqlCommandAsync<int>(countQuery, countParameters.ToArray());
-
-            int skip = filter.PageNumber == 1 ? 0 : (filter.PageNumber - 1) * filter.PageSize;
-
-            // Select columns
-            var selectColumns = @"
-                    DISTINCT
-                     c.Id,
-                     u.UserName AS FullName,
-                    u.Email,
-                    u.PhoneNumber,
-                    c.MembershipLevel,
-                    c.LoyaltyPoints,
-                    c.IsActive,
-                    c.CreatedDate
-                     ";
-
-            var mainQuery = query.ToString().Replace("#SELECT#", selectColumns);
-
-            // Apply sorting
-            mainQuery += GetSortClause(filter.SortBy, filter.SortDescending);
-
-            // Apply pagination at DB level - OFFSET/FETCH
-            mainQuery += $" OFFSET {skip} ROWS FETCH NEXT {filter.PageSize} ROWS ONLY";
-
-            var items = await repo.ExecuteSqlSelectAsync<CustomerListItemDto>(mainQuery, queryParameters.ToArray());
-
-            return new PaginatedResult<CustomerListItemDto>(items, totalCount, filter.PageNumber, filter.PageSize);
+                WHERE 1 = 1");
+            queryBuilder
+                .AddBoolCondition("c.IsActive = @IsActive", "IsActive", filter.IsActive)
+                .AddLikeCondition("c.MembershipLevel = @MembershipLevel", "MembershipLevel", filter.MembershipLevel)
+                .AddIntCondition("c.LoyaltyPoints >= @MinLoyaltyPoints", "MinLoyaltyPoints", filter.MinLoyaltyPoints)
+                .AddIntCondition("c.LoyaltyPoints <= @MaxLoyaltyPoints", "MaxLoyaltyPoints", filter.MaxLoyaltyPoints)
+                .AddSearchCondition(
+                    new[] { "u.UserName", "u.Email", "u.PhoneNumber", "c.MembershipLevel" },
+                    "Search",
+                    filter.Search);
+            var (countQuery, countParams) = queryBuilder.BuildCountQuery("COUNT(DISTINCT c.Id)");
+            int totalCount = await Repo.ExecuteSqlCommandAsync<int>(countQuery, countParams);
+            var selectColumns = @"DISTINCT c.Id, u.UserName AS FullName, u.Email, u.PhoneNumber,
+                                  c.MembershipLevel, c.LoyaltyPoints, c.IsActive, c.CreatedDate";
+            var (dataQuery, dataParams) = queryBuilder.BuildDataQuery(
+                selectColumns,
+                GetSortClause(filter.SortBy, filter.SortDescending),
+                filter.PageNumber,
+                filter.PageSize);
+            var items = await Repo.ExecuteSqlSelectAsync<CustomerListItem>(dataQuery, dataParams);
+            return new PaginatedResult<CustomerListItem>(items, totalCount, filter.PageNumber, filter.PageSize);
         }
 
-        private string GetSortClause(string? sortBy, bool desc)
+        public async Task<CustomerResponse?> GetCustomerById(Guid id)
+        {
+            var customer = await Repo.GetFirstAsync<Customer>(
+                filter: c => c.Id == id,
+                includeProperties: "ApplicationUser");
+            if (customer == null) return null;
+            var stats = await GetCustomerStatsAsync(id);
+            return MapToResponse(customer, stats);
+        }
+
+        public async Task<CustomerResponse> CreateCustomer(CreateCustomer dto)
+        {
+            if (await userAccountService.EmailExistsAsync(dto.Email))
+                throw new InvalidOperationException("Email already exists");
+            var user = await userAccountService.CreateUserAsync(new CreateUserRequest
+            {
+                FullName = dto.FullName,
+                Email = dto.Email,
+                PhoneNumber = dto.PhoneNumber,
+                Password = dto.Password,
+                Role = CustomerRole,
+                GenerateRandomPassword = false
+            });
+            var customer = new Customer
+            {
+                Id = Guid.NewGuid(),
+                ApplicationUserId = user.Id,
+                MembershipLevel = dto.MembershipLevel,
+                LoyaltyPoints = dto.LoyaltyPoints,
+                IsActive = true
+            };
+            try
+            {
+                await Repo.CreateAsync(customer);
+            }
+            catch
+            {
+                await userManager.DeleteAsync(user);
+                throw;
+            }
+            return MapToResponse(customer, user, (0, 0));
+        }
+
+        public async Task<CustomerResponse?> UpdateCustomer(Guid id, UpdateCustomer dto)
+        {
+            var customer = await Repo.GetFirstAsync<Customer>(
+                filter: c => c.Id == id,
+                includeProperties: "ApplicationUser");
+            if (customer == null) return null;
+            var user = customer.ApplicationUser;
+            if (user != null && HasUserUpdates(dto))
+            {
+                await userAccountService.UpdateUserAsync(user.Id, new UpdateUserRequest
+                {
+                    FullName = dto.FullName,
+                    PhoneNumber = dto.PhoneNumber
+                });
+            }
+
+            UpdateCustomerFields(customer, dto);
+            Repo.Update(customer);
+            await Repo.SaveAsync();
+
+            var stats = await GetCustomerStatsAsync(id);
+            return MapToResponse(customer, stats);
+        }
+
+        public async Task<bool> DeleteCustomer(Guid id)
+        {
+            var customer = await Repo.GetFirstAsync<Customer>(
+                c => c.Id == id,
+                includeProperties: "ApplicationUser");
+            if (customer == null) return false;
+            customer.IsActive = false;
+            Repo.Update(customer);
+            if (customer.ApplicationUser != null)
+                await userAccountService.DeactivateUserAsync(customer.ApplicationUser);
+            await Repo.SaveAsync();
+            return true;
+        }
+
+        #region Private Methods
+        private static string GetSortClause(string? sortBy, bool desc)
         {
             var direction = desc ? "DESC" : "ASC";
-
             return (sortBy?.ToLower()) switch
             {
                 "fullname" => $" ORDER BY u.UserName {direction}",
@@ -133,25 +153,47 @@ namespace RestX.BLL.Services
             };
         }
 
-        public async Task<CustomerResponseDto?> GetCustomerById(Guid id)
+        private async Task<(int TotalOrders, int TotalReservations)> GetCustomerStatsAsync(Guid customerId)
         {
-            var customer = await repo.GetFirstAsync<Customer>(
-                filter: c => c.Id == id,
-                includeProperties: "ApplicationUser");
-
-            if (customer == null) return null;
-
-            var totalOrders = await repo.ExecuteSqlCommandAsync<int>(
+            var totalOrders = await Repo.ExecuteSqlCommandAsync<int>(
                 "SELECT COUNT(*) FROM Orders WHERE CustomerId = @CustomerId",
-                new SqlParameter("CustomerId", id));
-
-            var totalReservations = await repo.ExecuteSqlCommandAsync<int>(
+                new SqlParameter("CustomerId", customerId));
+            var totalReservations = await Repo.ExecuteSqlCommandAsync<int>(
                 "SELECT COUNT(*) FROM Reservations WHERE CustomerId = @CustomerId",
-                new SqlParameter("CustomerId", id));
+                new SqlParameter("CustomerId", customerId));
 
-            var user = customer.ApplicationUser;
+            return (totalOrders, totalReservations);
+        }
 
-            return new CustomerResponseDto
+        private static void UpdateCustomerFields(Customer customer, UpdateCustomer dto)
+        {
+            if (!string.IsNullOrEmpty(dto.MembershipLevel))
+                customer.MembershipLevel = dto.MembershipLevel;
+            if (dto.LoyaltyPoints.HasValue)
+                customer.LoyaltyPoints = dto.LoyaltyPoints.Value;
+            if (dto.IsActive.HasValue)
+                customer.IsActive = dto.IsActive.Value;
+        }
+
+        private static bool HasUserUpdates(UpdateCustomer dto)
+        {
+            return !string.IsNullOrWhiteSpace(dto.FullName) ||
+                   !string.IsNullOrWhiteSpace(dto.PhoneNumber);
+        }
+
+        private static CustomerResponse MapToResponse(
+            Customer customer,
+            (int TotalOrders, int TotalReservations) stats)
+        {
+            return MapToResponse(customer, customer.ApplicationUser, stats);
+        }
+
+        private static CustomerResponse MapToResponse(
+            Customer customer,
+            ApplicationUser? user,
+            (int TotalOrders, int TotalReservations) stats)
+        {
+            return new CustomerResponse
             {
                 Id = customer.Id,
                 MembershipLevel = customer.MembershipLevel,
@@ -163,166 +205,10 @@ namespace RestX.BLL.Services
                 Email = user?.Email ?? string.Empty,
                 FullName = user?.UserName ?? string.Empty,
                 PhoneNumber = user?.PhoneNumber,
-                TotalOrders = totalOrders,
-                TotalReservations = totalReservations
+                TotalOrders = stats.TotalOrders,
+                TotalReservations = stats.TotalReservations
             };
         }
-
-
-        public async Task<CustomerResponseDto> CreateCustomer(CreateCustomerDto dto)
-        {
-            var existingUser = await userManager.FindByEmailAsync(dto.Email);
-            if (existingUser != null)
-            {
-                throw new InvalidOperationException("Email already exists");
-            }
-
-            var user = new ApplicationUser
-            {
-                Id = Guid.NewGuid(),
-                UserName = dto.Email,
-                Email = dto.Email,
-                PhoneNumber = dto.PhoneNumber,
-                EmailConfirmed = true,
-                LastModified = DateTime.UtcNow,
-                RefreshToken = string.Empty
-            };
-
-            var createResult = await userManager.CreateAsync(user, dto.Password);
-            if (!createResult.Succeeded)
-            {
-                var errors = string.Join(", ", createResult.Errors.Select(e => e.Description));
-                throw new InvalidOperationException($"Failed to create user: {errors}");
-            }
-
-            const string customerRole = "Customer";
-            if (!await roleManager.RoleExistsAsync(customerRole))
-            {
-                await roleManager.CreateAsync(new IdentityRole<Guid>(customerRole));
-            }
-            await userManager.AddToRoleAsync(user, customerRole);
-
-            var customer = new Customer
-            {
-                Id = Guid.NewGuid(),
-                ApplicationUserId = user.Id,
-                MembershipLevel = dto.MembershipLevel,
-                LoyaltyPoints = dto.LoyaltyPoints,
-                IsActive = true
-            };
-
-            await repo.CreateAsync(customer);
-            return new CustomerResponseDto
-            {
-                Id = customer.Id,
-                MembershipLevel = customer.MembershipLevel,
-                LoyaltyPoints = customer.LoyaltyPoints,
-                IsActive = customer.IsActive,
-                CreatedDate = customer.CreatedDate,
-                ModifiedDate = customer.ModifiedDate,
-                UserId = user.Id,
-                Email = user.Email ?? string.Empty,
-                FullName = dto.FullName,
-                PhoneNumber = user.PhoneNumber,
-                TotalOrders = 0,
-                TotalReservations = 0
-            };
-        }
-
-        public async Task<CustomerResponseDto?> UpdateCustomer(Guid id, UpdateCustomerDto dto)
-        {
-            var customer = await repo.GetFirstAsync<Customer>(
-       filter: c => c.Id == id,
-       includeProperties: "ApplicationUser"
-   );
-
-            if (customer == null) return null;
-
-            if (!string.IsNullOrEmpty(dto.MembershipLevel)) customer.MembershipLevel = dto.MembershipLevel;
-            if (dto.LoyaltyPoints.HasValue) customer.LoyaltyPoints = dto.LoyaltyPoints.Value;
-            if (dto.IsActive.HasValue) customer.IsActive = dto.IsActive.Value;
-
-            repo.Update(customer);
-            await repo.SaveAsync();
-
-            var user = customer.ApplicationUser;
-            if (user != null)
-            {
-                if (!string.IsNullOrWhiteSpace(dto.FullName))
-                    user.UserName = dto.FullName;
-
-                if (!string.IsNullOrWhiteSpace(dto.PhoneNumber))
-                    user.PhoneNumber = dto.PhoneNumber;
-
-                user.LastModified = DateTime.UtcNow;
-
-                var updateResult = await userManager.UpdateAsync(user);
-                if (!updateResult.Succeeded)
-                {
-                    var errors = string.Join(", ", updateResult.Errors.Select(e => e.Description));
-                    throw new InvalidOperationException($"Failed to update user: {errors}");
-                }
-            }
-            var totalOrders = await repo.ExecuteSqlCommandAsync<int>(
-        "SELECT COUNT(*) FROM Orders WHERE CustomerId = @CustomerId",
-        new SqlParameter("CustomerId", id)
-    );
-
-            var totalReservations = await repo.ExecuteSqlCommandAsync<int>(
-                "SELECT COUNT(*) FROM Reservations WHERE CustomerId = @CustomerId",
-                new SqlParameter("CustomerId", id)
-            );
-
-            return new CustomerResponseDto
-            {
-                Id = customer.Id,
-                MembershipLevel = customer.MembershipLevel,
-                LoyaltyPoints = customer.LoyaltyPoints,
-                IsActive = customer.IsActive,
-                CreatedDate = customer.CreatedDate,
-                ModifiedDate = customer.ModifiedDate,
-                UserId = user?.Id ?? Guid.Empty,
-                Email = user?.Email ?? string.Empty,
-                FullName = user?.UserName ?? string.Empty,
-                PhoneNumber = user?.PhoneNumber,
-                TotalOrders = totalOrders,
-                TotalReservations = totalReservations
-            };
-        }
-
-        public async Task<bool> DeleteCustomer(Guid id)
-        {
-
-            var customer = await repo.GetFirstAsync<Customer>(
-                c => c.Id == id,
-                includeProperties: "ApplicationUser"
-            );
-
-            if (customer == null)
-                return false;
-
-            customer.IsActive = false;
-            repo.Update(customer);
-
-            var user = customer.ApplicationUser;
-            if (user != null)
-            {
-                user.LockoutEnabled = true;
-                user.LockoutEnd = DateTimeOffset.MaxValue;
-                user.LastModified = DateTime.UtcNow;
-
-                var result = await userManager.UpdateAsync(user);
-                if (!result.Succeeded)
-                {
-                    var errors = string.Join(", ", result.Errors.Select(e => e.Description));
-                    throw new InvalidOperationException(errors);
-                }
-            }
-
-            await repo.SaveAsync();
-
-            return true;
-        }
-
+        #endregion
     }
 }

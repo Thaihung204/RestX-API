@@ -1,14 +1,14 @@
-using RestX.BLL.DTOs.Common;
-using RestX.BLL.DTOs.Customer;
+using RestX.BLL.DataTranferObjects.Common;
+using RestX.BLL.DataTranferObjects.Customer;
 
 namespace RestX.BLL.Interfaces.Customers
 {
     public interface ICustomerService
     {
-        Task<PaginatedResult<CustomerListItemDto>> GetAllCustomers(CustomerFilterParams filter);
-        Task<CustomerResponseDto?> GetCustomerById(Guid id);
-        Task<CustomerResponseDto> CreateCustomer(CreateCustomerDto dto);
-        Task<CustomerResponseDto?> UpdateCustomer(Guid id, UpdateCustomerDto dto);
+        Task<PaginatedResult<CustomerListItem>> GetAllCustomers(CustomerFilterParams filter);
+        Task<CustomerResponse?> GetCustomerById(Guid id);
+        Task<CustomerResponse> CreateCustomer(CreateCustomer dto);
+        Task<CustomerResponse?> UpdateCustomer(Guid id, UpdateCustomer dto);
         Task<bool> DeleteCustomer(Guid id);
     }
 }

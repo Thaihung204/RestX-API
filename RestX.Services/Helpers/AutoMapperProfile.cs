@@ -63,7 +63,10 @@ namespace RestX.BLL.Helpers
                     dest => dest.TableStatusName,
                     opt => opt.MapFrom(src => src.TableStatus != null ? src.TableStatus.Name : null)
                 );
-            CreateMap<TableRequest,Table>();
+            CreateMap<TableItem, Table>()
+                .ForMember(dest => dest.Id, opt => opt.Ignore())
+                .ForMember(dest => dest.TableStatus, opt => opt.Ignore())
+                .ForMember(dest => dest.Table3DModel, opt => opt.Ignore());
         }
     }
 }

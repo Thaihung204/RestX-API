@@ -26,14 +26,14 @@ namespace RestX.DAL.Context
 {
     public partial class TenantDbContext :  IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>
     {
-        private readonly ActiveTenant _tenant;
+        private readonly ActiveTenant tenant;
 
         public TenantDbContext()
         {
         }
         public TenantDbContext(ActiveTenant tenant)
         {
-            _tenant = tenant;
+            this.tenant = tenant;
         }
         public TenantDbContext(DbContextOptions<TenantDbContext> options)
             : base(options)
@@ -121,9 +121,9 @@ namespace RestX.DAL.Context
         {
             if (!optionsBuilder.IsConfigured)
             {
-                var connectionString = _tenant == null
-                    ? "Server=restx-sqlserver,1433;Database=demo_tenant;User Id=sa;Password=Passw0r1!;Encrypt=False;TrustServerCertificate=True;"
-                    : _tenant.ConnectionString;
+                var connectionString = tenant == null
+                    ? "Server=restx-sqlserver;Database=demo_tenant;User Id=sa;Password=Passw0r1!;Encrypt=False;TrustServerCertificate=True;"
+                    : tenant.ConnectionString;
                 optionsBuilder.UseSqlServer(connectionString);
             }
         }

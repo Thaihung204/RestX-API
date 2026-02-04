@@ -50,7 +50,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpPut("{id}")]
-        public async Task<ActionResult<TableItem>> EditTable([Required] Guid id, [FromBody] TableRequest request)
+        public async Task<ActionResult<TableItem>> EditTable([Required] Guid id, [FromBody] TableItem request)
         {
             try
             {
@@ -64,7 +64,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpPost]
-        public async Task<ActionResult<TableItem>> AddTable([FromBody] TableRequest request)
+        public async Task<ActionResult<TableItem>> AddTable([FromBody] TableItem request)
         {
             try
             {

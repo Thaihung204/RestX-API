@@ -6,7 +6,7 @@ namespace RestX.BLL.Interfaces.Tables
     {
         Task<IEnumerable<TableItem>> GetAllTables();
         Task<TableItem?> GetTableById(Guid id);
-        Task<TableItem> UpsertTable(Guid? id, TableRequest request);
+        Task<TableItem> UpsertTable(Guid? id, TableItem request);
         Task DeleteTable(Guid id);
     }
 }

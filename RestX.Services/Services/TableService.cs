@@ -11,7 +11,6 @@ namespace RestX.BLL.Services
     public class TableService : BaseService, ITableService
     {
         private readonly IMapper mapper;
-
         public TableService(
             IMapper mapper,
             IRepository repo,
@@ -21,6 +20,7 @@ namespace RestX.BLL.Services
         {
             this.mapper = mapper;
         }
+
         private string GetCacheKey()
             => $"{CurrentTenant?.Id}:tables";
         public async Task<IEnumerable<TableItem>> GetAllTables()
@@ -36,6 +36,7 @@ namespace RestX.BLL.Services
             }
             return mapper.Map<List<TableItem>>(tables);
         }
+
         public async Task<TableItem?> GetTableById(Guid id)
         {
             var table = await Repo.GetOneAsync<Table>(
@@ -44,7 +45,8 @@ namespace RestX.BLL.Services
             );
             return mapper.Map<TableItem>(table);
         }
-        public async Task<TableItem> UpsertTable(Guid? id, TableRequest request)
+
+        public async Task<TableItem> UpsertTable(Guid? id, TableItem request)
         {
             Table table;
 
@@ -78,6 +80,7 @@ namespace RestX.BLL.Services
             await RedisService.RemoveAsync(GetCacheKey());
             return mapper.Map<TableItem>(table);
         }
+
         public async Task DeleteTable(Guid id)
         {
             var table = await Repo.GetByIdAsync<Table>(id);

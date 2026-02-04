@@ -11,7 +11,7 @@ namespace RestX.DAL.DataSeeders
         private static readonly string[] DefaultRoles =
         {
             "System Admin",
-            "Tenant Admin",
+            "Admin",
             "Kitchen Staff",
             "Waiter",
             "Customer"

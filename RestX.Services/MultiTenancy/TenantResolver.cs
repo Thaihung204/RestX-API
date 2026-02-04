@@ -91,7 +91,7 @@ namespace RestX.BLL.MultiTenancy
                     b.Hostname == hostname ||
                     (!string.IsNullOrEmpty(hostnameWithPath) && b.Hostname == hostnameWithPath)
                 );
-
+            Console.WriteLine("ACTIVE TENANT: ", activeTenant);
             ActiveTenant tenant = null;
             if (activeTenant != null)
             {

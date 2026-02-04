@@ -1,6 +1,7 @@
 ﻿using AutoMapper;
 using Microsoft.Data.SqlClient;
 using RestX.BLL.DataTranferObjects.Dish;
+using RestX.BLL.Extensions;
 using RestX.BLL.Interfaces;
 using RestX.Models.Enum;
 using RestX.Models.Menu;
@@ -13,9 +14,11 @@ namespace RestX.BLL.Services
     public class DishService : BaseService, IDishService
     {
         private readonly IDishImageService dishImageService;
+        private readonly IMapper mapper;
 
-        public DishService(IDishImageService dishImageService, IRepository repo, IRedisService redisService, IEnumerable<ActiveTenant> tenant = null) : base(repo, redisService, tenant)
+        public DishService(IDishImageService dishImageService, IMapper mapper, IRepository repo, IRedisService redisService, IEnumerable<ActiveTenant> tenant = null) : base(repo, redisService, tenant)
         {
+            this.mapper = mapper;
             this.dishImageService = dishImageService;
         }
 
@@ -237,6 +240,7 @@ namespace RestX.BLL.Services
                 dish.AutoDisableByStock = model.AutoDisableByStock;
 
                 Repo.Update(dish);
+                await Repo.SaveAsync();
             }
             else
             {
@@ -267,17 +271,50 @@ namespace RestX.BLL.Services
 
             return await GetDishById(dish.Id);
         }
-
         public async Task DeleteDish(Guid id)
         {
-            var dish = await Repo.GetByIdAsync<Dish>(id);
-            if (dish == null)
-                return;
+            var dish = await GetDishById(id);
+            if (dish != null)
+            {
+                await dishImageService.DeleteAllByDishIdAsync(dish.Id);
+                Repo.Delete<Dish>(id);
+                await Repo.SaveAsync();
+            }
+        }
 
-            await dishImageService.DeleteAllByDishIdAsync(dish.Id);
-            Repo.Delete(dish);
+        public async Task<List<MenuCategory>> GetMenu()
+        {
+            var cacheKey = $"Menu:tenantId";
 
-            await Repo.SaveAsync();
+            var cachedMenu = await RedisService.GetAsync<List<MenuCategory>>(cacheKey);
+            if (cachedMenu != null)
+                return cachedMenu;
+
+            var dishes = await Repo.GetAsync<Dish>(
+                filter: d => d.IsActive,
+                includeProperties: "Category"
+            );
+
+            var menuItems = mapper.Map<List<MenuItem>>(dishes);
+
+            var menu = menuItems
+                .GroupBy(x => new { x.CategoryId, x.CategoryName })
+                .Select(g => new MenuCategory
+                {
+                    CategoryId = g.Key.CategoryId,
+                    CategoryName = g.Key.CategoryName,
+                    Items = g.ToList()
+                })
+                .OrderBy(c => c.CategoryName)
+                .ToList();
+
+            await RedisService.SetAsync(
+                cacheKey,
+                menu,
+                TimeSpan.FromMinutes(10)
+            );
+
+            return menu;
         }
 
     }

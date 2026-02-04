@@ -19,7 +19,6 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpGet]
-
         public async Task<ActionResult<IEnumerable<Dish>>> GetAllDishes([FromQuery] DishSearch searchModel)
         {
             try
@@ -90,6 +89,21 @@ namespace RestX.WebApp.Controllers
             {
                 exceptionHandler.RaiseException(ex);
                 return BadRequest("An internal error occurred");
+            }
+        }
+
+        [HttpGet("menu")]
+        public async Task<ActionResult<IEnumerable<MenuCategory>>> GetMenu()
+        {
+            try
+            {
+                var menu = await dishService.GetMenu();
+                return Ok(menu);
+            }
+            catch (Exception ex)
+            {
+                this.exceptionHandler.RaiseException(ex);
+                return this.BadRequest("An internal error occurred");
             }
         }
     }

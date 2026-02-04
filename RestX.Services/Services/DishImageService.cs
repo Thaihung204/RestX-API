@@ -43,35 +43,37 @@ namespace RestX.BLL.Services
             Dish dish,
             string folder)
         {
-            if (model.MainImage == null || model.MainImage.Length == 0)
-                return;
+            var mainImage = (await Repo.GetAsync<DishImage>(
+                x => x.DishId == dish.Id
+                  && x.ImageType == DishImageType.Main
+                  && x.IsActive
+            )).FirstOrDefault();
 
-            // deactivate old main images
-            var oldMainImages = await Repo.GetAsync<DishImage>(
-                x => x.DishId == dish.Id &&
-                     x.ImageType == DishImageType.Main &&
-                     x.IsActive
-            );
-
-            foreach (var img in oldMainImages)
+            if (model.MainImage == null)
             {
-                img.IsActive = false;
-                Repo.Update(img);
+                if (mainImage != null)
+                {
+                    await DeleteDishImageAsync(mainImage.Id);
+                    Repo.Delete(mainImage);
+                }
+
+                return;
             }
 
-            // create DishImage first to get Id
-            var mainImage = new DishImage
+            if (mainImage == null)
             {
-                Id = Guid.NewGuid(),
-                DishId = dish.Id,
-                ImageType = DishImageType.Main,
-                DisplayOrder = 1,
-                IsActive = true,
-                CreatedDate = DateTime.UtcNow
-            };
+                mainImage = new DishImage
+                {
+                    Id = Guid.NewGuid(),
+                    DishId = dish.Id,
+                    ImageType = DishImageType.Main,
+                    DisplayOrder = 1,
+                    IsActive = true,
+                    CreatedDate = DateTime.UtcNow
+                };
 
-            await Repo.CreateAsync(mainImage);
-            await Repo.SaveAsync();
+                await Repo.CreateAsync(mainImage);
+            }
 
             using var stream = model.MainImage.OpenReadStream();
 
@@ -87,6 +89,7 @@ namespace RestX.BLL.Services
             Repo.Update(mainImage);
         }
 
+
         // ======================
         // SUB IMAGES
         // ======================
@@ -95,82 +98,113 @@ namespace RestX.BLL.Services
             Dish dish,
             string folder)
         {
+            var existingImages = (await Repo.GetAsync<DishImage>(
+                x => x.DishId == dish.Id
+                  && x.ImageType == DishImageType.Sub
+                  && x.IsActive
+            )).ToList();
+
             if (model.SubImages == null || !model.SubImages.Any())
-                return;
-
-            var existingImages = await Repo.GetAsync<DishImage>(
-                x => x.DishId == dish.Id && x.IsActive
-            );
-
-            var displayImage = existingImages.Any()
-                ? existingImages.Max(x => x.DisplayOrder)
-                : 1;
-
-            foreach (var file in model.SubImages)
             {
-                if (file == null || file.Length == 0)
-                    continue;
-
-                displayImage++;
-
-                var subImage = new DishImage
+                foreach (var oldImage in existingImages)
                 {
-                    Id = Guid.NewGuid(),
-                    DishId = dish.Id,
-                    ImageType = DishImageType.Sub,
-                    DisplayOrder = displayImage,
-                    IsActive = true,
-                    CreatedDate = DateTime.UtcNow
-                };
+                    await DeleteDishImageAsync(oldImage.Id);
+                    Repo.Delete(oldImage);
+                }
 
-                await Repo.CreateAsync(subImage);
-                await Repo.SaveAsync();
+                return;
+            }
 
-                using var stream = file.OpenReadStream();
+            var incomingIds = model.SubImages
+                .Where(x => x.Id.HasValue)
+                .Select(x => x.Id!.Value)
+                .ToHashSet();
 
-                var upload = await cloudinaryService.UploadAsync(
-                    fileStream: stream,
-                    fileName: file.FileName,
-                    folder: folder,
-                    publicId: subImage.Id.ToString()
-                );
+            foreach (var oldImage in existingImages)
+            {
+                if (!incomingIds.Contains(oldImage.Id))
+                {
+                    await DeleteDishImageAsync(oldImage.Id);
+                    Repo.Delete(oldImage);
+                }
+            }
 
-                subImage.ImageUrl = upload.Url;
+            existingImages = (await Repo.GetAsync<DishImage>(
+                x => x.DishId == dish.Id
+                  && x.ImageType == DishImageType.Sub
+                  && x.IsActive
+            )).ToList();
+
+            foreach (var item in model.SubImages)
+            {
+                DishImage subImage;
+
+                if (item.Id.HasValue)
+                {
+                    subImage = existingImages.FirstOrDefault(x => x.Id == item.Id.Value);
+                    if (subImage == null) continue;
+                }
+
+                else
+                {
+                    subImage = new DishImage
+                    {
+                        Id = Guid.NewGuid(),
+                        DishId = dish.Id,
+                        ImageType = DishImageType.Sub,
+                        IsActive = true,
+                        CreatedDate = DateTime.UtcNow
+                    };
+
+                    await Repo.CreateAsync(subImage);
+                    existingImages.Add(subImage);
+                }
+
+                if (item.File != null && item.File.Length > 0)
+                {
+                    using var stream = item.File.OpenReadStream();
+
+                    var upload = await cloudinaryService.UploadAsync(
+                        fileStream: stream,
+                        fileName: item.File.FileName,
+                        folder: folder,
+                        publicId: subImage.Id.ToString(),
+                        overwrite: item.Id.HasValue
+                    );
+
+                    subImage.ImageUrl = upload.Url;
+                }
+
+                subImage.DisplayOrder = item.DisplayOrder;
+
                 Repo.Update(subImage);
             }
+
+            var ordered = existingImages
+                .OrderBy(x => x.DisplayOrder)
+                .ToList();
+
+            for (int i = 0; i < ordered.Count; i++)
+            {
+                ordered[i].DisplayOrder = i + 1;
+                Repo.Update(ordered[i]);
+            }
         }
+
 
         public async Task DeleteDishImageAsync(Guid dishImageId)
         {
             var dishImage = await Repo.GetByIdAsync<DishImage>(dishImageId);
-            if (dishImage == null)
-                return;
 
             var publicId = $"dishes/{dishImage.DishId}/{dishImage.Id}";
 
             await cloudinaryService.DeleteAsync(publicId);
 
-            dishImage.IsActive = false;
-            Repo.Update(dishImage);
-
-            await Repo.SaveAsync();
         }
         public async Task DeleteAllByDishIdAsync(Guid dishId)
         {
-            var images = await Repo.GetAsync<DishImage>(
-                x => x.DishId == dishId && x.IsActive
-            );
-
-            foreach (var img in images)
-            {
-                var publicId = $"dishes/{img.DishId}/{img.Id}";
-                await cloudinaryService.DeleteAsync(publicId);
-
-                img.IsActive = false;
-                Repo.Update(img);
-            }
-
-            await Repo.SaveAsync();
+            var prefix = $"dishes/{dishId}";
+            await cloudinaryService.DeleteFolderImageByPrefix(prefix);
         }
 
     }

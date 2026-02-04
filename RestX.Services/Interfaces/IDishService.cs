@@ -9,5 +9,6 @@ namespace RestX.BLL.Interfaces
         Task<DishItem> GetDishById(Guid id);
         Task<DishItem> UpsertDish(DishUpsert model);
         Task DeleteDish(Guid id);
+        Task<List<MenuCategory>> GetMenu();
     }
 }

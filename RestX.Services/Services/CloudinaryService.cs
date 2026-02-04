@@ -1,13 +1,21 @@
 ﻿using CloudinaryDotNet;
 using CloudinaryDotNet.Actions;
 using Microsoft.Extensions.Configuration;
+using RestX.BLL.Interfaces;
+using RestX.BLL.Services;
+using RestX.Models.Tenants;
 using System.Net;
 
-public class CloudinaryService : ICloudinaryService
+public class CloudinaryService : BaseService, ICloudinaryService
 {
-    private readonly Cloudinary _cloudinary;
+    private readonly Cloudinary cloudinary;
 
-    public CloudinaryService(IConfiguration configuration)
+    public CloudinaryService(
+        IConfiguration configuration,
+        IRepository repo,
+        IRedisService redisService,
+        IEnumerable<ActiveTenant> tenant = null
+    ) : base(repo, redisService, tenant)
     {
         var account = new Account(
             configuration["Cloudinary:CloudName"],
@@ -15,7 +23,7 @@ public class CloudinaryService : ICloudinaryService
             configuration["Cloudinary:ApiSecret"]
         );
 
-        _cloudinary = new Cloudinary(account);
+        cloudinary = new Cloudinary(account);
     }
 
     public async Task<CloudinaryUploadResult> UploadAsync(
@@ -25,17 +33,18 @@ public class CloudinaryService : ICloudinaryService
         string? publicId = null,
         bool overwrite = false)
     {
+        
         var uploadParams = new ImageUploadParams
         {
             File = new FileDescription(fileName, fileStream),
-            Folder = folder,
+            Folder = $"{CurrentTenant.Name.Replace(" ", "")}/{folder}".Trim('/'),
             PublicId = publicId,
             Overwrite = overwrite,
             UseFilename = publicId == null,
             UniqueFilename = publicId == null
         };
 
-        var result = await _cloudinary.UploadAsync(uploadParams);
+        var result = await cloudinary.UploadAsync(uploadParams);
 
         return new CloudinaryUploadResult
         {
@@ -47,6 +56,10 @@ public class CloudinaryService : ICloudinaryService
     public async Task DeleteAsync(string publicId)
     {
         if (string.IsNullOrWhiteSpace(publicId)) return;
-        await _cloudinary.DestroyAsync(new DeletionParams(publicId));
+        await cloudinary.DestroyAsync(new DeletionParams($"{CurrentTenant.Name.Replace(" ", "")}/{publicId}"));
+    }
+    public async Task DeleteFolderImageByPrefix(string prefix)
+    {
+        await cloudinary.DeleteResourcesByPrefixAsync($"{CurrentTenant.Name.Replace(" ", "")}/{prefix}");
     }
 }

@@ -16,7 +16,7 @@ app.UseForwardedHeaders(new ForwardedHeadersOptions
 });
 
 //app.UseHttpsRedirection();
-
+app.UseRouting();
 app.MapReverseProxy();
 
 app.Run("http://0.0.0.0:80");

@@ -125,6 +125,7 @@ namespace RestX.DAL.Context
                     ? "Server=restx-sqlserver,1433;Database=demo_tenant;User Id=sa;Password=Passw0r1!;Encrypt=False;TrustServerCertificate=True;"
                     : tenant.ConnectionString;
                 optionsBuilder.UseSqlServer(connectionString);
+                //Trigger
             }
         }
 

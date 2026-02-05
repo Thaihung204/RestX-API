@@ -192,7 +192,7 @@ namespace RestX.BLL.Services.Auth
 
         private async Task InvalidateRefreshTokenAsync(ApplicationUser user)
         {
-            user.RefreshToken = null!;
+            user.RefreshToken = string.Empty;
             user.RefreshTokenExpiryTime = null;
             await userManager.UpdateAsync(user);
         }

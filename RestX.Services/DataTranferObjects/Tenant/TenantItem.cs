@@ -33,4 +33,5 @@
     public string BusinessEmailAddress { get; set; }
     public string? BusinessCompanyNumber { get; set; }
     public string? BusinessOpeningHours { get; set; }
+    public string AboutUs { get; set; }
 }

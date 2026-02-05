@@ -76,7 +76,10 @@ namespace RestX.WebApp
                 return new TenantDbContext(tenant);
             });
 
-            services.AddIdentity<ApplicationUser, IdentityRole<Guid>>()
+            services.AddIdentity<ApplicationUser, IdentityRole<Guid>>(options =>
+            {
+                options.User.AllowedUserNameCharacters = null;
+            })
                 .AddEntityFrameworkStores<TenantDbContext>()
                 .AddDefaultTokenProviders();
 

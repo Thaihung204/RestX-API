@@ -127,6 +127,7 @@ namespace RestX.BLL.MultiTenancy
                     BusinessCounty = activeTenant.BusinessCounty,
                     BusinessCountry = activeTenant.BusinessCountry,
                     BusinessPostCode = activeTenant.BusinessPostCode,
+                    AboutUs = activeTenant.AboutUs
                 };
             }
 

@@ -31,7 +31,8 @@ namespace RestX.BLL.Services.Auth
 
         private static string BuildLink(string baseUrl, string path, string email, string token)
         {
-            return $"{baseUrl}/{path}?email={email}&token={token}";
+            var encodedToken = Uri.EscapeDataString(token);
+            return $"{baseUrl}/{path}?email={email}&token={encodedToken}";
         }
     }
 }

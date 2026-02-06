@@ -26,7 +26,7 @@ namespace RestX.BLL.Services.Auth
         public async Task<string> GenerateWelcomeLinkAsync(ApplicationUser user, string baseUrl)
         {
             var token = await userManager.GeneratePasswordResetTokenAsync(user);
-            return BuildLink(baseUrl, "set-password", user.Email!, token);
+            return BuildLink(baseUrl, "reset-password", user.Email!, token);
         }
 
         private static string BuildLink(string baseUrl, string path, string email, string token)

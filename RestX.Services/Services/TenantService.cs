@@ -40,7 +40,7 @@ namespace RestX.BLL.Services
                 return null;
 
             Tenant? tenant = null;
-            var cacheKey = $"tenant:{data.ToLower()}";
+            var cacheKey = $"Tenant:{data.ToLower()}";
 
             var cachedTenant = await RedisService.GetStringAsync(cacheKey);
             if (!string.IsNullOrEmpty(cachedTenant))
@@ -62,7 +62,7 @@ namespace RestX.BLL.Services
                 if (tenant != null)
                 {
                     await RedisService.SetStringAsync(
-                        cacheKey,
+                        $"Tenant:{tenant.Hostname}",
                         JsonConvert.SerializeObject(tenant)
                     );
                 }
@@ -98,12 +98,8 @@ namespace RestX.BLL.Services
                 
                 await adminRepo.SaveAsync();
 
-                var oldIdCacheKey = $"tenant:{tenant.Id.ToString().ToLower()}";
                 var oldHostnameCacheKey = $"tenant:{tenant.Hostname.ToLower()}";
-
-                await RedisService.RemoveAsync(oldIdCacheKey);
-                if (oldHostnameCacheKey != null)
-                    await RedisService.RemoveAsync(oldHostnameCacheKey);
+                await RedisService.RemoveAsync(oldHostnameCacheKey);
             }
             else
             {
@@ -210,8 +206,7 @@ namespace RestX.BLL.Services
             {
                 adminRepo.Delete<Tenant>(id);
                 await adminRepo.SaveAsync();
-                var oldIdCacheKey = $"tenant:{id.ToString().ToLower()}";
-                await RedisService.RemoveAsync(oldIdCacheKey);
+                await RedisService.RemoveAsync($"tenant:{tenant.Hostname.ToLower()}");
 
             }
         }

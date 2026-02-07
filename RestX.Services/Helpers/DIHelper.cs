@@ -26,7 +26,6 @@ namespace RestX.BLL.Helpers
             services.AddScoped<IAuthLinkService, AuthLinkService>();       
 
             services.AddScoped<ICloudinaryService, CloudinaryService>();
-            services.AddScoped<IDishImageService, DishImageService>();
             services.AddScoped<IRepository, EntityFrameworkRepository<TenantDbContext>>();
             services.AddScoped<IExceptionHandler, ExceptionHandler>();
             services.AddScoped<IDishService, DishService>();

@@ -9,5 +9,4 @@
     );
 
     Task DeleteAsync(string publicId);
-    Task DeleteFolderImageByPrefix(string prefix);
 }

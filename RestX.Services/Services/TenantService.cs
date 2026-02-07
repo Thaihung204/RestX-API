@@ -161,7 +161,8 @@ namespace RestX.BLL.Services
                     BusinessSecondaryPhone = model.BusinessSecondaryPhone ?? string.Empty,
                     BusinessEmailAddress = model.BusinessEmailAddress,
                     BusinessCompanyNumber = model.BusinessCompanyNumber ?? string.Empty,
-                    BusinessOpeningHours = model.BusinessOpeningHours ?? string.Empty
+                    BusinessOpeningHours = model.BusinessOpeningHours ?? string.Empty,
+                    AboutUs = model.AboutUs ?? string.Empty
                 };
 
                 await Repo.CreateAsync(tenant);

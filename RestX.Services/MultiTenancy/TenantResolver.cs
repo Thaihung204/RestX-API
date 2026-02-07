@@ -91,7 +91,7 @@ namespace RestX.BLL.MultiTenancy
                     b.Hostname == hostname ||
                     (!string.IsNullOrEmpty(hostnameWithPath) && b.Hostname == hostnameWithPath)
                 );
-
+            Console.WriteLine("ACTIVE TENANT: ", activeTenant);
             ActiveTenant tenant = null;
             if (activeTenant != null)
             {
@@ -127,6 +127,7 @@ namespace RestX.BLL.MultiTenancy
                     BusinessCounty = activeTenant.BusinessCounty,
                     BusinessCountry = activeTenant.BusinessCountry,
                     BusinessPostCode = activeTenant.BusinessPostCode,
+                    AboutUs = activeTenant.AboutUs
                 };
             }
 

@@ -1,5 +1,6 @@
 namespace RestX.BLL.Helpers
 {
+    using CloudinaryDotNet;
     using Microsoft.AspNetCore.Http;
     using Microsoft.Extensions.DependencyInjection;
     using RestX.BLL.Interfaces;
@@ -23,6 +24,9 @@ namespace RestX.BLL.Helpers
             services.AddScoped<IUserAccountService, UserAccountService>();
             services.AddScoped<ITokenService, TokenService>();
             services.AddScoped<IAuthLinkService, AuthLinkService>();       
+
+            services.AddScoped<ICloudinaryService, CloudinaryService>();
+            services.AddScoped<IDishImageService, DishImageService>();
             services.AddScoped<IRepository, EntityFrameworkRepository<TenantDbContext>>();
             services.AddScoped<IExceptionHandler, ExceptionHandler>();
             services.AddScoped<IDishService, DishService>();

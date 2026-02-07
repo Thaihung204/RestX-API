@@ -43,18 +43,30 @@ namespace RestX.BLL.Helpers
 
             // CreateMap<Source, Destination>();
             CreateMap<Dish, DishItem>()
-                .ForMember(
-                    dest => dest.CategoryName,
-                    opt => opt.MapFrom(src => src.Category != null ? src.Category.Name : string.Empty))
-                .ForMember(
-                    dest => dest.MainImageUrl,
-                    opt => opt.MapFrom(src =>
-                        src.DishImages
-                            .Where(x => x.IsActive && x.ImageType == DishImageType.Main)
-                            .OrderBy(x => x.DisplayOrder)
-                            .ThenBy(x => x.Id)
-                            .Select(x => x.ImageUrl)
-                            .FirstOrDefault()));
+            .ForMember(dest => dest.CategoryName,
+                opt => opt.MapFrom(src =>
+                    src.Category != null ? src.Category.Name : string.Empty))
+            .ForMember(dest => dest.MainImageUrl,
+                opt => opt.MapFrom(src =>
+                    src.DishImages
+                        .Where(x => x.ImageType == DishImageType.Main && x.IsActive)
+                        .OrderByDescending(x => x.CreatedDate)
+                        .Select(x => x.ImageUrl)
+                        .FirstOrDefault()
+                ))
+            .ForMember(dest => dest.SubImages,
+                opt => opt.MapFrom(src =>
+                    src.DishImages
+                        .Where(x => x.ImageType == DishImageType.Sub && x.IsActive)
+                        .OrderBy(x => x.DisplayOrder)
+                        .Select(x => new DishImageItem
+                        {
+                            Id = x.Id,
+                            DisplayOrder = x.DisplayOrder,
+                            ImageUrl = x.ImageUrl
+                        })
+                        .ToList()
+                ));
             CreateMap<Dish, MenuItem>()
             .ForMember(
                 dest => dest.CategoryName,

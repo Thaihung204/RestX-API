@@ -31,6 +31,7 @@ namespace RestX.BLL.Services
             var categories = await RedisService.GetAsync<List<Category>>(GetCacheKey());
             if (categories == null)
             {
+                Console.WriteLine("Repo:", Repo.ToString());
                 categories = (await Repo.GetAllAsync<Category>(
                     orderBy: q => q.OrderBy(c => c.Name),
                     includeProperties: "ParentCategory,SubCategories"
@@ -73,7 +74,6 @@ namespace RestX.BLL.Services
             }
 
             await Repo.CreateAsync(model);
-            await Repo.SaveAsync();
 
             await RedisService.RemoveAsync(GetCacheKey());
 

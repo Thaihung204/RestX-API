@@ -10,6 +10,7 @@ using RestX.Models.Tenants;
 using Serilog;
 using System.Text.RegularExpressions;
 using static Pipelines.Sockets.Unofficial.SocketConnection;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace RestX.BLL.Services
 {
@@ -39,7 +40,7 @@ namespace RestX.BLL.Services
                 return null;
 
             Tenant? tenant = null;
-            var cacheKey = $"tenant:{data.ToLower()}";
+            var cacheKey = $"Tenant:{data.ToLower()}";
 
             var cachedTenant = await RedisService.GetStringAsync(cacheKey);
             if (!string.IsNullOrEmpty(cachedTenant))
@@ -61,7 +62,7 @@ namespace RestX.BLL.Services
                 if (tenant != null)
                 {
                     await RedisService.SetStringAsync(
-                        cacheKey,
+                        $"Tenant:{tenant.Hostname}",
                         JsonConvert.SerializeObject(tenant)
                     );
                 }
@@ -96,6 +97,9 @@ namespace RestX.BLL.Services
                 adminRepo.Update(tenant);
                 
                 await adminRepo.SaveAsync();
+
+                var oldHostnameCacheKey = $"tenant:{tenant.Hostname.ToLower()}";
+                await RedisService.RemoveAsync(oldHostnameCacheKey);
             }
             else
             {
@@ -202,6 +206,8 @@ namespace RestX.BLL.Services
             {
                 adminRepo.Delete<Tenant>(id);
                 await adminRepo.SaveAsync();
+                await RedisService.RemoveAsync($"tenant:{tenant.Hostname.ToLower()}");
+
             }
         }
     }

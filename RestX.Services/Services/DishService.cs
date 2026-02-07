@@ -1,5 +1,7 @@
 ﻿using AutoMapper;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
 using RestX.BLL.DataTranferObjects.Dish;
 using RestX.BLL.Extensions;
 using RestX.BLL.Interfaces;
@@ -13,13 +15,13 @@ namespace RestX.BLL.Services
 {
     public class DishService : BaseService, IDishService
     {
-        private readonly IDishImageService dishImageService;
+        private readonly ICloudinaryService cloudinaryService;
         private readonly IMapper mapper;
 
-        public DishService(IDishImageService dishImageService, IMapper mapper, IRepository repo, IRedisService redisService, IEnumerable<ActiveTenant> tenant = null) : base(repo, redisService, tenant)
+        public DishService(ICloudinaryService cloudinaryService, IMapper mapper, IRepository repo, IRedisService redisService, IEnumerable<ActiveTenant> tenant = null) : base(repo, redisService, tenant)
         {
             this.mapper = mapper;
-            this.dishImageService = dishImageService;
+            this.cloudinaryService = cloudinaryService;
         }
 
         public async Task<DishSearchResult> GetAllDishes(DishSearch model)
@@ -30,22 +32,12 @@ namespace RestX.BLL.Services
             query.Append(@"
                 SELECT #SELECT#
                 FROM dbo.Dishes d
-                JOIN dbo.Categories c ON d.CategoryId = c.Id
-                OUTER APPLY (
-                    SELECT TOP (1) di.ImageUrl
-                    FROM dbo.DishImages di
-                    WHERE di.DishId = d.Id
-                      AND di.IsActive = 1
-                      AND di.ImageType = 0
-                    ORDER BY di.DisplayOrder ASC, di.Id ASC
-                ) mainImg
                 WHERE 1 = 1
             ");
 
             var countParams = new List<SqlParameter>();
             var queryParams = new List<SqlParameter>();
 
-            // Search: Name + Description
             if (!string.IsNullOrWhiteSpace(model.SearchText))
             {
                 query.Append(@"
@@ -55,34 +47,18 @@ namespace RestX.BLL.Services
                     )
                 ");
 
-                countParams.Add(new SqlParameter("SearchText", SqlDbType.NVarChar, 2000)
-                {
-                    Value = model.SearchText
-                });
-
-                queryParams.Add(new SqlParameter("SearchText", SqlDbType.NVarChar, 2000)
-                {
-                    Value = model.SearchText
-                });
+                countParams.Add(new SqlParameter("SearchText", SqlDbType.NVarChar, 2000) { Value = model.SearchText });
+                queryParams.Add(new SqlParameter("SearchText", SqlDbType.NVarChar, 2000) { Value = model.SearchText });
             }
 
-            // Category
             if (model.CategoryId.HasValue)
             {
                 query.Append(" AND d.CategoryId = @CategoryId ");
 
-                countParams.Add(new SqlParameter("CategoryId", SqlDbType.UniqueIdentifier)
-                {
-                    Value = model.CategoryId.Value
-                });
-
-                queryParams.Add(new SqlParameter("CategoryId", SqlDbType.UniqueIdentifier)
-                {
-                    Value = model.CategoryId.Value
-                });
+                countParams.Add(new SqlParameter("CategoryId", SqlDbType.UniqueIdentifier) { Value = model.CategoryId.Value });
+                queryParams.Add(new SqlParameter("CategoryId", SqlDbType.UniqueIdentifier) { Value = model.CategoryId.Value });
             }
 
-            // Boolean filters
             void AddBoolFilter(string column, string param, bool? value)
             {
                 if (!value.HasValue) return;
@@ -98,40 +74,23 @@ namespace RestX.BLL.Services
             AddBoolFilter("d.IsBestSeller", "IsBestSeller", model.IsBestSeller);
             AddBoolFilter("d.IsActive", "IsActive", model.IsActive);
 
-            // Price range
             if (model.PriceFrom.HasValue)
             {
                 query.Append(" AND d.Price >= @PriceFrom ");
 
-                countParams.Add(new SqlParameter("PriceFrom", SqlDbType.Decimal)
-                {
-                    Value = model.PriceFrom.Value
-                });
-
-                queryParams.Add(new SqlParameter("PriceFrom", SqlDbType.Decimal)
-                {
-                    Value = model.PriceFrom.Value
-                });
+                countParams.Add(new SqlParameter("PriceFrom", SqlDbType.Decimal) { Value = model.PriceFrom.Value });
+                queryParams.Add(new SqlParameter("PriceFrom", SqlDbType.Decimal) { Value = model.PriceFrom.Value });
             }
 
             if (model.PriceTo.HasValue)
             {
                 query.Append(" AND d.Price <= @PriceTo ");
 
-                countParams.Add(new SqlParameter("PriceTo", SqlDbType.Decimal)
-                {
-                    Value = model.PriceTo.Value
-                });
-
-                queryParams.Add(new SqlParameter("PriceTo", SqlDbType.Decimal)
-                {
-                    Value = model.PriceTo.Value
-                });
+                countParams.Add(new SqlParameter("PriceTo", SqlDbType.Decimal) { Value = model.PriceTo.Value });
+                queryParams.Add(new SqlParameter("PriceTo", SqlDbType.Decimal) { Value = model.PriceTo.Value });
             }
 
-            // COUNT
-            var countQuery = query.ToString()
-                .Replace("#SELECT#", "COUNT(DISTINCT d.Id)");
+            var countQuery = query.ToString().Replace("#SELECT#", "COUNT(1)");
 
             var totalCount = await Repo.ExecuteSqlCommandAsync<int>(
                 countQuery,
@@ -141,15 +100,11 @@ namespace RestX.BLL.Services
             result.TotalCount = totalCount;
             result.Page = model.Page;
             result.ItemsPerPage = model.ItemsPerPage;
-            result.TotalPages = (int)Math.Ceiling(
-                (decimal)totalCount / model.ItemsPerPage
-            );
+            result.TotalPages = (int)Math.Ceiling((decimal)totalCount / model.ItemsPerPage);
 
-            int skip = model.Page == 1 ? 0 : (model.Page - 1) * model.ItemsPerPage;
+            var skip = model.Page <= 1 ? 0 : (model.Page - 1) * model.ItemsPerPage;
 
-            // SELECT list
             var selectItems = @"
-                DISTINCT
                 d.Id,
                 d.CategoryId,
                 d.Name,
@@ -161,18 +116,11 @@ namespace RestX.BLL.Services
                 d.AutoDisableByStock,
                 d.IsVegetarian,
                 d.IsSpicy,
-                d.IsBestSeller,
-                d.CreatedDate,
-                mainImg.ImageUrl AS MainImageUrl
+                d.IsBestSeller
             ";
 
+            var mainQuery = query.ToString().Replace("#SELECT#", selectItems);
 
-            var mainQuery = countQuery.Replace(
-                "COUNT(DISTINCT d.Id)",
-                selectItems
-            );
-
-            // Sorting (whitelist)
             mainQuery += model.SortBy switch
             {
                 "name_asc" => " ORDER BY d.Name ASC",
@@ -185,105 +133,212 @@ namespace RestX.BLL.Services
 
             mainQuery += $" OFFSET {skip} ROWS FETCH NEXT {model.ItemsPerPage} ROWS ONLY";
 
-            result.Dishes = await Repo.ExecuteSqlSelectAsync<DishItem>(
+            var dishes = await Repo.ExecuteSqlSelectAsync<DishItem>(
                 mainQuery,
                 queryParams.Any() ? queryParams.Cast<object>().ToArray() : null
             );
 
+            if (dishes.Count > 0)
+            {
+                var ids = dishes.Where(d => d.Id.HasValue).Select(d => d.Id!.Value).ToList();
+                var idParams = ids
+                    .Select((id, i) => new SqlParameter($"DishId{i}", SqlDbType.UniqueIdentifier) { Value = id })
+                    .ToList();
+
+                var inClause = string.Join(", ", idParams.Select(p => "@" + p.ParameterName));
+
+                // Get ALL images (not just main)
+                var imgQuery = $@"
+                    SELECT
+                        di.Id,
+                        di.DishId,
+                        di.ImageUrl,
+                        di.ImageType,
+                        di.DisplayOrder,
+                        di.IsActive
+                    FROM dbo.DishImages di
+                    WHERE di.DishId IN ({inClause})
+                    ORDER BY di.DishId, di.DisplayOrder ASC, di.Id ASC
+                ";
+
+                var images = await Repo.ExecuteSqlSelectAsync<DishImage>(
+                    imgQuery,
+                    idParams.Cast<object>().ToArray()
+                );
+
+                var imagesByDishId = images
+                    .GroupBy(x => x.DishId)
+                    .ToDictionary(g => g.Key, g => g.ToList());
+
+                foreach (var dish in dishes)
+                {
+                    dish.Images = new List<DishImageItem>();
+
+                    if (dish.Id is null) continue;
+
+                    if (!imagesByDishId.TryGetValue(dish.Id.Value, out var imgs)) continue;
+
+                    dish.Images = imgs.Select(img => new DishImageItem
+                    {
+                        Id = img.Id,
+                        ImageUrl = img.ImageUrl,
+                        ImageType = img.ImageType,
+                        DisplayOrder = img.DisplayOrder,
+                        IsActive = img.IsActive
+                    }).ToList();
+                }
+            }
+
+            result.Dishes = dishes;
             return result;
         }
+
         public async Task<DishItem> GetDishById(Guid id)
         {
-            var dish = (await Repo.GetAsync<Dish>(
-                    filter: d => d.Id == id,
-                    includeProperties: "Category,DishImages",
-                    take: 1))
-                .FirstOrDefault();
+            var dish = await Repo.GetOneAsync<Dish>(
+                filter: d => d.Id == id,
+                includeProperties: "Category,DishImages"
+            );
 
-            var mainImageUrl = dish.DishImages?
-                .Where(x => x.IsActive && x.ImageType == DishImageType.Main)
+            DishItem dto;
+            try
+            {
+                dto = mapper.Map<DishItem>(dish);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(ex.ToString());
+                Console.Error.WriteLine(ex.ToString());
+                throw;
+            }
+
+            dto.Images = dish.DishImages?
                 .OrderBy(x => x.DisplayOrder)
                 .ThenBy(x => x.Id)
-                .Select(x => x.ImageUrl)
-                .FirstOrDefault();
+                .Select(x => new DishImageItem
+                {
+                    Id = x.Id,
+                    ImageUrl = x.ImageUrl,
+                    ImageType = x.ImageType,
+                    DisplayOrder = x.DisplayOrder,
+                    IsActive = x.IsActive
+                })
+                .ToList() ?? new List<DishImageItem>();
 
-            return mapper.Map<DishItem>(dish);
-
+            return dto;
         }
-        public async Task<DishItem> UpsertDish(DishUpsert model)
+
+        public async Task<Guid> UpsertDish(DishItem dto)
         {
-            if (model == null)
-                throw new ArgumentNullException(nameof(model));
-
             Dish dish;
-            var isUpdate = model.Id.HasValue && model.Id != Guid.Empty;
 
-            // ======================
-            // UPSERT DISH
-            // ======================
-            if (isUpdate)
+            if (dto.Id == null)
             {
-                dish = await Repo.GetByIdAsync<Dish>(model.Id!.Value)
-                    ?? throw new InvalidOperationException("Dish not found");
-
-                dish.CategoryId = model.CategoryId;
-                dish.Name = model.Name;
-                dish.Description = model.Description;
-                dish.Price = model.Price;
-                dish.Unit = model.Unit;
-                dish.Quantity = model.Quantity;
-                dish.IsVegetarian = model.IsVegetarian;
-                dish.IsSpicy = model.IsSpicy;
-                dish.IsBestSeller = model.IsBestSeller;
-                dish.IsActive = model.IsActive;
-                dish.AutoDisableByStock = model.AutoDisableByStock;
-
-                Repo.Update(dish);
-                await Repo.SaveAsync();
+                dish = mapper.Map<Dish>(dto);
+                Repo.Create(dish);
             }
             else
             {
-                dish = new Dish
-                {
-                    Id = Guid.NewGuid(),
-                    CategoryId = model.CategoryId,
-                    Name = model.Name,
-                    Description = model.Description,
-                    Price = model.Price,
-                    Unit = model.Unit,
-                    Quantity = model.Quantity,
-                    IsVegetarian = model.IsVegetarian,
-                    IsSpicy = model.IsSpicy,
-                    IsBestSeller = model.IsBestSeller,
-                    IsActive = model.IsActive,
-                    AutoDisableByStock = model.AutoDisableByStock,
-                    CreatedDate = DateTime.UtcNow
-                };
+                dish = await Repo.GetOneAsync<Dish>(
+                    filter: x => x.Id == dto.Id,
+                    includeProperties: "Category,DishImages");
 
-                await Repo.CreateAsync(dish);
+                mapper.Map(dto, dish);
+                Repo.Update(dish);
             }
 
-            // ======================
-            // HANDLE IMAGES 
-            // ======================
-            await dishImageService.HandleDishImagesAsync(model, dish);
+            var currentImageIds = dish.DishImages.Select(x => x.Id).ToList();
+            var incomingImageIds = dto.Images
+                .Where(x => x.Id.HasValue)
+                .Select(x => x.Id.Value)
+                .ToList();
 
-            return await GetDishById(dish.Id);
-        }
-        public async Task DeleteDish(Guid id)
-        {
-            var dish = await GetDishById(id);
-            if (dish != null)
+            var idsToDelete = currentImageIds.Except(incomingImageIds).ToList();
+            foreach (var id in idsToDelete)
             {
-                await dishImageService.DeleteAllByDishIdAsync(dish.Id);
-                Repo.Delete<Dish>(id);
-                await Repo.SaveAsync();
+                await cloudinaryService.DeleteAsync($"dishes/{dish.Id}/{id}");
+                Repo.Delete<DishImage>(id);
             }
+
+            var uploadTasks = new List<Task<DishImage>>();
+            foreach (var imgDto in dto.Images)
+            {
+                if (imgDto.Id != null)
+                {
+                    var existingImg = dish.DishImages.FirstOrDefault(x => x.Id == imgDto.Id);
+                    if (existingImg != null)
+                    {
+                        existingImg.DisplayOrder = imgDto.DisplayOrder;
+                        existingImg.ImageType = imgDto.ImageType;
+                        existingImg.IsActive = imgDto.IsActive;
+                        Repo.Update(existingImg);
+                    }
+                }
+                else if (imgDto.File != null)
+                {
+                    var newImageId = Guid.NewGuid();
+                    uploadTasks.Add(HandleImageUpload(imgDto, dish.Id, newImageId));
+                }
+            }
+
+            if (uploadTasks.Any())
+            {
+                var newImages = await Task.WhenAll(uploadTasks);
+                foreach (var newImg in newImages)
+                {
+                    Repo.Create(newImg);
+                }
+            }
+
+            await Repo.SaveAsync();
+            return dish.Id;
+        }
+
+        private async Task<DishImage> HandleImageUpload(DishImageItem imgDto, Guid dishId, Guid newImageId)
+        {
+            using var stream = imgDto.File.OpenReadStream();
+
+            var uploadResult = await cloudinaryService.UploadAsync(
+                fileStream: stream,
+                fileName: imgDto.File.FileName,
+                folder: $"dishes/{dishId}",
+                publicId: newImageId.ToString(),
+                overwrite: true
+            );
+
+            return new DishImage
+            {
+                Id = newImageId,
+                DishId = dishId,
+                ImageUrl = uploadResult.Url,
+                ImageType = imgDto.ImageType,
+                DisplayOrder = imgDto.DisplayOrder,
+                IsActive = imgDto.IsActive
+            };
+        }
+
+        public async Task<bool> DeleteDish(Guid id)
+        {
+            var dish = await Repo.GetOneAsync<Dish>(
+                filter: x => x.Id == id,
+                includeProperties: "DishImages");
+
+            if (dish == null) return false;
+
+            var deleteTasks = dish.DishImages.Select(img =>
+                cloudinaryService.DeleteAsync($"dishes/{id}/{img.Id}"));
+
+            await Task.WhenAll(deleteTasks);
+
+            Repo.Delete(dish);
+            await Repo.SaveAsync();
+
+            return true;
         }
 
         public async Task<List<MenuCategory>> GetMenu()
         {
-            var cacheKey = $"Menu:tenantId";
+            var cacheKey = $"Menu:{CurrentTenant.Id}";
 
             var cachedMenu = await RedisService.GetAsync<List<MenuCategory>>(cacheKey);
             if (cachedMenu != null)
@@ -291,10 +346,26 @@ namespace RestX.BLL.Services
 
             var dishes = await Repo.GetAsync<Dish>(
                 filter: d => d.IsActive,
-                includeProperties: "Category"
+                includeProperties: "Category,DishImages"
             );
 
-            var menuItems = mapper.Map<List<MenuItem>>(dishes);
+            var menuItems = dishes.Select(d =>
+            {
+                var mainImageUrl = d.DishImages?
+                    .Where(x => x.IsActive && x.ImageType == DishImageType.Main)
+                    .OrderBy(x => x.DisplayOrder)
+                    .ThenBy(x => x.Id)
+                    .Select(x => x.ImageUrl)
+                    .FirstOrDefault();
+
+                return new MenuItem
+                {
+                    Id = d.Id,
+                    CategoryId = d.CategoryId,
+                    CategoryName = d.Category?.Name ?? string.Empty,
+                    ImageUrl = mainImageUrl
+                };
+            }).ToList();
 
             var menu = menuItems
                 .GroupBy(x => new { x.CategoryId, x.CategoryName })
@@ -307,14 +378,9 @@ namespace RestX.BLL.Services
                 .OrderBy(c => c.CategoryName)
                 .ToList();
 
-            await RedisService.SetAsync(
-                cacheKey,
-                menu,
-                TimeSpan.FromMinutes(10)
-            );
+            await RedisService.SetAsync(cacheKey, menu);
 
             return menu;
         }
-
     }
 }

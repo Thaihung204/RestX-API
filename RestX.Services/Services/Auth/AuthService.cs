@@ -82,7 +82,7 @@ namespace RestX.BLL.Services.Auth
         {
             var user = await userManager.FindByEmailAsync(request.Email);
             if (user == null)
-                return AuthResponse.FailureResponse("Email not found");
+                return AuthResponse.FailureResponse("Please check your email and try again");
             try
             {
                 var baseUrl = GetTenantBaseUrl();

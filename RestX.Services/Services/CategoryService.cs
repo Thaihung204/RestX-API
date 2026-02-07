@@ -74,7 +74,6 @@ namespace RestX.BLL.Services
             }
 
             await Repo.CreateAsync(model);
-            await Repo.SaveAsync();
 
             await RedisService.RemoveAsync(GetCacheKey());
 

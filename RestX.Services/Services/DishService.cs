@@ -13,10 +13,13 @@ namespace RestX.BLL.Services
 {
     public class DishService : BaseService, IDishService
     {
+        private readonly IDishImageService dishImageService;
         private readonly IMapper mapper;
-        public DishService(IMapper mapper, IRepository repo, IRedisService redisService, IEnumerable<ActiveTenant> tenant = null) : base(repo, redisService, tenant)
+
+        public DishService(IDishImageService dishImageService, IMapper mapper, IRepository repo, IRedisService redisService, IEnumerable<ActiveTenant> tenant = null) : base(repo, redisService, tenant)
         {
             this.mapper = mapper;
+            this.dishImageService = dishImageService;
         }
 
         public async Task<DishSearchResult> GetAllDishes(DishSearch model)
@@ -148,13 +151,21 @@ namespace RestX.BLL.Services
             var selectItems = @"
                 DISTINCT
                 d.Id,
+                d.CategoryId,
                 d.Name,
-                c.Name AS CategoryName,
+                d.Description,
                 d.Price,
+                d.Unit,
+                d.Quantity,
                 d.IsActive,
+                d.AutoDisableByStock,
+                d.IsVegetarian,
+                d.IsSpicy,
+                d.IsBestSeller,
                 d.CreatedDate,
                 mainImg.ImageUrl AS MainImageUrl
             ";
+
 
             var mainQuery = countQuery.Replace(
                 "COUNT(DISTINCT d.Id)",
@@ -181,7 +192,6 @@ namespace RestX.BLL.Services
 
             return result;
         }
-
         public async Task<DishItem> GetDishById(Guid id)
         {
             var dish = (await Repo.GetAsync<Dish>(
@@ -197,28 +207,24 @@ namespace RestX.BLL.Services
                 .Select(x => x.ImageUrl)
                 .FirstOrDefault();
 
-            return new DishItem
-            {
-                Id = dish.Id,
-                Name = dish.Name,
-                CategoryName = dish.Category?.Name ?? string.Empty,
-                Price = dish.Price,
-                IsActive = dish.IsActive,
-                CreatedDate = dish.CreatedDate,
-                Description = dish.Description,
-                MainImageUrl = mainImageUrl
-            };
-        }
+            return mapper.Map<DishItem>(dish);
 
-        public async Task<Dish> UpsertDish(Dish model)
+        }
+        public async Task<DishItem> UpsertDish(DishUpsert model)
         {
-            if (model.Id != Guid.Empty)
+            if (model == null)
+                throw new ArgumentNullException(nameof(model));
+
+            Dish dish;
+            var isUpdate = model.Id.HasValue && model.Id != Guid.Empty;
+
+            // ======================
+            // UPSERT DISH
+            // ======================
+            if (isUpdate)
             {
-                var dish = await Repo.GetByIdAsync<Dish>(model.Id);
-                if (dish == null)
-                {
-                    throw new InvalidOperationException("Dish not found");
-                }
+                dish = await Repo.GetByIdAsync<Dish>(model.Id!.Value)
+                    ?? throw new InvalidOperationException("Dish not found");
 
                 dish.CategoryId = model.CategoryId;
                 dish.Name = model.Name;
@@ -234,19 +240,42 @@ namespace RestX.BLL.Services
 
                 Repo.Update(dish);
                 await Repo.SaveAsync();
+            }
+            else
+            {
+                dish = new Dish
+                {
+                    Id = Guid.NewGuid(),
+                    CategoryId = model.CategoryId,
+                    Name = model.Name,
+                    Description = model.Description,
+                    Price = model.Price,
+                    Unit = model.Unit,
+                    Quantity = model.Quantity,
+                    IsVegetarian = model.IsVegetarian,
+                    IsSpicy = model.IsSpicy,
+                    IsBestSeller = model.IsBestSeller,
+                    IsActive = model.IsActive,
+                    AutoDisableByStock = model.AutoDisableByStock,
+                    CreatedDate = DateTime.UtcNow
+                };
 
-                return dish;
+                await Repo.CreateAsync(dish);
             }
 
-            await Repo.CreateAsync(model);
-            return model;
-        }
+            // ======================
+            // HANDLE IMAGES 
+            // ======================
+            await dishImageService.HandleDishImagesAsync(model, dish);
 
+            return await GetDishById(dish.Id);
+        }
         public async Task DeleteDish(Guid id)
         {
             var dish = await GetDishById(id);
             if (dish != null)
             {
+                await dishImageService.DeleteAllByDishIdAsync(dish.Id);
                 Repo.Delete<Dish>(id);
                 await Repo.SaveAsync();
             }

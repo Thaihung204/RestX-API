@@ -10,6 +10,7 @@ using RestX.Models.Tenants;
 using Serilog;
 using System.Text.RegularExpressions;
 using static Pipelines.Sockets.Unofficial.SocketConnection;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace RestX.BLL.Services
 {
@@ -96,6 +97,13 @@ namespace RestX.BLL.Services
                 adminRepo.Update(tenant);
                 
                 await adminRepo.SaveAsync();
+
+                var oldIdCacheKey = $"tenant:{tenant.Id.ToString().ToLower()}";
+                var oldHostnameCacheKey = $"tenant:{tenant.Hostname.ToLower()}";
+
+                await RedisService.RemoveAsync(oldIdCacheKey);
+                if (oldHostnameCacheKey != null)
+                    await RedisService.RemoveAsync(oldHostnameCacheKey);
             }
             else
             {
@@ -202,6 +210,9 @@ namespace RestX.BLL.Services
             {
                 adminRepo.Delete<Tenant>(id);
                 await adminRepo.SaveAsync();
+                var oldIdCacheKey = $"tenant:{id.ToString().ToLower()}";
+                await RedisService.RemoveAsync(oldIdCacheKey);
+
             }
         }
     }

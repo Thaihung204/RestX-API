@@ -122,9 +122,10 @@ namespace RestX.DAL.Context
             if (!optionsBuilder.IsConfigured)
             {
                 var connectionString = tenant == null
-                    ? "Server=restx-sqlserver;Database=demo_tenant;User Id=sa;Password=Passw0r1!;Encrypt=False;TrustServerCertificate=True;"
+                    ? "Server=restx-sqlserver,1433;Database=demo_tenant;User Id=sa;Password=Passw0r1!;Encrypt=False;TrustServerCertificate=True;"
                     : tenant.ConnectionString;
                 optionsBuilder.UseSqlServer(connectionString);
+                //Trigger
             }
         }
 

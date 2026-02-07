@@ -79,27 +79,53 @@ namespace RestX.BLL.Services
             Tenant tenant;
             if (model.Id != null)
             {
+                var oldHostnameCacheKey = $"tenant:{model.Hostname.ToLower()}";
+                await RedisService.RemoveAsync(oldHostnameCacheKey);
+
                 tenant = await adminRepo.GetByIdAsync<Tenant>(model.Id);
-                tenant.Prefix = model.Prefix;
+
+                tenant.Prefix = model.Prefix
+                    ?? string.Join("", model.Name.Split(" ", System.StringSplitOptions.RemoveEmptyEntries)
+                        .Select(w => w.Substring(0, 1).ToUpper()).ToList());
+
                 tenant.Name = model.Name;
-                tenant.LogoUrl = model.LogoUrl;
-                tenant.FaviconUrl = model.FaviconUrl;
-                tenant.BackgroundUrl = model.BackgroundUrl;
-                tenant.BaseColor = model.BaseColor;
-                tenant.PrimaryColor = model.PrimaryColor;
-                tenant.SecondaryColor = model.SecondaryColor;
-                tenant.NetworkIp = model.NetworkIp;
-                tenant.ConnectionString = model.ConnectionString;
+                tenant.LogoUrl = model.LogoUrl ?? string.Empty;
+                tenant.FaviconUrl = model.FaviconUrl ?? string.Empty;
+                tenant.BackgroundUrl = model.BackgroundUrl ?? string.Empty;
+
+                tenant.BaseColor = model.BaseColor ?? "#FF380B";
+                tenant.PrimaryColor = model.PrimaryColor ?? "#6b7280";
+                tenant.SecondaryColor = model.SecondaryColor ?? "#9ca3af";
+                tenant.HeaderColor = model.HeaderColor ?? "#141927";
+                tenant.FooterColor = model.FooterColor ?? "#141927";
+
+                tenant.NetworkIp = model.NetworkIp ?? string.Empty;
+                tenant.ConnectionString = model.ConnectionString ?? tenant.ConnectionString;
+
                 tenant.Status = model.Status;
                 tenant.Hostname = model.Hostname;
-                tenant.ExpiredAt = model.ExpiredAt;
+
+                tenant.ExpiredAt = model.ExpiredAt == default
+                    ? DateTime.UtcNow.AddYears(1)
+                    : model.ExpiredAt;
+
+                tenant.BusinessName = model.BusinessName;
+                tenant.BusinessAddressLine1 = model.BusinessAddressLine1;
+                tenant.BusinessAddressLine2 = model.BusinessAddressLine2;
+                tenant.BusinessAddressLine3 = model.BusinessAddressLine3;
+                tenant.BusinessAddressLine4 = model.BusinessAddressLine4;
+                tenant.BusinessCounty = model.BusinessCounty ?? string.Empty;
+                tenant.BusinessPostCode = model.BusinessPostCode ?? string.Empty;
+                tenant.BusinessCountry = model.BusinessCountry ?? string.Empty;
+                tenant.BusinessPrimaryPhone = model.BusinessPrimaryPhone;
+                tenant.BusinessSecondaryPhone = model.BusinessSecondaryPhone ?? string.Empty;
+                tenant.BusinessEmailAddress = model.BusinessEmailAddress;
+                tenant.BusinessCompanyNumber = model.BusinessCompanyNumber ?? string.Empty;
+                tenant.BusinessOpeningHours = model.BusinessOpeningHours ?? string.Empty;
+                tenant.AboutUs = model.AboutUs ?? string.Empty;
 
                 adminRepo.Update(tenant);
-                
                 await adminRepo.SaveAsync();
-
-                var oldHostnameCacheKey = $"tenant:{tenant.Hostname.ToLower()}";
-                await RedisService.RemoveAsync(oldHostnameCacheKey);
             }
             else
             {

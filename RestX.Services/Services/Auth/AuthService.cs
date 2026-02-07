@@ -82,7 +82,7 @@ namespace RestX.BLL.Services.Auth
         {
             var user = await userManager.FindByEmailAsync(request.Email);
             if (user == null)
-                return AuthResponse.SuccessResponse("If the email exists, a password reset link has been sent");
+                return AuthResponse.FailureResponse("Please check your email and try again");
             try
             {
                 var baseUrl = GetTenantBaseUrl();

@@ -104,7 +104,10 @@ namespace RestX.WebApp.Controllers
                     return BadRequest(ModelState);
                 }
                 var result = await authService.ForgotPasswordAsync(request);
-
+                if (!result.Success)
+                {
+                    return BadRequest(result);
+                }
                 return Ok(result);
             }
             catch (Exception ex)

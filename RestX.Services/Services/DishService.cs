@@ -268,8 +268,8 @@ namespace RestX.BLL.Services
                     var existingImg = dish.DishImages.FirstOrDefault(x => x.Id == imgDto.Id);
                     if (existingImg != null)
                     {
-                        existingImg.DisplayOrder = imgDto.DisplayOrder;
-                        existingImg.ImageType = imgDto.ImageType;
+                        existingImg.DisplayOrder = imgDto.DisplayOrder ?? existingImg.DisplayOrder;
+                        existingImg.ImageType = imgDto.ImageType ?? existingImg.ImageType;
                         existingImg.IsActive = imgDto.IsActive;
                         Repo.Update(existingImg);
                     }
@@ -311,8 +311,8 @@ namespace RestX.BLL.Services
                 Id = newImageId,
                 DishId = dishId,
                 ImageUrl = uploadResult.Url,
-                ImageType = imgDto.ImageType,
-                DisplayOrder = imgDto.DisplayOrder,
+                ImageType = imgDto.ImageType ?? DishImageType.Main,
+                DisplayOrder = imgDto.DisplayOrder ?? 0,
                 IsActive = imgDto.IsActive
             };
         }

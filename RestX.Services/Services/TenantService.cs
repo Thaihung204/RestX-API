@@ -1,4 +1,5 @@
 ﻿using AutoMapper;
+using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
 using RestX.AdminDAL.Context;
@@ -10,6 +11,7 @@ using RestX.Models.Tenants;
 using Serilog;
 using System.Text.RegularExpressions;
 using static Pipelines.Sockets.Unofficial.SocketConnection;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace RestX.BLL.Services
 {
@@ -39,7 +41,7 @@ namespace RestX.BLL.Services
                 return null;
 
             Tenant? tenant = null;
-            var cacheKey = $"tenant:{data.ToLower()}";
+            var cacheKey = $"Tenant:{data.ToLower()}";
 
             var cachedTenant = await RedisService.GetStringAsync(cacheKey);
             if (!string.IsNullOrEmpty(cachedTenant))
@@ -61,7 +63,7 @@ namespace RestX.BLL.Services
                 if (tenant != null)
                 {
                     await RedisService.SetStringAsync(
-                        cacheKey,
+                        $"Tenant:{tenant.Hostname}",
                         JsonConvert.SerializeObject(tenant)
                     );
                 }
@@ -78,23 +80,52 @@ namespace RestX.BLL.Services
             Tenant tenant;
             if (model.Id != null)
             {
+                var oldHostnameCacheKey = $"Tenant:{model.Hostname.ToLower()}";
+                await RedisService.RemoveAsync(oldHostnameCacheKey);
+
                 tenant = await adminRepo.GetByIdAsync<Tenant>(model.Id);
-                tenant.Prefix = model.Prefix;
+
+                tenant.Prefix = model.Prefix
+                    ?? string.Join("", model.Name.Split(" ", System.StringSplitOptions.RemoveEmptyEntries)
+                        .Select(w => w.Substring(0, 1).ToUpper()).ToList());
+
                 tenant.Name = model.Name;
-                tenant.LogoUrl = model.LogoUrl;
-                tenant.FaviconUrl = model.FaviconUrl;
-                tenant.BackgroundUrl = model.BackgroundUrl;
-                tenant.BaseColor = model.BaseColor;
-                tenant.PrimaryColor = model.PrimaryColor;
-                tenant.SecondaryColor = model.SecondaryColor;
-                tenant.NetworkIp = model.NetworkIp;
-                tenant.ConnectionString = model.ConnectionString;
+                tenant.LogoUrl = model.LogoUrl ?? string.Empty;
+                tenant.FaviconUrl = model.FaviconUrl ?? string.Empty;
+                tenant.BackgroundUrl = model.BackgroundUrl ?? string.Empty;
+
+                tenant.BaseColor = model.BaseColor ?? "#FF380B";
+                tenant.PrimaryColor = model.PrimaryColor ?? "#6b7280";
+                tenant.SecondaryColor = model.SecondaryColor ?? "#9ca3af";
+                tenant.HeaderColor = model.HeaderColor ?? "#141927";
+                tenant.FooterColor = model.FooterColor ?? "#141927";
+
+                tenant.NetworkIp = model.NetworkIp ?? string.Empty;
+                tenant.ConnectionString = model.ConnectionString ?? tenant.ConnectionString;
+
                 tenant.Status = model.Status;
                 tenant.Hostname = model.Hostname;
-                tenant.ExpiredAt = model.ExpiredAt;
+
+                tenant.ExpiredAt = model.ExpiredAt == default
+                    ? DateTime.UtcNow.AddYears(1)
+                    : model.ExpiredAt;
+
+                tenant.BusinessName = model.BusinessName;
+                tenant.BusinessAddressLine1 = model.BusinessAddressLine1;
+                tenant.BusinessAddressLine2 = model.BusinessAddressLine2;
+                tenant.BusinessAddressLine3 = model.BusinessAddressLine3;
+                tenant.BusinessAddressLine4 = model.BusinessAddressLine4;
+                tenant.BusinessCounty = model.BusinessCounty ?? string.Empty;
+                tenant.BusinessPostCode = model.BusinessPostCode ?? string.Empty;
+                tenant.BusinessCountry = model.BusinessCountry ?? string.Empty;
+                tenant.BusinessPrimaryPhone = model.BusinessPrimaryPhone;
+                tenant.BusinessSecondaryPhone = model.BusinessSecondaryPhone ?? string.Empty;
+                tenant.BusinessEmailAddress = model.BusinessEmailAddress;
+                tenant.BusinessCompanyNumber = model.BusinessCompanyNumber ?? string.Empty;
+                tenant.BusinessOpeningHours = model.BusinessOpeningHours ?? string.Empty;
+                tenant.AboutUs = model.AboutUs ?? string.Empty;
 
                 adminRepo.Update(tenant);
-                
                 await adminRepo.SaveAsync();
             }
             else
@@ -197,12 +228,50 @@ namespace RestX.BLL.Services
         }
         public async Task DeleteTenant(string id)
         {
-            var tenant = await GetTenantByIdOrHostname(id);
-            if (tenant != null)
+            var tenant = await adminRepo.GetByIdAsync<Tenant>(Guid.Parse(id));
+
+            if (tenant == null)
+                return;
+
+            await DropTenantDatabaseAsync(tenant.ConnectionString);
+            adminRepo.Delete<Tenant>(tenant.Id);
+            await adminRepo.SaveAsync();
+            await RedisService.RemoveAsync($"Tenant:{tenant.Hostname.ToLower()}");
+        }
+
+        private static async Task DropTenantDatabaseAsync(string tenantConnectionString)
+        {
+            if (string.IsNullOrWhiteSpace(tenantConnectionString))
+                return;
+
+            var tenantBuilder = new SqlConnectionStringBuilder(tenantConnectionString);
+            var dbName = tenantBuilder.InitialCatalog;
+
+            if (string.IsNullOrWhiteSpace(dbName))
+                return;
+
+            var masterBuilder = new SqlConnectionStringBuilder(tenantConnectionString)
             {
-                adminRepo.Delete<Tenant>(id);
-                await adminRepo.SaveAsync();
-            }
+                InitialCatalog = "master"
+            };
+
+            const string sql = """
+                               IF DB_ID(@dbName) IS NOT NULL
+                               BEGIN
+                                   DECLARE @sql NVARCHAR(MAX) =
+                                       N'ALTER DATABASE ' + QUOTENAME(@dbName) + N' SET SINGLE_USER WITH ROLLBACK IMMEDIATE; ' +
+                                       N'DROP DATABASE ' + QUOTENAME(@dbName) + N';';
+                                   EXEC sp_executesql @sql;
+                               END
+                               """;
+
+            await using var conn = new SqlConnection(masterBuilder.ConnectionString);
+            await conn.OpenAsync();
+
+            await using var cmd = new SqlCommand(sql, conn);
+            cmd.Parameters.Add(new SqlParameter("@dbName", System.Data.SqlDbType.NVarChar, 128) { Value = dbName });
+
+            await cmd.ExecuteNonQueryAsync();
         }
     }
 }

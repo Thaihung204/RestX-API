@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Http;
 using RestX.BLL.DataTranferObjects.Common;
 using RestX.Models.Identity;
 
@@ -11,5 +12,6 @@ namespace RestX.BLL.Interfaces.Auth
         Task<bool> EmailExistsAsync(string email);
         Task<ApplicationUser?> GetUserByMemberIdAsync(Guid memberId);
         Task<IList<string>> GetUserRolesAsync(ApplicationUser user);
+        Task UploadAvatarAsync(Guid userId, IFormFile file);
     }
 }

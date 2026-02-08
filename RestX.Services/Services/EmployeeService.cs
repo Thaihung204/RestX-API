@@ -50,12 +50,11 @@ namespace RestX.BLL.Services
                     new[] { "e.Code", "e.Position", "u.UserName", "u.Email" },
                     "Search",
                     filter.Search);
-
             var (countQuery, countParams) = queryBuilder.BuildCountQuery("COUNT(DISTINCT e.Id)");
             int totalCount = await Repo.ExecuteSqlCommandAsync<int>(countQuery, countParams);
 
             var selectColumns = @"DISTINCT e.Id, e.Code, u.UserName AS FullName, u.Email,
-                                  e.Position, e.IsActive, e.HireDate, e.CreatedDate";
+                                  e.Position, e.IsActive, e.HireDate, e.CreatedDate, u.AvatarUrl";
             var (dataQuery, dataParams) = queryBuilder.BuildDataQuery(
                 selectColumns,
                 GetSortClause(filter.SortBy, filter.SortDescending),
@@ -83,7 +82,6 @@ namespace RestX.BLL.Services
         {
             if (await userAccountService.EmailExistsAsync(dto.Email))
                 throw new InvalidOperationException("Email already exists");
-
             var employee = await CreateEmployeeEntityAsync(dto);
             await Repo.CreateAsync(employee);
 
@@ -106,8 +104,9 @@ namespace RestX.BLL.Services
                 await Repo.SaveAsync();
                 throw;
             }
+            if (dto.Avatar != null)
+                await userAccountService.UploadAvatarAsync(user.Id, dto.Avatar);
             await TrySendWelcomeEmailAsync(user, dto.FullName);
-
             var roles = await userAccountService.GetUserRolesAsync(user);
             return MapToResponse(employee, user, roles);
         }
@@ -116,7 +115,6 @@ namespace RestX.BLL.Services
         {
             var employee = await Repo.GetFirstAsync<Employee>(filter: e => e.Id == id);
             if (employee == null) return null;
-
             var user = await userAccountService.GetUserByMemberIdAsync(id);
             if (user != null && HasUserUpdates(dto))
             {
@@ -126,6 +124,8 @@ namespace RestX.BLL.Services
                     PhoneNumber = dto.PhoneNumber
                 });
             }
+            if (user != null && dto.Avatar != null)
+                await userAccountService.UploadAvatarAsync(user.Id, dto.Avatar);
 
             UpdateEmployeeFields(employee, dto);
             Repo.Update(employee);
@@ -185,8 +185,8 @@ namespace RestX.BLL.Services
                 Address = dto.Address,
                 Position = dto.Position,
                 HireDate = dto.HireDate,
-                Salary = dto.Salary,
-                SalaryType = dto.SalaryType,
+                Salary = 0,
+                SalaryType = "Monthly",
                 IsActive = true
             };
         }
@@ -237,10 +237,6 @@ namespace RestX.BLL.Services
                 employee.HireDate = dto.HireDate.Value;
             if (dto.TerminationDate.HasValue)
                 employee.TerminationDate = dto.TerminationDate;
-            if (dto.Salary.HasValue)
-                employee.Salary = dto.Salary.Value;
-            if (!string.IsNullOrEmpty(dto.SalaryType))
-                employee.SalaryType = dto.SalaryType;
             if (dto.IsActive.HasValue)
                 employee.IsActive = dto.IsActive.Value;
         }
@@ -273,6 +269,7 @@ namespace RestX.BLL.Services
                 Email = user?.Email ?? string.Empty,
                 FullName = user?.UserName ?? string.Empty,
                 PhoneNumber = user?.PhoneNumber,
+                AvatarUrl = user?.AvatarUrl,
                 Roles = roles.ToList()
             };
         }

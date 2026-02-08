@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Http;
 using System.ComponentModel.DataAnnotations;
 using RestX.BLL.DataTranferObjects.Common;
 namespace RestX.BLL.DataTranferObjects.Employee
@@ -28,12 +29,9 @@ namespace RestX.BLL.DataTranferObjects.Employee
         public string Position { get; set; } = string.Empty;
         [Required(ErrorMessage = "Hire date is required")]
         public DateTime HireDate { get; set; }
-        [Range(0, 999999999999.99, ErrorMessage = "Salary must be a positive number")]
-        public decimal Salary { get; set; } = 0;
-        [MaxLength(20)]
-        public string SalaryType { get; set; } = "Monthly";
         [Required(ErrorMessage = "Role is required")]
-        public string Role { get; set; } = string.Empty; 
+        public string Role { get; set; } = string.Empty;
+        public IFormFile? Avatar { get; set; }
     }
     public class UpdateEmployee
     {
@@ -50,11 +48,8 @@ namespace RestX.BLL.DataTranferObjects.Employee
         public string? Position { get; set; }
         public DateTime? HireDate { get; set; }
         public DateTime? TerminationDate { get; set; }
-        [Range(0, 999999999999.99, ErrorMessage = "Salary must be a positive number")]
-        public decimal? Salary { get; set; }
-        [MaxLength(20)]
-        public string? SalaryType { get; set; }
         public bool? IsActive { get; set; }
+        public IFormFile? Avatar { get; set; }
     }
     public class EmployeeResponse
     {
@@ -73,6 +68,7 @@ namespace RestX.BLL.DataTranferObjects.Employee
         public string Email { get; set; } = string.Empty;
         public string FullName { get; set; } = string.Empty;
         public string? PhoneNumber { get; set; }
+        public string? AvatarUrl { get; set; }
         public List<string> Roles { get; set; } = new();
     }
     public class EmployeeListItem
@@ -85,5 +81,6 @@ namespace RestX.BLL.DataTranferObjects.Employee
         public bool IsActive { get; set; }
         public DateTime HireDate { get; set; }
         public DateTime CreatedDate { get; set; }
+        public string? AvatarUrl { get; set; }
     }
 }

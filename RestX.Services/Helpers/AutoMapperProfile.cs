@@ -32,6 +32,7 @@ namespace RestX.BLL.Helpers
                 .ForMember(dest => dest.Email, opt => opt.MapFrom(src => src.ApplicationUser.Email ?? string.Empty))
                 .ForMember(dest => dest.FullName, opt => opt.MapFrom(src => src.ApplicationUser.UserName ?? string.Empty))
                 .ForMember(dest => dest.PhoneNumber, opt => opt.MapFrom(src => src.ApplicationUser.PhoneNumber))
+                .ForMember(dest => dest.AvatarUrl, opt => opt.MapFrom(src => src.ApplicationUser.AvatarUrl))
                 .ForMember(dest => dest.TotalOrders, opt => opt.Ignore())
                 .ForMember(dest => dest.TotalReservations, opt => opt.Ignore());
             CreateMap<Employee, EmployeeResponse>()

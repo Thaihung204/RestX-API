@@ -1,4 +1,5 @@
 ﻿using AutoMapper;
+using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
 using RestX.AdminDAL.Context;
@@ -227,14 +228,50 @@ namespace RestX.BLL.Services
         }
         public async Task DeleteTenant(string id)
         {
-            var tenant = await GetTenantByIdOrHostname(id);
-            if (tenant != null)
-            {
-                adminRepo.Delete<Tenant>(id);
-                await adminRepo.SaveAsync();
-                await RedisService.RemoveAsync($"Tenant:{tenant.Hostname.ToLower()}");
+            var tenant = await adminRepo.GetByIdAsync<Tenant>(Guid.Parse(id));
 
-            }
+            if (tenant == null)
+                return;
+
+            await DropTenantDatabaseAsync(tenant.ConnectionString);
+            adminRepo.Delete<Tenant>(tenant.Id);
+            await adminRepo.SaveAsync();
+            await RedisService.RemoveAsync($"Tenant:{tenant.Hostname.ToLower()}");
+        }
+
+        private static async Task DropTenantDatabaseAsync(string tenantConnectionString)
+        {
+            if (string.IsNullOrWhiteSpace(tenantConnectionString))
+                return;
+
+            var tenantBuilder = new SqlConnectionStringBuilder(tenantConnectionString);
+            var dbName = tenantBuilder.InitialCatalog;
+
+            if (string.IsNullOrWhiteSpace(dbName))
+                return;
+
+            var masterBuilder = new SqlConnectionStringBuilder(tenantConnectionString)
+            {
+                InitialCatalog = "master"
+            };
+
+            const string sql = """
+                               IF DB_ID(@dbName) IS NOT NULL
+                               BEGIN
+                                   DECLARE @sql NVARCHAR(MAX) =
+                                       N'ALTER DATABASE ' + QUOTENAME(@dbName) + N' SET SINGLE_USER WITH ROLLBACK IMMEDIATE; ' +
+                                       N'DROP DATABASE ' + QUOTENAME(@dbName) + N';';
+                                   EXEC sp_executesql @sql;
+                               END
+                               """;
+
+            await using var conn = new SqlConnection(masterBuilder.ConnectionString);
+            await conn.OpenAsync();
+
+            await using var cmd = new SqlCommand(sql, conn);
+            cmd.Parameters.Add(new SqlParameter("@dbName", System.Data.SqlDbType.NVarChar, 128) { Value = dbName });
+
+            await cmd.ExecuteNonQueryAsync();
         }
     }
 }

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace RestX.Models.Identity
@@ -17,5 +18,7 @@ namespace RestX.Models.Identity
         public string RefreshToken { get; set; }
         public DateTime? RefreshTokenExpiryTime { get; set; }
         public bool PushNotificationEnabled { get; set; } = true;
+        [MaxLength(500)]
+        public string? AvatarUrl { get; set; }
     }
 }

@@ -256,7 +256,7 @@ namespace RestX.BLL.Services
             var idsToDelete = currentImageIds.Except(incomingImageIds).ToList();
             foreach (var id in idsToDelete)
             {
-                await cloudinaryService.DeleteAsync($"dishes/{dish.Id}/{id}");
+                await cloudinaryService.DeleteAsync($"{CurrentTenant.Name.Replace(" ", "")}/dishes/{dish.Id}/{id}");
                 Repo.Delete<DishImage>(id);
             }
 
@@ -301,7 +301,7 @@ namespace RestX.BLL.Services
             var uploadResult = await cloudinaryService.UploadAsync(
                 fileStream: stream,
                 fileName: imgDto.File.FileName,
-                folder: $"dishes/{dishId}",
+                folder: $"{CurrentTenant.Name.Replace(" ", "")}//dishes/{dishId}",
                 publicId: newImageId.ToString(),
                 overwrite: true
             );
@@ -326,7 +326,7 @@ namespace RestX.BLL.Services
             if (dish == null) return false;
 
             var deleteTasks = dish.DishImages.Select(img =>
-                cloudinaryService.DeleteAsync($"dishes/{id}/{img.Id}"));
+                cloudinaryService.DeleteAsync($"{CurrentTenant.Name.Replace(" ", "")}/dishes/{id}/{img.Id}"));
 
             await Task.WhenAll(deleteTasks);
 

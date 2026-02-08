@@ -79,7 +79,7 @@ namespace RestX.BLL.Services
             Tenant tenant;
             if (model.Id != null)
             {
-                var oldHostnameCacheKey = $"tenant:{model.Hostname.ToLower()}";
+                var oldHostnameCacheKey = $"Tenant:{model.Hostname.ToLower()}";
                 await RedisService.RemoveAsync(oldHostnameCacheKey);
 
                 tenant = await adminRepo.GetByIdAsync<Tenant>(model.Id);
@@ -232,7 +232,7 @@ namespace RestX.BLL.Services
             {
                 adminRepo.Delete<Tenant>(id);
                 await adminRepo.SaveAsync();
-                await RedisService.RemoveAsync($"tenant:{tenant.Hostname.ToLower()}");
+                await RedisService.RemoveAsync($"Tenant:{tenant.Hostname.ToLower()}");
 
             }
         }

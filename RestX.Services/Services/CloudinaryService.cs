@@ -37,7 +37,7 @@ public class CloudinaryService : BaseService, ICloudinaryService
         var uploadParams = new ImageUploadParams
         {
             File = new FileDescription(fileName, fileStream),
-            Folder = $"{CurrentTenant.Name.Replace(" ", "")}/{folder}".Trim('/'),
+            Folder = $"{folder}".Trim('/'),
             PublicId = publicId,
             Overwrite = overwrite,
             UseFilename = publicId == null,
@@ -56,10 +56,6 @@ public class CloudinaryService : BaseService, ICloudinaryService
     public async Task DeleteAsync(string publicId)
     {
         if (string.IsNullOrWhiteSpace(publicId)) return;
-        await cloudinary.DestroyAsync(new DeletionParams($"{CurrentTenant.Name.Replace(" ", "")}/{publicId}"));
-    }
-    public async Task DeleteFolderImageByPrefix(string prefix)
-    {
-        await cloudinary.DeleteResourcesByPrefixAsync($"{CurrentTenant.Name.Replace(" ", "")}/{prefix}");
+        await cloudinary.DestroyAsync(new DeletionParams($"{publicId}"));
     }
 }

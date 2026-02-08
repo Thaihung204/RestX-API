@@ -48,10 +48,12 @@ namespace RestX.Admin.Controllers
         }
 
         [HttpPut("{id}")]
-        public async Task<IActionResult> EditTenant([Required] Guid id, [FromBody] TenantItem tenant)
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> EditTenant([Required] Guid id, [FromForm] TenantItem tenant)
         {
             try
             {
+                tenant.Id = id;
                 return Ok(await tenantService.UpsertTenant(tenant));
             }
             catch (Exception ex)
@@ -62,7 +64,8 @@ namespace RestX.Admin.Controllers
         }
 
         [HttpPost]
-        public async Task<ActionResult<TenantItem>> AddTenant([FromBody] TenantItem tenant)
+        [Consumes("multipart/form-data")]
+        public async Task<ActionResult<TenantItem>> AddTenant([FromForm] TenantItem tenant)
         {
             try
             {

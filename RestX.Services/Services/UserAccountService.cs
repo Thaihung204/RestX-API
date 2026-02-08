@@ -1,6 +1,8 @@
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using RestX.BLL.DataTranferObjects.Common;
+using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Auth;
 using RestX.Models.Identity;
 
@@ -10,13 +12,16 @@ namespace RestX.BLL.Services
     {
         private readonly UserManager<ApplicationUser> userManager;
         private readonly RoleManager<IdentityRole<Guid>> roleManager;
+        private readonly ICloudinaryService cloudinaryService;
 
         public UserAccountService(
             UserManager<ApplicationUser> userManager,
-            RoleManager<IdentityRole<Guid>> roleManager)
+            RoleManager<IdentityRole<Guid>> roleManager,
+            ICloudinaryService cloudinaryService)
         {
             this.userManager = userManager;
             this.roleManager = roleManager;
+            this.cloudinaryService = cloudinaryService;
         }
 
         public async Task<ApplicationUser> CreateUserAsync(CreateUserRequest request)
@@ -92,6 +97,20 @@ namespace RestX.BLL.Services
         public async Task<IList<string>> GetUserRolesAsync(ApplicationUser user)
         {
             return await userManager.GetRolesAsync(user);
+        }
+
+        public async Task UploadAvatarAsync(Guid userId, IFormFile file)
+        {
+            using var stream = file.OpenReadStream();
+            var uploadResult = await cloudinaryService.UploadAsync(
+                stream, file.FileName, $"avatars/{userId}", publicId: "avatar", overwrite: true);
+            var user = await userManager.FindByIdAsync(userId.ToString())
+                ?? throw new InvalidOperationException("User not found");
+            user.AvatarUrl = uploadResult.Url;
+            user.LastModified = DateTime.UtcNow;
+            var result = await userManager.UpdateAsync(user);
+            if (!result.Succeeded)
+                throw new InvalidOperationException($"Failed to update avatar: {FormatIdentityErrors(result)}");
         }
 
         private async Task EnsureRoleAndAssignAsync(ApplicationUser user, string roleName)

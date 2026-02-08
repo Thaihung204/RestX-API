@@ -49,7 +49,7 @@ namespace RestX.WebApp.Controllers
             }
         }
         [HttpPost]
-        public async Task<IActionResult> CreateEmployee([FromBody] CreateEmployee dto)
+        public async Task<IActionResult> CreateEmployee([FromForm] CreateEmployee dto)
         {
             try
             {
@@ -71,7 +71,7 @@ namespace RestX.WebApp.Controllers
             }
         }
         [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateEmployee([Required] Guid id, [FromBody] UpdateEmployee dto)
+        public async Task<IActionResult> UpdateEmployee([Required] Guid id, [FromForm] UpdateEmployee dto)
         {
             try
             {

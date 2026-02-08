@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Http;
 using System.ComponentModel.DataAnnotations;
 using RestX.BLL.DataTranferObjects.Common;
 namespace RestX.BLL.DataTranferObjects.Customer
@@ -27,6 +28,7 @@ namespace RestX.BLL.DataTranferObjects.Customer
         [MaxLength(20)]
         public string MembershipLevel { get; set; } = "BRONZE";
         public int LoyaltyPoints { get; set; } = 0;
+        public IFormFile? Avatar { get; set; }
     }
     public class UpdateCustomer
     {
@@ -40,6 +42,7 @@ namespace RestX.BLL.DataTranferObjects.Customer
         [Range(0, int.MaxValue, ErrorMessage = "Loyalty points must be a positive number")]
         public int? LoyaltyPoints { get; set; }
         public bool? IsActive { get; set; }
+        public IFormFile? Avatar { get; set; }
     }
     public class CustomerResponse
     {
@@ -53,6 +56,7 @@ namespace RestX.BLL.DataTranferObjects.Customer
         public string Email { get; set; } = string.Empty;
         public string FullName { get; set; } = string.Empty;
         public string? PhoneNumber { get; set; }
+        public string? AvatarUrl { get; set; }
         public int TotalOrders { get; set; }
         public int TotalReservations { get; set; }
     }
@@ -66,5 +70,6 @@ namespace RestX.BLL.DataTranferObjects.Customer
         public int LoyaltyPoints { get; set; }
         public bool IsActive { get; set; }
         public DateTime CreatedDate { get; set; }
+        public string? AvatarUrl { get; set; }
     }
 }

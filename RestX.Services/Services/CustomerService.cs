@@ -46,7 +46,7 @@ namespace RestX.BLL.Services
             var (countQuery, countParams) = queryBuilder.BuildCountQuery("COUNT(DISTINCT c.Id)");
             int totalCount = await Repo.ExecuteSqlCommandAsync<int>(countQuery, countParams);
             var selectColumns = @"DISTINCT c.Id, u.UserName AS FullName, u.Email, u.PhoneNumber,
-                                  c.MembershipLevel, c.LoyaltyPoints, c.IsActive, c.CreatedDate";
+                                  c.MembershipLevel, c.LoyaltyPoints, c.IsActive, c.CreatedDate, u.AvatarUrl";
             var (dataQuery, dataParams) = queryBuilder.BuildDataQuery(
                 selectColumns,
                 GetSortClause(filter.SortBy, filter.SortDescending),
@@ -96,6 +96,10 @@ namespace RestX.BLL.Services
                 await userManager.DeleteAsync(user);
                 throw;
             }
+
+            if (dto.Avatar != null)
+                await userAccountService.UploadAvatarAsync(user.Id, dto.Avatar);
+
             return MapToResponse(customer, user, (0, 0));
         }
 
@@ -114,6 +118,9 @@ namespace RestX.BLL.Services
                     PhoneNumber = dto.PhoneNumber
                 });
             }
+
+            if (user != null && dto.Avatar != null)
+                await userAccountService.UploadAvatarAsync(user.Id, dto.Avatar);
 
             UpdateCustomerFields(customer, dto);
             Repo.Update(customer);
@@ -205,6 +212,7 @@ namespace RestX.BLL.Services
                 Email = user?.Email ?? string.Empty,
                 FullName = user?.UserName ?? string.Empty,
                 PhoneNumber = user?.PhoneNumber,
+                AvatarUrl = user?.AvatarUrl,
                 TotalOrders = stats.TotalOrders,
                 TotalReservations = stats.TotalReservations
             };

@@ -1,7 +1,11 @@
+using AutoMapper;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using RestX.BLL.DataTranferObjects.Employee;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Employees;
+using RestX.Models.Identity;
+using RestX.Models.Tenants;
 using RestX.WebApp.Controllers.BaseControllers;
 using System.ComponentModel.DataAnnotations;
 
@@ -12,7 +16,11 @@ namespace RestX.WebApp.Controllers
     public class EmployeesController : BaseController
     {
         private readonly IEmployeeService employeeService;
-        public EmployeesController(IEmployeeService employeeService, IExceptionHandler exceptionHandler) : base(exceptionHandler)
+        public EmployeesController(IEmployeeService employeeService,
+            IMapper mapper,
+            UserManager<ApplicationUser> userManager,
+            IExceptionHandler exceptionHandler,
+            IEnumerable<ActiveTenant> tenant) : base(mapper, userManager, exceptionHandler, tenant)
         {
             this.employeeService = employeeService;
         }
@@ -26,7 +34,7 @@ namespace RestX.WebApp.Controllers
             }
             catch (Exception ex)
             {
-                exceptionHandler.RaiseException(ex);
+                this.ExceptionHandler.RaiseException(ex);
                 return BadRequest(new { success = false, message = "An internal error occurred" });
             }
         }
@@ -44,7 +52,7 @@ namespace RestX.WebApp.Controllers
             }
             catch (Exception ex)
             {
-                exceptionHandler.RaiseException(ex);
+                this.ExceptionHandler.RaiseException(ex);
                 return BadRequest(new { success = false, message = "An internal error occurred" });
             }
         }
@@ -66,7 +74,7 @@ namespace RestX.WebApp.Controllers
             }
             catch (Exception ex)
             {
-                exceptionHandler.RaiseException(ex);
+                this.ExceptionHandler.RaiseException(ex);
                 return BadRequest(new { success = false, message = "An internal error occurred" });
             }
         }
@@ -92,7 +100,7 @@ namespace RestX.WebApp.Controllers
             }
             catch (Exception ex)
             {
-                exceptionHandler.RaiseException(ex);
+                this.ExceptionHandler.RaiseException(ex);
                 return BadRequest(new { success = false, message = "An internal error occurred" });
             }
         }
@@ -110,7 +118,7 @@ namespace RestX.WebApp.Controllers
             }
             catch (Exception ex)
             {
-                exceptionHandler.RaiseException(ex);
+                this.ExceptionHandler.RaiseException(ex);
                 return BadRequest(new { success = false, message = "An internal error occurred" });
             }
         }

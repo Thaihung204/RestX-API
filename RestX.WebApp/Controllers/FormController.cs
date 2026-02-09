@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using RestX.BLL.Helpers;
 using RestX.BLL.Interfaces;
 using RestX.WebApp.Controllers.BaseControllers;
@@ -7,11 +8,13 @@ namespace RestX.WebApp.Controllers;
 
 [Route("api/forms")]
 [ApiController]
+[Authorize(AuthenticationSchemes = "Bearer")]
 public class FormController : BaseController
 {
     public FormController(IExceptionHandler exceptionHandler) : base(exceptionHandler) { }
 
     [HttpGet("get-lists/{name}")]
+    [AllowAnonymous]
     public IActionResult GetLists([FromRoute] string name)
     {
         try

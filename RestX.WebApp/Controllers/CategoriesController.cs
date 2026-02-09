@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using RestX.BLL.Interfaces;
 using RestX.Models.Menu;
 using RestX.WebApp.Controllers.BaseControllers;
@@ -8,6 +9,7 @@ namespace RestX.WebApp.Controllers
 {
     [Route("api/categories")]
     [ApiController]
+    [Authorize(AuthenticationSchemes = "Bearer")]
     public class CategoriesController : BaseController
     {
         private readonly ICategoryService categoryService;
@@ -18,6 +20,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpGet]
+        [AllowAnonymous]
         public async Task<ActionResult<IEnumerable<Category>>> GetAllCategories()
         {
             try
@@ -33,6 +36,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpGet("{id}")]
+        [AllowAnonymous]
         public async Task<ActionResult<Category>> GetCategoryById([Required] Guid id)
         {
             try
@@ -48,6 +52,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpPut("{id}")]
+        [Authorize(Roles = "Admin,System Admin")]
         public async Task<IActionResult> EditCategory([Required] Guid id, [FromBody] Category category)
         {
             try
@@ -63,6 +68,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpPost]
+        [Authorize(Roles = "Admin,System Admin")]
         public async Task<ActionResult<Category>> AddCategory([FromBody] Category category)
         {
             try
@@ -77,6 +83,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Admin,System Admin")]
         public async Task<IActionResult> DeleteCategory([Required] Guid id)
         {
             try

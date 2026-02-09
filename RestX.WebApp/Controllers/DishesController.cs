@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using RestX.BLL.DataTranferObjects.Dish;
 using RestX.BLL.Interfaces;
 using RestX.Models.Menu;
@@ -9,6 +10,7 @@ namespace RestX.WebApp.Controllers
 {
     [Route("api/dishes")]
     [ApiController]
+    [Authorize(AuthenticationSchemes = "Bearer")]
     public class DishesController : BaseController
     {
         private readonly IDishService dishService;
@@ -19,6 +21,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpGet]
+        [AllowAnonymous]
         public async Task<ActionResult<IEnumerable<Dish>>> GetAllDishes([FromQuery] DishSearch searchModel)
         {
             try
@@ -34,6 +37,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpGet("{id}")]
+        [AllowAnonymous]
         public async Task<ActionResult<Dish>> GetDishById([Required] Guid id)
         {
             try
@@ -49,6 +53,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpPut("{id}")]
+        [Authorize(Roles = "Admin,System Admin")]
         public async Task<IActionResult> EditDish([Required] Guid id, [FromForm] DishItem dish)
         {
             try
@@ -64,6 +69,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpPost]
+        [Authorize(Roles = "Admin,System Admin")]
         public async Task<ActionResult<Dish>> AddDish([FromForm] DishItem dish)
         {
             try
@@ -78,6 +84,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Admin,System Admin")]
         public async Task<IActionResult> DeleteDish([Required] Guid id)
         {
             try
@@ -93,6 +100,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpGet("menu")]
+        [AllowAnonymous]
         public async Task<ActionResult<IEnumerable<MenuCategory>>> GetMenu()
         {
             try

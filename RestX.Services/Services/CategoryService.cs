@@ -1,5 +1,5 @@
 ﻿using AutoMapper;
-using Microsoft.AspNetCore.Mvc.Rendering;
+using Microsoft.AspNetCore.Http;
 using Newtonsoft.Json;
 using RestX.BLL.DataTranferObjects.Category;
 using RestX.BLL.Extensions;
@@ -13,7 +13,10 @@ namespace RestX.BLL.Services
     public class CategoryService : BaseService, ICategoryService
     {
         private readonly IMapper mapper;
+        private readonly ICloudinaryService cloudinaryService;
+
         public CategoryService(
+            ICloudinaryService cloudinaryService,
             IMapper mapper,
             IRepository repo,
             IRedisService redisService,
@@ -21,6 +24,7 @@ namespace RestX.BLL.Services
         ) : base(repo, redisService, tenant)
         {
             this.mapper = mapper;
+            this.cloudinaryService = cloudinaryService;
         }
 
         private string GetCacheKey()
@@ -42,6 +46,7 @@ namespace RestX.BLL.Services
 
             return mapper.Map<List<CategoryItem>>(categories);
         }
+
         public async Task<CategoryItem?> GetCategoryById(Guid id)
         {
             var category = await Repo.GetOneAsync<Category>(
@@ -51,33 +56,78 @@ namespace RestX.BLL.Services
             return mapper.Map<CategoryItem>(category);
         }
 
-        public async Task<Category> UpsertCategory(Category model)
+        public async Task<Guid> UpsertCategory(CategoryItem dto)
         {
-            if (model.Id != Guid.Empty)
-            {
-                var category = await Repo.GetByIdAsync<Category>(model.Id);
-                if (category == null)
-                    throw new InvalidOperationException("Category not found");
+            Category category;
 
-                category.Name = model.Name;
-                category.Description = model.Description;
-                category.ImageUrl = model.ImageUrl;
-                category.ParentId = model.ParentId;
-                category.IsActive = model.IsActive;
+            if (dto.Id != null)
+            {
+                category = await Repo.GetByIdAsync<Category>(dto.Id.Value);
+                category.Name = dto.Name;
+                category.Description = dto.Description;
+                category.ParentId = dto.ParentId;
+                category.IsActive = dto.IsActive;
+
+                if (dto.File == null)
+                    category.ImageUrl = dto.ImageUrl;
+                else
+                {
+                    var newImageUrl = await HandleCategoryImageUpload(dto.File, category.Id);
+
+                    if (!string.IsNullOrWhiteSpace(category.ImageUrl))
+                    {
+                        await cloudinaryService.DeleteAsync(
+                            $"{CurrentTenant.Name.Replace(" ", "")}/categories/{category.Id}"
+                        );
+                    }
+
+                    category.ImageUrl = newImageUrl;
+                }
 
                 Repo.Update(category);
                 await Repo.SaveAsync();
 
                 await RedisService.RemoveAsync(GetCacheKey());
 
-                return category;
+                return category.Id;
             }
 
-            await Repo.CreateAsync(model);
+            category = new Category
+            {
+                Id = Guid.NewGuid(),
+                Name = dto.Name,
+                Description = dto.Description,
+                ParentId = dto.ParentId,
+                IsActive = dto.IsActive,
+                ImageUrl = dto.ImageUrl
+            };
+
+            if (dto.File != null)
+            {
+                category.ImageUrl = await HandleCategoryImageUpload(dto.File, category.Id);
+            }
+
+            Repo.Create(category);
+            await Repo.SaveAsync();
 
             await RedisService.RemoveAsync(GetCacheKey());
 
-            return model;
+            return category.Id;
+        }
+
+        private async Task<string> HandleCategoryImageUpload(IFormFile file, Guid categoryId)
+        {
+            using var stream = file.OpenReadStream();
+
+            var uploadResult = await cloudinaryService.UploadAsync(
+                fileStream: stream,
+                fileName: file.FileName,
+                folder: $"{CurrentTenant.Name.Replace(" ", "")}/categories/",
+                publicId: categoryId.ToString(), 
+                overwrite: true
+            );
+
+            return uploadResult.Url;
         }
 
         public async Task DeleteCategory(Guid id)
@@ -85,6 +135,7 @@ namespace RestX.BLL.Services
             var category = await Repo.GetByIdAsync<Category>(id);
             if (category == null)
                 return;
+            await cloudinaryService.DeleteAsync($"{CurrentTenant.Name.Replace(" ", "")}/categories/{id}/{id}");
 
             Repo.Delete<Category>(id);
             await Repo.SaveAsync();

@@ -2,6 +2,7 @@
 using Hangfire;
 using Hangfire.SqlServer;
 using Microsoft.ApplicationInsights.Extensibility;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.HttpLogging;
@@ -95,63 +96,43 @@ namespace RestX.WebApp
             services.AddCors();
             //services.AddSingleton<ICorsPolicyProvider, CustomCorsPolicyProvider>();
 
-            // Cookie Auth
+            // JWT Authentication
             var secret = Configuration.GetSection("AppSettings")["Secret"];
-            services.AddAuthentication()
-                .AddCookie("Cookies")
-                .AddJwtBearer("Bearer", cfg =>
-                {
-                    cfg.RequireHttpsMetadata = false;
-                    cfg.SaveToken = true;
-                    cfg.TokenValidationParameters = new TokenValidationParameters
-                    {
-                        ValidateIssuer = false,
-                        ValidateAudience = false,
-                        IssuerSigningKey = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(secret)),
-                        ClockSkew = TimeSpan.Zero,
-                        ValidateLifetime = true,
-                        RoleClaimType = ClaimTypes.Role //"role"
-                    };
-                });
-
-            // Configure here rather than inline as settings get lost calling JWT as well.
-            services.ConfigureApplicationCookie(cfg =>
+            var jwtSettings = Configuration.GetSection("JwtSettings");
+            services.AddAuthentication(options =>
             {
-                cfg.CookieManager = new RestXCookieManager();
-                cfg.SlidingExpiration = true;
-                cfg.LoginPath = "/login";
-                cfg.LogoutPath = "/logout";
-                cfg.AccessDeniedPath = "/access-denied";
-                cfg.ExpireTimeSpan = TimeSpan.FromHours(10);
-                cfg.EventsType = typeof(RestXCookieAuthenticationEvents);
-                cfg.Events.OnRedirectToAccessDenied = context =>
-                {
-                    if (context.Request.Path.ToString().Contains("/api"))
-                    {
-                        context.Response.Clear();
-                        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                        return Task.CompletedTask;
-                    }
+                options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+                options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+            })
+            .AddJwtBearer("Bearer", cfg =>
+             {
+                 cfg.RequireHttpsMetadata = !isDevlopement;
+                 cfg.SaveToken = true;
+                 cfg.TokenValidationParameters = new TokenValidationParameters
+                 {
+                     ValidateIssuer = !string.IsNullOrEmpty(jwtSettings["Issuer"]),
+                     ValidateAudience = !string.IsNullOrEmpty(jwtSettings["Audience"]),
+                     ValidIssuer = jwtSettings["Issuer"],
+                     ValidAudience = jwtSettings["Audience"],
+                     ValidateIssuerSigningKey = true,
+                     IssuerSigningKey = new SymmetricSecurityKey(
+                         Encoding.ASCII.GetBytes(secret)
+                     ),
+                     ValidateLifetime = true,
+                     ClockSkew = TimeSpan.Zero,
+                     RoleClaimType = ClaimTypes.Role
+                 };
+             });
 
-                    context.Response.Redirect(context.RedirectUri);
-                    return Task.CompletedTask;
-                };
+            services.AddAuthorization(options =>
+            {
+                options.DefaultPolicy = new AuthorizationPolicyBuilder(
+                    JwtBearerDefaults.AuthenticationScheme
+                )
+                .RequireAuthenticatedUser()
+                .Build();
             });
-            //services.AddAuthorization(options =>
-            //{
-            //    var defaultAuthorizationPolicyBuilder = new AuthorizationPolicyBuilder(
-            //        "Cookies",
-            //        "Bearer",
-            //        "Identity.Application");
-            //    defaultAuthorizationPolicyBuilder = defaultAuthorizationPolicyBuilder.RequireAuthenticatedUser();
 
-            //    var entraId = new AuthorizationPolicyBuilder()
-            //        .AddAuthenticationSchemes(OpenIdConnectDefaults.AuthenticationScheme)
-            //        .RequireAuthenticatedUser()
-            //        .Build();
-            //    options.AddPolicy("Entra", entraId);
-            //    options.DefaultPolicy = defaultAuthorizationPolicyBuilder.Build();
-            //});
 
             // MSSQL Hangfire
             services.AddHangfire(x => x.UseSqlServerStorage(Configuration.GetConnectionString("AdminDbContext"),
@@ -159,15 +140,13 @@ namespace RestX.WebApp
                 {
                     QueuePollInterval = TimeSpan.Zero
                 }));
-
+           
             services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
             services.AddHttpContextAccessor();
 
             services.AddApplicationInsightsTelemetry();
 
             services.AddSnapshotCollector();
-
-            services.AddScoped<RestXCookieAuthenticationEvents>();
 
             //services.AddWebOptimizer(BundleHelper.RegisterBundles);
             services.AddAutoMapper(typeof(AutoMapperProfile));
@@ -204,10 +183,10 @@ namespace RestX.WebApp
             {
                 options.AddPolicy("CustomCorsPolicy", builder =>
                 {
-                    builder
-                        .AllowAnyOrigin()
-                        .AllowAnyMethod()
-                        .AllowAnyHeader();
+                        builder
+                            .AllowAnyOrigin()
+                            .AllowAnyMethod()
+                            .AllowAnyHeader();
                 });
             });
 
@@ -293,7 +272,7 @@ namespace RestX.WebApp
 
             if (env.IsProduction())
             {
-            app.UseMiddleware<TenantUnresolvedRedirectMiddleware<ActiveTenant>>("https://restx.food", false);
+                app.UseMiddleware<TenantUnresolvedRedirectMiddleware<ActiveTenant>>("https://restx.food", false);
             }
             //app.UseMiddleware<TenantRedirectMiddleware<ActiveTenant>>();
             //app.UseIpRateLimiting();

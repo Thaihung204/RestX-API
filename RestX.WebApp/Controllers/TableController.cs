@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using RestX.BLL.DataTranferObjects.Table;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Tables;
+using RestX.Models.Enum;
 using RestX.WebApp.Controllers.BaseControllers;
 using System.ComponentModel.DataAnnotations;
 
@@ -84,6 +85,24 @@ namespace RestX.WebApp.Controllers
             {
                 await tableService.DeleteTable(id);
                 return Ok();
+            }
+            catch (Exception ex)
+            {
+                exceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
+        [HttpPut("{id}/status")]
+        public async Task<ActionResult<TableItem>> ChangeStatus([Required] Guid id, [FromBody] TableStatus status)
+        {
+            try
+            {
+                return Ok(await tableService.ChangeTableStatus(id, status));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
             }
             catch (Exception ex)
             {

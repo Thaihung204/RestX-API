@@ -3,6 +3,7 @@ using RestX.BLL.DataTranferObjects.Table;
 using RestX.BLL.Extensions;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Tables;
+using RestX.Models.Enum;
 using RestX.Models.Tables;
 using RestX.Models.Tenants;
 
@@ -89,6 +90,11 @@ namespace RestX.BLL.Services
             Repo.Delete<Table>(id);
             await Repo.SaveAsync();
             await RedisService.RemoveAsync(GetCacheKey());
+        }
+
+        public Task<TableItem> ChangeTableStatus(Guid id, TableStatus status)
+        {
+            throw new NotImplementedException();
         }
     }
 }

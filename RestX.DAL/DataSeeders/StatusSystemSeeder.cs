@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using RestX.DAL.Context;
 using RestX.Models.Common;
+using RestX.Models.Enum;
 using Serilog;
 
 namespace RestX.DAL.DataSeeders
@@ -33,11 +34,11 @@ namespace RestX.DAL.DataSeeders
         {
             return new List<StatusType>
             {
-                new() { Id = Guid.NewGuid(), Code = "ORDER_STATUS" },
-                new() { Id = Guid.NewGuid(), Code = "PAYMENT_STATUS" },
-                new() { Id = Guid.NewGuid(), Code = "RESERVATION_STATUS" },
-                new() { Id = Guid.NewGuid(), Code = "TABLE_STATUS" },
-                new() { Id = Guid.NewGuid(), Code = "ITEM_STATUS" }
+                new() { Code = "ORDER_STATUS" },
+                new() { Code = "PAYMENT_STATUS" },
+                new() { Code = "RESERVATION_STATUS" },
+                new() { Code = "TABLE_STATUS" },
+                new() { Code = "ITEM_STATUS" }
             };
         }
         private static List<StatusValue> CreateStatusValues(List<StatusType> statusTypes)
@@ -46,57 +47,51 @@ namespace RestX.DAL.DataSeeders
             var typeMap = statusTypes.ToDictionary(t => t.Code, t => t.Id);
             values.AddRange(CreateValuesForType(typeMap["ORDER_STATUS"], new[]
             {
-                ("RESERVED", "Reserved", "#FFA500"),
-                ("SERVING", "Serving", "#9C27B0"),
-                ("COMPLETED", "Completed", "#4CAF50"),
-                ("DELETED", "Deleted", "#F44336")
+                (nameof(OrderStatus.Reserved), "Reserved", "#FFA500", true),
+                (nameof(OrderStatus.Serving), "Serving", "#9C27B0", false),
+                (nameof(OrderStatus.Completed), "Completed", "#4CAF50", false),
+                (nameof(OrderStatus.Cancelled), "Cancelled", "#F44336", false)
             }));
-
-            values.AddRange(CreateValuesForType(typeMap["PAYMENT_STATUS"], new[]
-            {
-                ("UNPAID", "Unpaid", "#FF9800"),
-                ("PAID", "Paid", "#4CAF50"),
-                ("REFUNDED", "Refunded", "#9E9E9E")
-            }));
-
-            values.AddRange(CreateValuesForType(typeMap["RESERVATION_STATUS"], new[]
-            {
-                ("PENDING", "Pending", "#FFA500"),
-                ("CONFIRMED", "Confirmed", "#4CAF50"),
-                ("COMPLETED", "Completed", "#00C853"),
-                ("CANCELLED", "Cancelled", "#F44336")
-            }));
-
             values.AddRange(CreateValuesForType(typeMap["TABLE_STATUS"], new[]
             {
-                ("AVAILABLE", "Available", "#4CAF50"),
-                ("RESERVED", "Reserved", "#FF9800"),
-                ("OCCUPIED", "Occupied", "#F44336")
+                (nameof(TableStatus.Available), "Available", "#4CAF50", true),
+                (nameof(TableStatus.Reserved), "Reserved", "#FF9800", false),
+                (nameof(TableStatus.Occupied), "Occupied", "#F44336", false)
             }));
-
+            values.AddRange(CreateValuesForType(typeMap["PAYMENT_STATUS"], new[]
+            {
+                ("UNPAID", "Unpaid", "#FF9800", true),
+                ("PAID", "Paid", "#4CAF50", false),
+                ("REFUNDED", "Refunded", "#9E9E9E", false)
+            }));
+            values.AddRange(CreateValuesForType(typeMap["RESERVATION_STATUS"], new[]
+            {
+                ("PENDING", "Pending", "#FFA500", true),
+                ("CONFIRMED", "Confirmed", "#4CAF50", false),
+                ("COMPLETED", "Completed", "#00C853", false),
+                ("CANCELLED", "Cancelled", "#F44336", false)
+            }));
             values.AddRange(CreateValuesForType(typeMap["ITEM_STATUS"], new[]
             {
-                ("PENDING", "Pending", "#FFA500"),
-                ("PREPARING", "Preparing", "#2196F3"),
-                ("READY", "Ready", "#00C853"),
-                ("SERVED", "Served", "#9C27B0"),
-                ("CANCELLED", "Cancelled", "#F44336")
+                ("PENDING", "Pending", "#FFA500", true),
+                ("PREPARING", "Preparing", "#2196F3", false),
+                ("READY", "Ready", "#00C853", false),
+                ("SERVED", "Served", "#9C27B0", false),
+                ("CANCELLED", "Cancelled", "#F44336", false)
             }));
-
             return values;
         }
         private static IEnumerable<StatusValue> CreateValuesForType(
-            Guid typeId,
-            (string Code, string Name, string Color)[] definitions)
+            int typeId,
+            (string Code, string Name, string Color, bool IsDefault)[] definitions)
         {
             return definitions.Select(d => new StatusValue
             {
-                Id = Guid.NewGuid(),
                 StatusTypeId = typeId,
                 Code = d.Code,
                 Name = d.Name,
                 ColorCode = d.Color,
-                IsActive = true
+                IsDefault = d.IsDefault
             });
         }
     }

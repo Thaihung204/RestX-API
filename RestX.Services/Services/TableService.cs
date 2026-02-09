@@ -30,7 +30,7 @@ namespace RestX.BLL.Services
             {
                 tables = (await Repo.GetAllAsync<Table>(
                         orderBy: q => q.OrderBy(t => t.Code),
-                        includeProperties: "TableStatus,Table3DModel"
+                        includeProperties: "Table3DModel"
                     )).ToList();
                 await RedisService.SetAsync(GetCacheKey(), tables);
             }
@@ -41,7 +41,7 @@ namespace RestX.BLL.Services
         {
             var table = await Repo.GetOneAsync<Table>(
                 filter: t => t.Id == id,
-                includeProperties: "TableStatus,Table3DModel"
+                includeProperties: "Table3DModel"
             );
             return mapper.Map<TableItem>(table);
         }

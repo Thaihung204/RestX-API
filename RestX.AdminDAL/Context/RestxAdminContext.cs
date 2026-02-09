@@ -30,7 +30,11 @@ public partial class RestxAdminContext : IdentityDbContext<Admin>
     {
         modelBuilder.Entity<Admin>();
 
-        modelBuilder.Entity<Tenant>();
+        modelBuilder.Entity<Tenant>(entity =>
+        {
+            entity.HasIndex(x => x.Hostname)
+                  .IsUnique();
+        });
 
         modelBuilder.Entity<TenantSetting>();
 

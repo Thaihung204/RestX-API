@@ -1,4 +1,6 @@
-﻿public class TenantItem
+﻿using Microsoft.AspNetCore.Http;
+
+public class TenantItem
 {
     public Guid? Id { get; set; }
     public string Name { get; set; }
@@ -8,6 +10,10 @@
     public string? LogoUrl { get; set; }
     public string? FaviconUrl { get; set; }
     public string? BackgroundUrl { get; set; }
+    // Uploads (multipart/form-data)
+    public IFormFile? LogoFile { get; set; }
+    public IFormFile? FaviconFile { get; set; }
+    public IFormFile? BackgroundFile { get; set; }
 
     public string? BaseColor { get; set; }
     public string? PrimaryColor { get; set; }

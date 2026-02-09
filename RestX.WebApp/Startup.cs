@@ -27,6 +27,7 @@ using RestX.BLL.Services;
 using RestX.DAL.Context;
 using RestX.Models.Identity;
 using RestX.Models.Tenants;
+using RestX.WebApp.Extensions;
 using SaasKit.Multitenancy;
 using SaasKit.Multitenancy.Internal;
 using System.Security.Claims;
@@ -316,7 +317,7 @@ namespace RestX.WebApp
             app.UseAuthentication();
             app.UseAuthorization();
             app.UseMiddleware<TelemetryExtender>();
-
+            app.ApplyMigrations();
             app.UseEndpoints(endpoints =>
             {
                 endpoints.MapControllers();

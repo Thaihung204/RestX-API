@@ -67,6 +67,7 @@ builder.Services.AddScoped<IRepository, EntityFrameworkRepository<RestxAdminCont
 builder.Services.AddScoped<ITenantService, TenantService>();
 builder.Services.AddScoped<IExceptionHandler, ExceptionHandler>();
 builder.Services.AddScoped<IRedisService, RedisService>();
+builder.Services.AddScoped<ICloudinaryService, CloudinaryService>();
 builder.Services.AddIdentity<Admin, IdentityRole>().AddEntityFrameworkStores<RestxAdminContext>().AddDefaultTokenProviders();
 builder.Services.Configure<ConnectionStrings>(builder.Configuration.GetSection("ConnectionStrings"));
 

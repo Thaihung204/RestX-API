@@ -1,4 +1,5 @@
 ﻿using AutoMapper;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
@@ -21,8 +22,10 @@ namespace RestX.BLL.Services
         private readonly IRepository adminRepo;
         private readonly IMapper mapper;
         private readonly IConfiguration configuration;
-        public TenantService(RestxAdminContext restxAdminContext, IRepository repo, IRedisService redisService, IMapper mapper, IConfiguration configuration, IEnumerable<ActiveTenant> tenant = null) : base(repo, redisService, tenant)
+        private readonly ICloudinaryService cloudinaryService;
+        public TenantService(ICloudinaryService cloudinaryService, RestxAdminContext restxAdminContext, IRepository repo, IRedisService redisService, IMapper mapper, IConfiguration configuration, IEnumerable<ActiveTenant> tenant = null) : base(repo, redisService, tenant)
         {
+            this.cloudinaryService = cloudinaryService;
             this.adminContext = restxAdminContext;
             this.adminRepo = repo;
             this.mapper = mapper;
@@ -85,14 +88,29 @@ namespace RestX.BLL.Services
 
                 tenant = await adminRepo.GetByIdAsync<Tenant>(model.Id);
 
+                if (model.LogoFile != null)
+                {
+                    await cloudinaryService.DeleteAsync($"{tenant.Name.Replace(" ", "")}/LogoUrl/logo");
+                    tenant.LogoUrl = await HandleUploadTenantImage(model.LogoFile, $"{tenant.Name.Replace(" ", "")}/LogoUrl", "logo") ?? tenant.LogoUrl;
+                }
+
+                if (model.FaviconFile != null)
+                {
+                    await cloudinaryService.DeleteAsync($"{tenant.Name.Replace(" ", "")}/FaviconUrl/favicon");
+                    tenant.FaviconUrl = await HandleUploadTenantImage(model.FaviconFile, $"{tenant.Name.Replace(" ", "")}/FaviconUrl", "favicon") ?? tenant.FaviconUrl;
+                }
+
+                if (model.BackgroundFile != null)
+                {
+                    await cloudinaryService.DeleteAsync($"{tenant.Name.Replace(" ", "")}/BackgroundUrl/background");
+                    tenant.BackgroundUrl = await HandleUploadTenantImage(model.BackgroundFile, $"{tenant.Name.Replace(" ", "")}/BackgroundUrl", "background") ?? tenant.BackgroundUrl;
+                }
+
                 tenant.Prefix = model.Prefix
                     ?? string.Join("", model.Name.Split(" ", System.StringSplitOptions.RemoveEmptyEntries)
                         .Select(w => w.Substring(0, 1).ToUpper()).ToList());
 
                 tenant.Name = model.Name;
-                tenant.LogoUrl = model.LogoUrl ?? string.Empty;
-                tenant.FaviconUrl = model.FaviconUrl ?? string.Empty;
-                tenant.BackgroundUrl = model.BackgroundUrl ?? string.Empty;
 
                 tenant.BaseColor = model.BaseColor ?? "#FF380B";
                 tenant.PrimaryColor = model.PrimaryColor ?? "#6b7280";
@@ -196,12 +214,28 @@ namespace RestX.BLL.Services
                     AboutUs = model.AboutUs ?? string.Empty
                 };
 
+                tenant.LogoUrl = await HandleUploadTenantImage(model.LogoFile, $"{tenant.Name.Replace(" ", "")}/LogoUrl", "logo") ?? tenant.LogoUrl;
+                tenant.FaviconUrl = await HandleUploadTenantImage(model.FaviconFile, $"{tenant.Name.Replace(" ", "")}/FaviconUrl", "favicon") ?? tenant.FaviconUrl;
+                tenant.BackgroundUrl = await HandleUploadTenantImage(model.BackgroundFile, $"{tenant.Name.Replace(" ", "")}/BackgroundUrl", "background") ?? tenant.BackgroundUrl;
+
                 await Repo.CreateAsync(tenant);
                 await SeedTenantDataAsync(tenant);
             }
             return tenant;
         }
+        private async Task<string?> HandleUploadTenantImage(IFormFile? file, string folder, string publicId)
+        {
+            await using var stream = file.OpenReadStream();
 
+            var upload = await cloudinaryService.UploadAsync(
+                stream,
+                file.FileName,
+                folder,
+                publicId: publicId,
+                overwrite: true);
+
+            return upload?.Url;
+        }
 
         private async Task SeedTenantDataAsync(Tenant tenant)
         {

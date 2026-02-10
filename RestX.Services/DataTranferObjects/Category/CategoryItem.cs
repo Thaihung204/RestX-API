@@ -1,18 +1,16 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using Microsoft.AspNetCore.Http;
 
 namespace RestX.BLL.DataTranferObjects.Category
 {
     public class CategoryItem
     {
-        public Guid Id { get; set; }
+        public Guid? Id { get; set; }
 
         public string Name { get; set; } = null!;
 
         public string? Description { get; set; }
+
+        public IFormFile? File { get; set; }
 
         public string? ImageUrl { get; set; }
 
@@ -20,6 +18,6 @@ namespace RestX.BLL.DataTranferObjects.Category
 
         public bool IsActive { get; set; }
 
-        public List<CategoryItem> CategoryChildrens { get; set; } = new();
+        public List<CategoryItem>? CategoryChildrens { get; set; } = new();
     }
 }

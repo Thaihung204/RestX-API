@@ -31,7 +31,7 @@ namespace RestX.BLL.Services
             {
                 tables = (await Repo.GetAllAsync<Table>(
                         orderBy: q => q.OrderBy(t => t.Code),
-                        includeProperties: "TableStatus,Table3DModel"
+                        includeProperties: "Table3DModel"
                     )).ToList();
                 await RedisService.SetAsync(GetCacheKey(), tables);
             }
@@ -42,7 +42,7 @@ namespace RestX.BLL.Services
         {
             var table = await Repo.GetOneAsync<Table>(
                 filter: t => t.Id == id,
-                includeProperties: "TableStatus,Table3DModel"
+                includeProperties: "Table3DModel"
             );
             return mapper.Map<TableItem>(table);
         }
@@ -92,9 +92,18 @@ namespace RestX.BLL.Services
             await RedisService.RemoveAsync(GetCacheKey());
         }
 
-        public Task<TableItem> ChangeTableStatus(Guid id, TableStatus status)
+        public async Task<TableItem> ChangeTableStatus(Guid id, TableStatus status)
         {
-            throw new NotImplementedException();
+            var table = await Repo.GetByIdAsync<Table>(id);
+
+            table.TableStatusId = status;
+
+            Repo.Update(table);
+            await Repo.SaveAsync();
+
+            await RedisService.RemoveAsync(GetCacheKey());
+
+            return mapper.Map<TableItem>(table);
         }
     }
 }

@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace RestX.Models.Common
 {
-    public partial class StatusType : Entity<Guid>
+    public partial class StatusType : Entity<int>
     {
         [Required, MaxLength(50)]
         public string Code { get; set; } = string.Empty;

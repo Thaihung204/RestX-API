@@ -8,9 +8,9 @@ using System.Threading.Tasks;
 
 namespace RestX.Models.Common
 {
-    public partial class StatusValue : Entity<Guid>
+    public partial class StatusValue : Entity<int>
     {
-        public Guid StatusTypeId { get; set; }
+        public int StatusTypeId { get; set; }
 
         [Required]
         [MaxLength(50)]
@@ -22,7 +22,7 @@ namespace RestX.Models.Common
 
         [MaxLength(7)]
         public string ColorCode { get; set; } = string.Empty;
-        public bool IsActive { get; set; } = true;
+        public bool IsDefault { get; set; } = false;
 
         public virtual StatusType StatusType { get; set; } = null!;
     }

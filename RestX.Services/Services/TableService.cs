@@ -1,4 +1,5 @@
 using AutoMapper;
+using QRCoder;
 using RestX.BLL.DataTranferObjects.Table;
 using RestX.BLL.Extensions;
 using RestX.BLL.Interfaces;
@@ -12,17 +13,14 @@ namespace RestX.BLL.Services
     public class TableService : BaseService, ITableService
     {
         private readonly IMapper mapper;
-        private readonly IQRCodeService qrCodeService;
         public TableService(
             IMapper mapper,
-            IQRCodeService qrCodeService,
             IRepository repo,
             IRedisService redisService,
             IEnumerable<ActiveTenant> tenant = null
         ) : base(repo, redisService, tenant)
         {
             this.mapper = mapper;
-            this.qrCodeService = qrCodeService;
         }
 
         private string GetCacheKey()
@@ -84,7 +82,7 @@ namespace RestX.BLL.Services
             await Repo.SaveAsync();
             if (string.IsNullOrEmpty(table.QRCodeUrl) && CurrentTenant != null)
             {
-                table.QRCodeUrl = qrCodeService.GenerateTableQRCode(table.Id, CurrentTenant.Hostname);
+                table.QRCodeUrl = GenerateTableQRCode(table.Id, CurrentTenant.Hostname);
                 Repo.Update(table);
                 await Repo.SaveAsync();
             }
@@ -101,5 +99,22 @@ namespace RestX.BLL.Services
             await Repo.SaveAsync();
             await RedisService.RemoveAsync(GetCacheKey());
         }
+
+        #region QR Code Generation
+        private string GenerateTableQRCode(Guid tableId, string tenantHostname)
+        {
+            var url = $"https://{tenantHostname}/customer/{tableId}";
+            using (QRCodeGenerator qrGenerator = new QRCodeGenerator())
+            {
+                QRCodeData qrCodeData = qrGenerator.CreateQrCode(url, QRCodeGenerator.ECCLevel.Q);
+                using (PngByteQRCode qrCode = new PngByteQRCode(qrCodeData))
+                {
+                    byte[] qrCodeBytes = qrCode.GetGraphic(20);
+                    string base64String = Convert.ToBase64String(qrCodeBytes);
+                    return $"data:image/png;base64,{base64String}";
+                }
+            }
+        }
+        #endregion
     }
 }

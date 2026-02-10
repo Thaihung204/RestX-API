@@ -31,7 +31,6 @@ namespace RestX.BLL.Helpers
             services.AddScoped<IDishService, DishService>();
             services.AddScoped<ICategoryService, CategoryService>();
             services.AddScoped<ITableService, TableService>();
-            services.AddScoped<IQRCodeService, QRCodeService>();
         }
     }
 }

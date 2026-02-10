@@ -11,14 +11,17 @@ namespace RestX.BLL.Services
     public class TableService : BaseService, ITableService
     {
         private readonly IMapper mapper;
+        private readonly IQRCodeService qrCodeService;
         public TableService(
             IMapper mapper,
+            IQRCodeService qrCodeService,
             IRepository repo,
             IRedisService redisService,
             IEnumerable<ActiveTenant> tenant = null
         ) : base(repo, redisService, tenant)
         {
             this.mapper = mapper;
+            this.qrCodeService = qrCodeService;
         }
 
         private string GetCacheKey()
@@ -77,6 +80,12 @@ namespace RestX.BLL.Services
                 await Repo.CreateAsync(table);
             }
             await Repo.SaveAsync();
+            if (string.IsNullOrEmpty(table.QRCodeUrl) && CurrentTenant != null)
+            {
+                table.QRCodeUrl = qrCodeService.GenerateTableQRCode(table.Id, CurrentTenant.Hostname);
+                Repo.Update(table);
+                await Repo.SaveAsync();
+            }
             await RedisService.RemoveAsync(GetCacheKey());
             return mapper.Map<TableItem>(table);
         }

@@ -35,6 +35,15 @@ jobs:
         push: true
         tags: |
           ${{ secrets.DOCKER_USERNAME }}/restx-app:latest
+          
+    - name: Build & Push Proxy
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: RestX.Proxy/Dockerfile
+        push: true
+        tags: |
+          ${{ secrets.DOCKER_USERNAME }}/restx-proxy:latest
 
     # ======================
     # CD: Deploy to VPS

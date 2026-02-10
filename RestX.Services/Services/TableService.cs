@@ -22,7 +22,7 @@ namespace RestX.BLL.Services
         }
 
         private string GetCacheKey()
-            => $"{CurrentTenant?.Id}:tables";
+            => $"Table:{CurrentTenant.Hostname}";
         public async Task<IEnumerable<TableItem>> GetAllTables()
         {
             var tables = await RedisService.GetAsync<List<Table>>(GetCacheKey());

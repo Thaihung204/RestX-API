@@ -24,7 +24,7 @@ namespace RestX.BLL.Services
         }
 
         private string GetCacheKey()
-            => $"{CurrentTenant?.Id}:category";
+            => $"Category:{CurrentTenant.Hostname}";
 
         public async Task<IEnumerable<CategoryItem>> GetAllCategories()
         {

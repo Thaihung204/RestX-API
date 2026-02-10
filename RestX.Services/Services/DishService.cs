@@ -301,7 +301,7 @@ namespace RestX.BLL.Services
             var uploadResult = await cloudinaryService.UploadAsync(
                 fileStream: stream,
                 fileName: imgDto.File.FileName,
-                folder: $"{CurrentTenant.Name.Replace(" ", "")}//dishes/{dishId}",
+                folder: $"{CurrentTenant.Name.Replace(" ", "")}/dishes/{dishId}",
                 publicId: newImageId.ToString(),
                 overwrite: true
             );

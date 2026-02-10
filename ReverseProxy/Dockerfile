@@ -1,7 +1,7 @@
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
-COPY ReverseProxy/ReverseProxy.csproj .
+COPY ReverseProxy.csproj .
 RUN dotnet restore
 
 COPY . .

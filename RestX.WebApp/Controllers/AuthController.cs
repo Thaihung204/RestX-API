@@ -1,8 +1,12 @@
+using AutoMapper;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using RestX.BLL.DataTranferObjects.Authentication;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Auth;
+using RestX.Models.Identity;
+using RestX.Models.Tenants;
 using RestX.WebApp.Controllers.BaseControllers;
 using System.Security.Claims;
 
@@ -13,7 +17,11 @@ namespace RestX.WebApp.Controllers
     public class AuthController : BaseController
     {
         private readonly IAuthService authService;
-        public AuthController(IAuthService authService, IExceptionHandler exceptionHandler) : base(exceptionHandler)
+        public AuthController(IAuthService authService,
+            IMapper mapper,
+            UserManager<ApplicationUser> userManager,
+            IExceptionHandler exceptionHandler,
+            IEnumerable<ActiveTenant> tenant) : base(mapper, userManager, exceptionHandler, tenant)
         {
             this.authService = authService;
         }
@@ -36,7 +44,7 @@ namespace RestX.WebApp.Controllers
             }
             catch (Exception ex)
             {
-                exceptionHandler.RaiseException(ex);
+                this.ExceptionHandler.RaiseException(ex);
                 return BadRequest(AuthResponse.FailureResponse("An internal error occurred"));
             }
         }
@@ -60,7 +68,7 @@ namespace RestX.WebApp.Controllers
             }
             catch (Exception ex)
             {
-                exceptionHandler.RaiseException(ex);
+                this.ExceptionHandler.RaiseException(ex);
                 return BadRequest(AuthResponse.FailureResponse("An internal error occurred"));
             }
         }
@@ -89,7 +97,7 @@ namespace RestX.WebApp.Controllers
             }
             catch (Exception ex)
             {
-                exceptionHandler.RaiseException(ex);
+                this.ExceptionHandler.RaiseException(ex);
                 return BadRequest(AuthResponse.FailureResponse("An internal error occurred"));
             }
         }
@@ -112,7 +120,7 @@ namespace RestX.WebApp.Controllers
             }
             catch (Exception ex)
             {
-                exceptionHandler.RaiseException(ex);
+                this.ExceptionHandler.RaiseException(ex);
                 return BadRequest(AuthResponse.FailureResponse("An internal error occurred"));
             }
         }
@@ -135,7 +143,7 @@ namespace RestX.WebApp.Controllers
             }
             catch (Exception ex)
             {
-                exceptionHandler.RaiseException(ex);
+                this.ExceptionHandler.RaiseException(ex);
                 return BadRequest(AuthResponse.FailureResponse("An internal error occurred"));
             }
         }
@@ -158,7 +166,7 @@ namespace RestX.WebApp.Controllers
             }
             catch (Exception ex)
             {
-                exceptionHandler.RaiseException(ex);
+                this.ExceptionHandler.RaiseException(ex);
                 return BadRequest(AuthResponse.FailureResponse("An internal error occurred"));
             }
         }
@@ -186,7 +194,7 @@ namespace RestX.WebApp.Controllers
             }
             catch (Exception ex)
             {
-                exceptionHandler.RaiseException(ex);
+                this.ExceptionHandler.RaiseException(ex);
                 return BadRequest(AuthResponse.FailureResponse("An internal error occurred"));
             }
         }
@@ -209,7 +217,7 @@ namespace RestX.WebApp.Controllers
             }
             catch (Exception ex)
             {
-                exceptionHandler.RaiseException(ex);
+                this.ExceptionHandler.RaiseException(ex);
                 return BadRequest(AuthResponse.FailureResponse("An internal error occurred"));
             }
         }
@@ -232,7 +240,7 @@ namespace RestX.WebApp.Controllers
             }
             catch (Exception ex)
             {
-                exceptionHandler.RaiseException(ex);
+                this.ExceptionHandler.RaiseException(ex);
                 return BadRequest(AuthResponse.FailureResponse("An internal error occurred"));
             }
         }

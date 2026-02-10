@@ -21,7 +21,7 @@ namespace RestX.Models.Orders
         [MaxLength(500)]
         public string? Note { get; set; }
 
-        public Guid ItemStatusId { get; set; }
+        public int ItemStatusId { get; set; }
 
         public virtual Order Order { get; set; } = null!;
         public virtual Dish Dish { get; set; } = null!;

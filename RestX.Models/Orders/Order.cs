@@ -1,6 +1,7 @@
 ﻿using RestX.Models.BaseModel;
 using RestX.Models.Common;
 using RestX.Models.Customers;
+using RestX.Models.Enum;
 using RestX.Models.Feedbacks;
 using RestX.Models.HR;
 using RestX.Models.Loyalty;
@@ -24,8 +25,8 @@ namespace RestX.Models.Orders
 
         public Guid? CustomerId { get; set; }
         public Guid? ReservationId { get; set; }
-        public Guid OrderStatusId { get; set; }
-        public Guid PaymentStatusId { get; set; }
+        public OrderStatus OrderStatusId { get; set; }
+        public int PaymentStatusId { get; set; }
 
         [Column(TypeName = "decimal(18,2)")]
         [Range(0, 999999999.99)]
@@ -55,7 +56,6 @@ namespace RestX.Models.Orders
 
         public virtual Customer? Customer { get; set; }
         public virtual Reservation? Reservation { get; set; }
-        public virtual StatusValue OrderStatus { get; set; }
         public virtual StatusValue PaymentStatus { get; set; }
         public virtual Employee? Handler { get; set; }
         public virtual ICollection<OrderDetail> OrderDetails { get; set; } = new HashSet<OrderDetail>();

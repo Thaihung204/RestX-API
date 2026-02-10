@@ -1,3 +1,4 @@
+using RestX.Models.Enum;
 using System;
 using System.ComponentModel.DataAnnotations;
 
@@ -34,7 +35,7 @@ namespace RestX.BLL.DataTranferObjects.Table
         [MaxLength(500)]
         [Url]
         public string? DefaultViewUrl { get; set; }
-        public Guid TableStatusId { get; set; }
+        public TableStatus TableStatusId { get; set; }
         public string? TableStatusName { get; set; }
         public bool IsActive { get; set; } = true;
     }

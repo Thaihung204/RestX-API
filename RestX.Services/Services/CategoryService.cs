@@ -68,19 +68,12 @@ namespace RestX.BLL.Services
                 category.ParentId = dto.ParentId;
                 category.IsActive = dto.IsActive;
 
-                if (dto.File == null)
-                    category.ImageUrl = dto.ImageUrl;
+                await cloudinaryService.DeleteAsync($"{CurrentTenant.Name.Replace(" ", "")}/categories/{category.Id}");
+
+                if (dto.File == null) category.ImageUrl = dto.ImageUrl;
                 else
                 {
                     var newImageUrl = await HandleCategoryImageUpload(dto.File, category.Id);
-
-                    if (!string.IsNullOrWhiteSpace(category.ImageUrl))
-                    {
-                        await cloudinaryService.DeleteAsync(
-                            $"{CurrentTenant.Name.Replace(" ", "")}/categories/{category.Id}"
-                        );
-                    }
-
                     category.ImageUrl = newImageUrl;
                 }
 

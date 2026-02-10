@@ -1,5 +1,5 @@
 ﻿using RestX.Models.BaseModel;
-using RestX.Models.Common;
+using RestX.Models.Enum;
 using RestX.Models.Orders;
 using RestX.Models.Reservations;
 using System;
@@ -58,11 +58,8 @@ namespace RestX.Models.Tables
         [Url]
         public string? DefaultViewUrl { get; set; }
 
-        public Guid TableStatusId { get; set; }
-
+        public TableStatus TableStatusId { get; set; }
         public bool IsActive { get; set; } = true;
-
-        public virtual StatusValue TableStatus { get; set; }
         public virtual Table3DModel? Table3DModel { get; set; }
         public virtual ICollection<TableSession> TableSessions { get; set; } = new HashSet<TableSession>();
         public virtual ICollection<ReservationTable> ReservationTables { get; set; } = new HashSet<ReservationTable>();

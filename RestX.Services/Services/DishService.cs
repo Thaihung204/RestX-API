@@ -363,6 +363,8 @@ namespace RestX.BLL.Services
                     Id = d.Id,
                     CategoryId = d.CategoryId,
                     CategoryName = d.Category?.Name ?? string.Empty,
+                    Price = d.Price,
+                    Description = d.Description,
                     ImageUrl = mainImageUrl
                 };
             }).ToList();

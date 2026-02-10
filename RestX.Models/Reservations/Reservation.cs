@@ -24,7 +24,7 @@ namespace RestX.Models.Reservations
         [MaxLength(1000)]
         public string? SpecialRequests { get; set; }
 
-        public Guid ReservationStatusId { get; set; }
+        public int ReservationStatusId { get; set; }
 
         [Column(TypeName = "decimal(18,2)")]
         [Range(0, 999999999.99)]

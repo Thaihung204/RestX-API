@@ -20,7 +20,7 @@ namespace RestX.Models.HR
 
         public TimeSpan EndTime { get; set; }
 
-        public Guid StatusId { get; set; }
+        public int StatusId { get; set; }
 
         public DateTime? CheckInTime { get; set; }
 

@@ -76,7 +76,7 @@ namespace RestX.WebApp.Controllers
             }
         }
         [HttpPut("{id}")]
-        [Authorize(Roles = "Admin,System Admin,Kitchen Staff,Waiter")]
+        [Authorize(Roles = "Admin,System Admin")]
         public async Task<IActionResult> UpdateEmployee([Required] Guid id, [FromForm] UpdateEmployee dto)
         {
             try

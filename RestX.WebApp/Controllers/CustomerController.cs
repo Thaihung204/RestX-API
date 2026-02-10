@@ -54,7 +54,7 @@ namespace RestX.WebApp.Controllers
             }
         }
         [HttpPost]
-        [Authorize(Roles = "Admin,System Admin")]
+        [Authorize(Roles = "Admin,System Admin,Customer")]
         public async Task<IActionResult> CreateCustomer([FromForm] CreateCustomer dto)
         {
             try

@@ -3,6 +3,7 @@ using RestX.BLL.DataTranferObjects.Table;
 using RestX.BLL.Extensions;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Tables;
+using RestX.Models.Enum;
 using RestX.Models.Tables;
 using RestX.Models.Tenants;
 
@@ -77,6 +78,7 @@ namespace RestX.BLL.Services
             else
             {
                 table = mapper.Map<Table>(request);
+                table.TableStatusId = TableStatus.Available;
                 await Repo.CreateAsync(table);
             }
             await Repo.SaveAsync();

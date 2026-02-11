@@ -83,7 +83,7 @@ namespace RestX.BLL.Helpers
                 .ForMember(dest => dest.Table3DModel, opt => opt.Ignore());
 
             CreateMap<StatusValue, StatusValueItem>();
-            CreateMap<UpsertStatusValueRequest, StatusValue>()
+            CreateMap<StatusValueItem, StatusValue>()
                 .ForMember(dest => dest.Id, opt => opt.Ignore())
                 .ForMember(dest => dest.StatusTypeId, opt => opt.Ignore())
                 .ForMember(dest => dest.StatusType, opt => opt.Ignore());

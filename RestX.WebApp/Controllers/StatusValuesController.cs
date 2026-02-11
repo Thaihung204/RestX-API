@@ -50,7 +50,6 @@ public class StatusValuesController : BaseController
             var data = await statusValueService.GetById(id);
             if (data == null)
                 return NotFound(new { success = false, message = "Status value not found" });
-
             return Ok(new { success = true, data });
         }
         catch (Exception ex)
@@ -63,7 +62,7 @@ public class StatusValuesController : BaseController
     [HttpPost("{typeCode}")]
     public async Task<ActionResult<StatusValueItem>> Create(
         [FromRoute] string typeCode,
-        [FromBody] UpsertStatusValueRequest request)
+        [FromBody] StatusValueItem request)
     {
         try
         {
@@ -81,7 +80,7 @@ public class StatusValuesController : BaseController
     public async Task<ActionResult<StatusValueItem>> Update(
         [FromRoute] string typeCode,
         [Required] int id,
-        [FromBody] UpsertStatusValueRequest request)
+        [FromBody] StatusValueItem request)
     {
         try
         {
@@ -100,7 +99,7 @@ public class StatusValuesController : BaseController
     {
         try
         {
-            await statusValueService.Delete(id);
+            await statusValueService.Delete(typeCode, id);
             return Ok(new { success = true });
         }
         catch (Exception ex)

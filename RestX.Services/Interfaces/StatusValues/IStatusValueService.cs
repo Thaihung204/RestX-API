@@ -6,7 +6,7 @@ namespace RestX.BLL.Interfaces.StatusValues
     {
         Task<IEnumerable<StatusValueItem>> GetByType(string typeCode);
         Task<StatusValueItem?> GetById(int id);
-        Task<StatusValueItem> Upsert(string typeCode, int? id, UpsertStatusValueRequest request);
-        Task Delete(int id);
+        Task<StatusValueItem> Upsert(string typeCode, int? id, StatusValueItem request);
+        Task Delete(string typeCode, int id);
     }
 }

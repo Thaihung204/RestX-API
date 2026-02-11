@@ -38,13 +38,11 @@ namespace RestX.BLL.Services
             var cached = await RedisService.GetAsync<List<StatusValueItem>>(cacheKey);
             if (cached != null)
                 return cached;
-
             var statusType = await GetStatusTypeOrThrow(typeCode);
             var values = (await Repo.GetAsync<StatusValue>(
                 filter: sv => sv.StatusTypeId == statusType.Id,
                 orderBy: q => q.OrderBy(sv => sv.Id)
             )).ToList();
-
             var result = mapper.Map<List<StatusValueItem>>(values);
             await RedisService.SetAsync(cacheKey, result);
             return result;
@@ -60,13 +58,11 @@ namespace RestX.BLL.Services
         {
             var statusType = await GetStatusTypeOrThrow(typeCode);
             StatusValue entity;
-
             if (id.HasValue && id.Value > 0)
             {
                 entity = await Repo.GetByIdAsync<StatusValue>(id.Value);
                 if (entity == null)
                     throw new InvalidOperationException("Status value not found");
-
                 mapper.Map(request, entity);
                 Repo.Update(entity);
             }

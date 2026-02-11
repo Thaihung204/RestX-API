@@ -1,7 +1,12 @@
-﻿using Microsoft.AspNetCore.Authorization;
+﻿using AutoMapper;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using RestX.BLL.DataTranferObjects.Category;
 using RestX.BLL.Interfaces;
+using RestX.Models.Identity;
 using RestX.Models.Menu;
+using RestX.Models.Tenants;
 using RestX.WebApp.Controllers.BaseControllers;
 using System.ComponentModel.DataAnnotations;
 
@@ -14,14 +19,18 @@ namespace RestX.WebApp.Controllers
     {
         private readonly ICategoryService categoryService;
 
-        public CategoriesController(ICategoryService categoryService, IExceptionHandler exceptionHandler) : base(exceptionHandler)
+        public CategoriesController(ICategoryService categoryService,
+            IMapper mapper,
+            UserManager<ApplicationUser> userManager,
+            IExceptionHandler exceptionHandler,
+            IEnumerable<ActiveTenant> tenant) : base(mapper, userManager, exceptionHandler, tenant)
         {
             this.categoryService = categoryService;
         }
 
         [HttpGet]
         [AllowAnonymous]
-        public async Task<ActionResult<IEnumerable<Category>>> GetAllCategories()
+        public async Task<ActionResult<IEnumerable<CategoryItem>>> GetAllCategories()
         {
             try
             {
@@ -30,14 +39,14 @@ namespace RestX.WebApp.Controllers
             }
             catch (Exception ex)
             {
-                exceptionHandler.RaiseException(ex);
+                this.ExceptionHandler.RaiseException(ex);
                 return BadRequest("An internal error occurred");
             }
         }
 
         [HttpGet("{id}")]
         [AllowAnonymous]
-        public async Task<ActionResult<Category>> GetCategoryById([Required] Guid id)
+        public async Task<ActionResult<CategoryItem>> GetCategoryById([Required] Guid id)
         {
             try
             {
@@ -46,38 +55,41 @@ namespace RestX.WebApp.Controllers
             }
             catch (Exception ex)
             {
-                exceptionHandler.RaiseException(ex);
+                this.ExceptionHandler.RaiseException(ex);
                 return BadRequest("An internal error occurred");
             }
         }
 
+
         [HttpPut("{id}")]
         [Authorize(Roles = "Admin,System Admin")]
-        public async Task<IActionResult> EditCategory([Required] Guid id, [FromBody] Category category)
+        public async Task<IActionResult> EditCategory([Required] Guid id, [FromForm] CategoryItem category)
         {
             try
             {
                 category.Id = id;
-                return Ok(await categoryService.UpsertCategory(category));
+                var categoryId = await categoryService.UpsertCategory(category);
+                return Ok(categoryId);
             }
             catch (Exception ex)
             {
-                exceptionHandler.RaiseException(ex);
+                this.ExceptionHandler.RaiseException(ex);
                 return BadRequest("An internal error occurred");
             }
         }
 
         [HttpPost]
         [Authorize(Roles = "Admin,System Admin")]
-        public async Task<ActionResult<Category>> AddCategory([FromBody] Category category)
+        public async Task<ActionResult<Guid>> AddCategory([FromForm] CategoryItem category)
         {
             try
             {
-                return Ok(await categoryService.UpsertCategory(category));
+                var categoryId = await categoryService.UpsertCategory(category);
+                return Ok(categoryId);
             }
             catch (Exception ex)
             {
-                exceptionHandler.RaiseException(ex);
+                this.ExceptionHandler.RaiseException(ex);
                 return BadRequest("An internal error occurred");
             }
         }
@@ -93,7 +105,7 @@ namespace RestX.WebApp.Controllers
             }
             catch (Exception ex)
             {
-                exceptionHandler.RaiseException(ex);
+                this.ExceptionHandler.RaiseException(ex);
                 return BadRequest("An internal error occurred");
             }
         }

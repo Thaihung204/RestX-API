@@ -1,8 +1,12 @@
-﻿using Microsoft.AspNetCore.Authorization;
+﻿using AutoMapper;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using RestX.BLL.DataTranferObjects.Dish;
 using RestX.BLL.Interfaces;
+using RestX.Models.Identity;
 using RestX.Models.Menu;
+using RestX.Models.Tenants;
 using RestX.WebApp.Controllers.BaseControllers;
 using System.ComponentModel.DataAnnotations;
 
@@ -15,7 +19,11 @@ namespace RestX.WebApp.Controllers
     {
         private readonly IDishService dishService;
 
-        public DishesController(IDishService dishService, IExceptionHandler exceptionHandler) : base(exceptionHandler)
+        public DishesController(IDishService dishService,
+            IMapper mapper,
+            UserManager<ApplicationUser> userManager,
+            IExceptionHandler exceptionHandler,
+            IEnumerable<ActiveTenant> tenant) : base(mapper, userManager, exceptionHandler, tenant)
         {
             this.dishService = dishService;
         }
@@ -31,7 +39,7 @@ namespace RestX.WebApp.Controllers
             }
             catch (Exception ex)
             {
-                this.exceptionHandler.RaiseException(ex);
+                this.ExceptionHandler.RaiseException(ex);
                 return this.BadRequest("An internal error occurred");
             }
         }
@@ -47,7 +55,7 @@ namespace RestX.WebApp.Controllers
             }
             catch (Exception ex)
             {
-                exceptionHandler.RaiseException(ex);
+                this.ExceptionHandler.RaiseException(ex);
                 return BadRequest("An internal error occurred");
             }
         }
@@ -63,7 +71,7 @@ namespace RestX.WebApp.Controllers
             }
             catch (Exception ex)
             {
-                exceptionHandler.RaiseException(ex);
+                this.ExceptionHandler.RaiseException(ex);
                 return BadRequest("An internal error occurred");
             }
         }
@@ -78,7 +86,7 @@ namespace RestX.WebApp.Controllers
             }
             catch (Exception ex)
             {
-                exceptionHandler.RaiseException(ex);
+                this.ExceptionHandler.RaiseException(ex);
                 return BadRequest("An internal error occurred");
             }
         }
@@ -94,7 +102,7 @@ namespace RestX.WebApp.Controllers
             }
             catch (Exception ex)
             {
-                exceptionHandler.RaiseException(ex);
+                this.ExceptionHandler.RaiseException(ex);
                 return BadRequest("An internal error occurred");
             }
         }
@@ -110,7 +118,7 @@ namespace RestX.WebApp.Controllers
             }
             catch (Exception ex)
             {
-                this.exceptionHandler.RaiseException(ex);
+                this.ExceptionHandler.RaiseException(ex);
                 return this.BadRequest("An internal error occurred");
             }
         }

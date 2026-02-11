@@ -1,5 +1,6 @@
 using AutoMapper;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using RestX.BLL.DataTranferObjects.Employee;
 using RestX.BLL.Interfaces;
@@ -13,6 +14,7 @@ namespace RestX.WebApp.Controllers
 {
     [Route("api/employees")]
     [ApiController]
+    [Authorize(AuthenticationSchemes = "Bearer")]
     public class EmployeesController : BaseController
     {
         private readonly IEmployeeService employeeService;
@@ -25,6 +27,7 @@ namespace RestX.WebApp.Controllers
             this.employeeService = employeeService;
         }
         [HttpGet]
+        [Authorize(Roles = "Admin,System Admin")]
         public async Task<IActionResult> GetAllEmployees([FromQuery] EmployeeFilterParams filter)
         {
             try
@@ -39,6 +42,7 @@ namespace RestX.WebApp.Controllers
             }
         }
         [HttpGet("{id}")]
+        [Authorize(Roles = "Admin,System Admin,Kitchen Staff,Waiter")]
         public async Task<IActionResult> GetEmployeeById([Required] Guid id)
         {
             try
@@ -57,6 +61,7 @@ namespace RestX.WebApp.Controllers
             }
         }
         [HttpPost]
+        [Authorize(Roles = "Admin,System Admin")]
         public async Task<IActionResult> CreateEmployee([FromForm] CreateEmployee dto)
         {
             try
@@ -79,6 +84,7 @@ namespace RestX.WebApp.Controllers
             }
         }
         [HttpPut("{id}")]
+        [Authorize(Roles = "Admin,System Admin")]
         public async Task<IActionResult> UpdateEmployee([Required] Guid id, [FromForm] UpdateEmployee dto)
         {
             try
@@ -105,6 +111,7 @@ namespace RestX.WebApp.Controllers
             }
         }
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Admin,System Admin")]
         public async Task<IActionResult> DeleteEmployee([Required] Guid id)
         {
             try

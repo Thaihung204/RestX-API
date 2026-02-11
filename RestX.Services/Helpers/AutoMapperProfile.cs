@@ -1,5 +1,6 @@
 ﻿using AutoMapper;
 using RestX.BLL.DataTranferObjects.Category;
+using RestX.BLL.DataTranferObjects.StatusValue;
 using RestX.BLL.DataTranferObjects.Table;
 using RestX.BLL.DataTranferObjects.Tenants;
 using RestX.BLL.DataTranferObjects.Dish;
@@ -12,6 +13,7 @@ using RestX.BLL.DataTranferObjects.Customer;
 using RestX.BLL.DataTranferObjects.Employee;
 using RestX.Models.Customers;
 using RestX.Models.HR;
+using RestX.Models.Common;
 using RestX.Models.Identity;
 using RestX.Models.Tables;
 
@@ -79,6 +81,12 @@ namespace RestX.BLL.Helpers
             CreateMap<TableItem, Table>()
                 .ForMember(dest => dest.Id, opt => opt.Ignore())
                 .ForMember(dest => dest.Table3DModel, opt => opt.Ignore());
+
+            CreateMap<StatusValue, StatusValueItem>();
+            CreateMap<UpsertStatusValueRequest, StatusValue>()
+                .ForMember(dest => dest.Id, opt => opt.Ignore())
+                .ForMember(dest => dest.StatusTypeId, opt => opt.Ignore())
+                .ForMember(dest => dest.StatusType, opt => opt.Ignore());
         }
     }
 }

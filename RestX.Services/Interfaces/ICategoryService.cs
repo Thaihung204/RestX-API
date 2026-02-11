@@ -1,5 +1,4 @@
 ﻿using RestX.BLL.DataTranferObjects.Category;
-using RestX.Models.Menu;
 
 namespace RestX.BLL.Interfaces
 {
@@ -7,7 +6,7 @@ namespace RestX.BLL.Interfaces
     {
         Task<IEnumerable<CategoryItem>> GetAllCategories();
         Task<CategoryItem?> GetCategoryById(Guid id);
-        Task<Category> UpsertCategory(Category model);
+        Task<Guid> UpsertCategory(CategoryItem model);
         Task DeleteCategory(Guid id);
     }
 }

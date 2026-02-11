@@ -34,7 +34,7 @@ namespace RestX.Models.Orders
 
         public DateTime PaymentDate { get; set; } = DateTime.UtcNow;
 
-        public Guid PaymentStatusId { get; set; }
+        public int PaymentStatusId { get; set; }
 
         [Column(TypeName = "decimal(18,2)")]
         [Range(0, 999999999.99)]

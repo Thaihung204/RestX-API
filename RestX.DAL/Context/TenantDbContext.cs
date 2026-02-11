@@ -381,11 +381,7 @@ namespace RestX.DAL.Context
                 entity.Property(e => e.Rotation).HasColumnType("decimal(5,2)");
                 entity.Property(e => e.ViewDescription).HasMaxLength(500);
                 entity.Property(e => e.DefaultViewUrl).HasMaxLength(500);
-
-                entity.HasOne<StatusValue>(e => e.TableStatus)
-                    .WithMany()
-                    .HasForeignKey(e => e.TableStatusId)
-                    .OnDelete(DeleteBehavior.Restrict);
+                entity.Property(e => e.QRCodeUrl).HasColumnType("nvarchar(max)");
             });
 
             modelBuilder.Entity<Table3DModel>(entity =>
@@ -498,11 +494,6 @@ namespace RestX.DAL.Context
                     .WithMany(r => r.Orders)
                     .HasForeignKey(e => e.ReservationId)
                     .OnDelete(DeleteBehavior.SetNull);
-
-                entity.HasOne<StatusValue>(e => e.OrderStatus)
-                    .WithMany()
-                    .HasForeignKey(e => e.OrderStatusId)
-                    .OnDelete(DeleteBehavior.Restrict);
 
                 entity.HasOne<StatusValue>(e => e.PaymentStatus)
                     .WithMany()

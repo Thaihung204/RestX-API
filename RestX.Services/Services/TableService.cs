@@ -1,8 +1,10 @@
 using AutoMapper;
+using QRCoder;
 using RestX.BLL.DataTranferObjects.Table;
 using RestX.BLL.Extensions;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Tables;
+using RestX.Models.Enum;
 using RestX.Models.Tables;
 using RestX.Models.Tenants;
 
@@ -22,7 +24,7 @@ namespace RestX.BLL.Services
         }
 
         private string GetCacheKey()
-            => $"{CurrentTenant?.Id}:tables";
+            => $"Table:{CurrentTenant.Hostname}";
         public async Task<IEnumerable<TableItem>> GetAllTables()
         {
             var tables = await RedisService.GetAsync<List<Table>>(GetCacheKey());
@@ -30,7 +32,7 @@ namespace RestX.BLL.Services
             {
                 tables = (await Repo.GetAllAsync<Table>(
                         orderBy: q => q.OrderBy(t => t.Code),
-                        includeProperties: "TableStatus,Table3DModel"
+                        includeProperties: "Table3DModel"
                     )).ToList();
                 await RedisService.SetAsync(GetCacheKey(), tables);
             }
@@ -41,7 +43,7 @@ namespace RestX.BLL.Services
         {
             var table = await Repo.GetOneAsync<Table>(
                 filter: t => t.Id == id,
-                includeProperties: "TableStatus,Table3DModel"
+                includeProperties: "Table3DModel"
             );
             return mapper.Map<TableItem>(table);
         }
@@ -74,9 +76,16 @@ namespace RestX.BLL.Services
             else
             {
                 table = mapper.Map<Table>(request);
+                table.TableStatusId = TableStatus.Available;
                 await Repo.CreateAsync(table);
             }
             await Repo.SaveAsync();
+            if (string.IsNullOrEmpty(table.QRCodeUrl) && CurrentTenant != null)
+            {
+                table.QRCodeUrl = GenerateTableQRCode(table.Id, CurrentTenant.Hostname);
+                Repo.Update(table);
+                await Repo.SaveAsync();
+            }
             await RedisService.RemoveAsync(GetCacheKey());
             return mapper.Map<TableItem>(table);
         }
@@ -90,5 +99,22 @@ namespace RestX.BLL.Services
             await Repo.SaveAsync();
             await RedisService.RemoveAsync(GetCacheKey());
         }
+
+        #region QR Code Generation
+        private string GenerateTableQRCode(Guid tableId, string tenantHostname)
+        {
+            var url = $"https://{tenantHostname}/customer/{tableId}";
+            using (QRCodeGenerator qrGenerator = new QRCodeGenerator())
+            {
+                QRCodeData qrCodeData = qrGenerator.CreateQrCode(url, QRCodeGenerator.ECCLevel.Q);
+                using (PngByteQRCode qrCode = new PngByteQRCode(qrCodeData))
+                {
+                    byte[] qrCodeBytes = qrCode.GetGraphic(20);
+                    string base64String = Convert.ToBase64String(qrCodeBytes);
+                    return $"data:image/png;base64,{base64String}";
+                }
+            }
+        }
+        #endregion
     }
 }

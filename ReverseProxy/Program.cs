@@ -14,6 +14,12 @@ app.UseForwardedHeaders(new ForwardedHeadersOptions
         ForwardedHeaders.XForwardedProto |
         ForwardedHeaders.XForwardedHost
 });
+app.Use(async (ctx, next) =>
+{
+    Console.WriteLine("HOST = " + ctx.Request.Host);
+    Console.WriteLine("XFH = " + ctx.Request.Headers["X-Forwarded-Host"]);
+    await next();
+});
 
 //app.UseHttpsRedirection();
 app.UseRouting();

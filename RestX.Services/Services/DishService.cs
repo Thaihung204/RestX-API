@@ -291,6 +291,8 @@ namespace RestX.BLL.Services
             }
 
             await Repo.SaveAsync();
+            await RedisService.RemoveAsync($"Menu:{CurrentTenant.Hostname}");
+
             return dish.Id;
         }
 
@@ -338,7 +340,7 @@ namespace RestX.BLL.Services
 
         public async Task<List<MenuCategory>> GetMenu()
         {
-            var cacheKey = $"Menu:{CurrentTenant.Id}";
+            var cacheKey = $"Menu:{CurrentTenant.Hostname}";
 
             var cachedMenu = await RedisService.GetAsync<List<MenuCategory>>(cacheKey);
             if (cachedMenu != null)
@@ -363,6 +365,9 @@ namespace RestX.BLL.Services
                     Id = d.Id,
                     CategoryId = d.CategoryId,
                     CategoryName = d.Category?.Name ?? string.Empty,
+                    Name = d.Name,
+                    Price = d.Price,
+                    Description = d.Description,
                     ImageUrl = mainImageUrl
                 };
             }).ToList();

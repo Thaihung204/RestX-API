@@ -15,13 +15,13 @@ public class Tenant : Entity<Guid>
 
     public string BackgroundUrl { get; set; }
 
-    public string BaseColor { get; set; }
-
     public string PrimaryColor { get; set; }
-
-    public string SecondaryColor { get; set; }
-    public string HeaderColor { get; set; }
-    public string FooterColor { get; set; }
+    public string LightBaseColor { get; set; }
+    public string LightSurfaceColor { get; set; }
+    public string LightCardColor { get; set; }
+    public string DarkBaseColor { get; set; }
+    public string DarkSurfaceColor { get; set; }
+    public string DarkCardColor { get; set; }
 
     public string NetworkIp { get; set; }
 

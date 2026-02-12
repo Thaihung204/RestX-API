@@ -37,6 +37,7 @@ namespace RestX.BLL.DataTranferObjects.Table
         public string? DefaultViewUrl { get; set; }
         public TableStatus TableStatusId { get; set; }
         public string? TableStatusName { get; set; }
+        public string? QRCodeUrl { get; set; }
         public bool IsActive { get; set; } = true;
     }
 }

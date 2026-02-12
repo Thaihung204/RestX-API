@@ -1,6 +1,8 @@
 ﻿using AutoMapper;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using RestX.BLL.DataTranferObjects.Category;
 using RestX.BLL.Interfaces;
 using RestX.Models.Identity;
 using RestX.Models.Menu;
@@ -12,6 +14,7 @@ namespace RestX.WebApp.Controllers
 {
     [Route("api/categories")]
     [ApiController]
+    [Authorize(AuthenticationSchemes = "Bearer")]
     public class CategoriesController : BaseController
     {
         private readonly ICategoryService categoryService;
@@ -26,7 +29,8 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Category>>> GetAllCategories()
+        [AllowAnonymous]
+        public async Task<ActionResult<IEnumerable<CategoryItem>>> GetAllCategories()
         {
             try
             {
@@ -41,7 +45,8 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpGet("{id}")]
-        public async Task<ActionResult<Category>> GetCategoryById([Required] Guid id)
+        [AllowAnonymous]
+        public async Task<ActionResult<CategoryItem>> GetCategoryById([Required] Guid id)
         {
             try
             {
@@ -55,13 +60,16 @@ namespace RestX.WebApp.Controllers
             }
         }
 
+
         [HttpPut("{id}")]
-        public async Task<IActionResult> EditCategory([Required] Guid id, [FromBody] Category category)
+        [Authorize(Roles = "Admin,System Admin")]
+        public async Task<IActionResult> EditCategory([Required] Guid id, [FromForm] CategoryItem category)
         {
             try
             {
                 category.Id = id;
-                return Ok(await categoryService.UpsertCategory(category));
+                var categoryId = await categoryService.UpsertCategory(category);
+                return Ok(categoryId);
             }
             catch (Exception ex)
             {
@@ -71,11 +79,13 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpPost]
-        public async Task<ActionResult<Category>> AddCategory([FromBody] Category category)
+        [Authorize(Roles = "Admin,System Admin")]
+        public async Task<ActionResult<Guid>> AddCategory([FromForm] CategoryItem category)
         {
             try
             {
-                return Ok(await categoryService.UpsertCategory(category));
+                var categoryId = await categoryService.UpsertCategory(category);
+                return Ok(categoryId);
             }
             catch (Exception ex)
             {
@@ -85,6 +95,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Admin,System Admin")]
         public async Task<IActionResult> DeleteCategory([Required] Guid id)
         {
             try

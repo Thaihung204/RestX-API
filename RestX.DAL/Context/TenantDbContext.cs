@@ -381,6 +381,7 @@ namespace RestX.DAL.Context
                 entity.Property(e => e.Rotation).HasColumnType("decimal(5,2)");
                 entity.Property(e => e.ViewDescription).HasMaxLength(500);
                 entity.Property(e => e.DefaultViewUrl).HasMaxLength(500);
+                entity.Property(e => e.QRCodeUrl).HasColumnType("nvarchar(max)");
             });
 
             modelBuilder.Entity<Table3DModel>(entity =>
@@ -672,6 +673,7 @@ namespace RestX.DAL.Context
                 entity.Property(e => e.Name).HasMaxLength(20).IsRequired();
                 entity.Property(e => e.DiscountPercentage).HasColumnType("decimal(5,2)");
                 entity.Property(e => e.BenefitDescription).HasMaxLength(500).IsRequired();
+                entity.Property(e => e.LogoColor).HasMaxLength(10);
             });
 
             modelBuilder.Entity<PointsTransaction>(entity =>

@@ -1,4 +1,5 @@
 using AutoMapper;
+using QRCoder;
 using RestX.BLL.DataTranferObjects.Table;
 using RestX.BLL.Extensions;
 using RestX.BLL.Interfaces;
@@ -68,9 +69,16 @@ namespace RestX.BLL.Services
             else
             {
                 table = mapper.Map<Table>(request);
+                table.TableStatusId = TableStatus.Available;
                 await Repo.CreateAsync(table);
             }
             await Repo.SaveAsync();
+            if (string.IsNullOrEmpty(table.QRCodeUrl) && CurrentTenant != null)
+            {
+                table.QRCodeUrl = GenerateTableQRCode(table.Id, CurrentTenant.Hostname);
+                Repo.Update(table);
+                await Repo.SaveAsync();
+            }
             return mapper.Map<TableItem>(table);
         }
 
@@ -94,5 +102,22 @@ namespace RestX.BLL.Services
 
             return mapper.Map<TableItem>(table);
         }
+
+        #region QR Code Generation
+        private string GenerateTableQRCode(Guid tableId, string tenantHostname)
+        {
+            var url = $"https://{tenantHostname}/customer/{tableId}";
+            using (QRCodeGenerator qrGenerator = new QRCodeGenerator())
+            {
+                QRCodeData qrCodeData = qrGenerator.CreateQrCode(url, QRCodeGenerator.ECCLevel.Q);
+                using (PngByteQRCode qrCode = new PngByteQRCode(qrCodeData))
+                {
+                    byte[] qrCodeBytes = qrCode.GetGraphic(20);
+                    string base64String = Convert.ToBase64String(qrCodeBytes);
+                    return $"data:image/png;base64,{base64String}";
+                }
+            }
+        }
+        #endregion
     }
 }

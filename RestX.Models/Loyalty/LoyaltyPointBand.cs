@@ -29,6 +29,9 @@ namespace RestX.Models.Loyalty
         [MaxLength(500)]
         public string BenefitDescription { get; set; } = string.Empty;
 
+        [MaxLength(10)]
+        public string LogoColor { get; set; } = string.Empty;
+
         public bool IsActive { get; set; } = true;
     }
 }

@@ -22,19 +22,12 @@ namespace RestX.BLL.Services
             this.mapper = mapper;
         }
 
-        private string GetCacheKey()
-            => $"{CurrentTenant?.Id}:tables";
         public async Task<IEnumerable<TableItem>> GetAllTables()
         {
-            var tables = await RedisService.GetAsync<List<Table>>(GetCacheKey());
-            if (tables == null)
-            {
-                tables = (await Repo.GetAllAsync<Table>(
+            var tables = (await Repo.GetAllAsync<Table>(
                         orderBy: q => q.OrderBy(t => t.Code),
                         includeProperties: "Table3DModel"
                     )).ToList();
-                await RedisService.SetAsync(GetCacheKey(), tables);
-            }
             return mapper.Map<List<TableItem>>(tables);
         }
 
@@ -78,7 +71,6 @@ namespace RestX.BLL.Services
                 await Repo.CreateAsync(table);
             }
             await Repo.SaveAsync();
-            await RedisService.RemoveAsync(GetCacheKey());
             return mapper.Map<TableItem>(table);
         }
 
@@ -89,19 +81,16 @@ namespace RestX.BLL.Services
                 return;
             Repo.Delete<Table>(id);
             await Repo.SaveAsync();
-            await RedisService.RemoveAsync(GetCacheKey());
         }
 
-        public async Task<TableItem> ChangeTableStatus(Guid id, TableStatus status)
+        public async Task<TableItem> ChangeTableStatus(Guid tableId, TableStatus status)
         {
-            var table = await Repo.GetByIdAsync<Table>(id);
+            var table = await Repo.GetByIdAsync<Table>(tableId);
 
             table.TableStatusId = status;
 
             Repo.Update(table);
             await Repo.SaveAsync();
-
-            await RedisService.RemoveAsync(GetCacheKey());
 
             return mapper.Map<TableItem>(table);
         }

@@ -59,6 +59,9 @@ namespace RestX.Models.Tables
         public string? DefaultViewUrl { get; set; }
 
         public TableStatus TableStatusId { get; set; }
+
+        public string? QRCodeUrl { get; set; }
+
         public bool IsActive { get; set; } = true;
         public virtual Table3DModel? Table3DModel { get; set; }
         public virtual ICollection<TableSession> TableSessions { get; set; } = new HashSet<TableSession>();

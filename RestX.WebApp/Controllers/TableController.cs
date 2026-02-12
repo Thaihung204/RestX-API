@@ -1,5 +1,6 @@
 using AutoMapper;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using RestX.BLL.DataTranferObjects.Table;
 using RestX.BLL.Interfaces;
@@ -13,6 +14,7 @@ namespace RestX.WebApp.Controllers
 {
     [Route("api/tables")]
     [ApiController]
+    [Authorize(AuthenticationSchemes = "Bearer")]
     public class TablesController : BaseController
     {
         private readonly ITableService tableService;
@@ -28,6 +30,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpGet]
+        [AllowAnonymous]
         public async Task<ActionResult<IEnumerable<TableItem>>> GetAllTables()
         {
             try
@@ -42,6 +45,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpGet("{id}")]
+        [AllowAnonymous]
         public async Task<ActionResult<TableItem>> GetTableById([Required] Guid id)
         {
             try
@@ -56,6 +60,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpPut("{id}")]
+        [Authorize(Roles = "Admin,System Admin")]
         public async Task<ActionResult<TableItem>> EditTable([Required] Guid id, [FromBody] TableItem request)
         {
             try
@@ -70,6 +75,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpPost]
+        [Authorize(Roles = "Admin,System Admin")]
         public async Task<ActionResult<TableItem>> AddTable([FromBody] TableItem request)
         {
             try
@@ -84,6 +90,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Admin,System Admin")]
         public async Task<IActionResult> DeleteTable([Required] Guid id)
         {
             try

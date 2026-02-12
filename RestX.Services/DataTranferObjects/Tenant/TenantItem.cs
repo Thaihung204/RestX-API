@@ -15,7 +15,7 @@ public class TenantItem
     public IFormFile? FaviconFile { get; set; }
     public IFormFile? BackgroundFile { get; set; }
 
-    public string PrimaryColor { get; set; }S
+    public string PrimaryColor { get; set; }
     public string LightBaseColor { get; set; }
     public string LightSurfaceColor { get; set; }
     public string LightCardColor { get; set; }

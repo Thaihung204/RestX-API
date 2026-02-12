@@ -25,6 +25,7 @@ namespace RestX.BLL.DataTranferObjects.Inventory
         public decimal MaxStockLevel { get; set; } = 0;
 
         public Guid? SupplierId { get; set; }
+        public string SupplierName { get; set; } = string.Empty;
 
         [MaxLength(50)]
         public string? Type { get; set; }

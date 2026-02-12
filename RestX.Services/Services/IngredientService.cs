@@ -22,21 +22,12 @@ namespace RestX.BLL.Services
             this.mapper = mapper;
         }
 
-        private string GetCacheKey()
-            => $"{CurrentTenant?.Id}:ingredient";
-
         public async Task<IEnumerable<IngredientItem>> GetAllIngredients()
         {
-            var ingredients = await RedisService.GetAsync<List<Ingredient>>(GetCacheKey());
-            if (ingredients == null)
-            {
-                ingredients = (await Repo.GetAllAsync<Ingredient>(
+                var ingredients = (await Repo.GetAllAsync<Ingredient>(
                     orderBy: q => q.OrderBy(i => i.Name),
                     includeProperties: "Supplier,InventoryStock"
                 )).ToList();
-
-                await RedisService.SetAsync(GetCacheKey(), ingredients);
-            }
 
             return mapper.Map<List<IngredientItem>>(ingredients);
         }
@@ -73,7 +64,6 @@ namespace RestX.BLL.Services
                 Repo.Update(ingredient);
                 await Repo.SaveAsync();
 
-                await RedisService.RemoveAsync(GetCacheKey());
                 return ingredient.Id;
             }
 
@@ -93,7 +83,6 @@ namespace RestX.BLL.Services
             Repo.Create(ingredient);
             await Repo.SaveAsync();
 
-            await RedisService.RemoveAsync(GetCacheKey());
             return ingredient.Id;
         }
 
@@ -106,7 +95,6 @@ namespace RestX.BLL.Services
             Repo.Delete<Ingredient>(id);
             await Repo.SaveAsync();
 
-            await RedisService.RemoveAsync(GetCacheKey());
         }
     }
 }

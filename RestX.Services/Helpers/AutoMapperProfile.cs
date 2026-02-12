@@ -14,6 +14,8 @@ using RestX.Models.Customers;
 using RestX.Models.HR;
 using RestX.Models.Identity;
 using RestX.Models.Tables;
+using RestX.BLL.DataTranferObjects.Inventory;
+using RestX.Models.Inventory;
 
 namespace RestX.BLL.Helpers
 {
@@ -79,6 +81,8 @@ namespace RestX.BLL.Helpers
             CreateMap<TableItem, Table>()
                 .ForMember(dest => dest.Id, opt => opt.Ignore())
                 .ForMember(dest => dest.Table3DModel, opt => opt.Ignore());
+            CreateMap<Ingredient, IngredientItem>()
+                 .ReverseMap();
         }
     }
 }

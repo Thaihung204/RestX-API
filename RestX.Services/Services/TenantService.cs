@@ -112,11 +112,13 @@ namespace RestX.BLL.Services
 
                 tenant.Name = model.Name;
 
-                tenant.BaseColor = model.BaseColor ?? "#FF380B";
-                tenant.PrimaryColor = model.PrimaryColor ?? "#6b7280";
-                tenant.SecondaryColor = model.SecondaryColor ?? "#9ca3af";
-                tenant.HeaderColor = model.HeaderColor ?? "#141927";
-                tenant.FooterColor = model.FooterColor ?? "#141927";
+                tenant.PrimaryColor = model.PrimaryColor ?? "#FF380B";
+                tenant.LightBaseColor = model.LightBaseColor ?? "#FFFFFF";
+                tenant.LightSurfaceColor = model.LightSurfaceColor ?? "#F9FAFB";
+                tenant.LightCardColor = model.LightCardColor ?? "#FFFFFF";
+                tenant.DarkBaseColor = model.DarkBaseColor ?? "#0A0E14";
+                tenant.DarkSurfaceColor = model.DarkSurfaceColor ?? "#1A1F2E";
+                tenant.DarkCardColor = model.DarkCardColor ?? "#151A24";
 
                 tenant.NetworkIp = model.NetworkIp ?? string.Empty;
                 tenant.ConnectionString = model.ConnectionString ?? tenant.ConnectionString;
@@ -182,11 +184,13 @@ namespace RestX.BLL.Services
                     ConnectionString = model.ConnectionString ?? tenantConnectionString,
 
                     // Theme / UI
-                    BaseColor = model.BaseColor ?? "#FF380B",
-                    PrimaryColor = model.PrimaryColor ?? "#6b7280",
-                    SecondaryColor = model.SecondaryColor ?? "#9ca3af",
-                    HeaderColor = model.HeaderColor ?? "#141927",
-                    FooterColor = model.FooterColor ?? "#141927",
+                    PrimaryColor = model.PrimaryColor ?? "#FF380B",
+                    LightBaseColor = model.LightBaseColor ?? "#FFFFFF",
+                    LightSurfaceColor = model.LightSurfaceColor ?? "#F9FAFB",
+                    LightCardColor = model.LightCardColor ?? "#FFFFFF",
+                    DarkBaseColor = model.DarkBaseColor ?? "#0A0E14",
+                    DarkSurfaceColor = model.DarkSurfaceColor ?? "#1A1F2E",
+                    DarkCardColor = model.DarkCardColor ?? "#151A24",
 
                     LogoUrl = model.LogoUrl ?? string.Empty,
                     FaviconUrl = model.FaviconUrl ?? string.Empty,

@@ -7,6 +7,7 @@ using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Tables;
 using RestX.Models.Identity;
 using RestX.Models.Tenants;
+using RestX.Models.Enum;
 using RestX.WebApp.Controllers.BaseControllers;
 using System.ComponentModel.DataAnnotations;
 
@@ -97,6 +98,20 @@ namespace RestX.WebApp.Controllers
             {
                 await tableService.DeleteTable(id);
                 return Ok();
+            }
+            catch (Exception ex)
+            {
+                this.ExceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
+        [HttpPut("{id}/status")]
+        public async Task<ActionResult<TableItem>> ChangeStatus([Required] Guid id, [FromBody] TableStatus status)
+        {
+            try
+            {
+                return Ok(await tableService.ChangeTableStatus(id, status));
             }
             catch (Exception ex)
             {

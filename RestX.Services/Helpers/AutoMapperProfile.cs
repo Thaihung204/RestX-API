@@ -83,6 +83,7 @@ namespace RestX.BLL.Helpers
                 .ForMember(dest => dest.Table3DModel, opt => opt.Ignore());
             CreateMap<Ingredient, IngredientItem>()
                  .ReverseMap();
+            CreateMap<Supplier, SupplierItem>().ReverseMap();
         }
     }
 }

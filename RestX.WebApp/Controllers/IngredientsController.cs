@@ -59,7 +59,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpPut("{id}")]
-        public async Task<IActionResult> EditIngredient([Required] Guid id, [FromForm] IngredientItem ingredient)
+        public async Task<IActionResult> EditIngredient([Required] Guid id, [FromBody] IngredientItem ingredient)
         {
             try
             {
@@ -75,7 +75,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpPost]
-        public async Task<ActionResult<Guid>> AddIngredient([FromForm] IngredientItem ingredient)
+        public async Task<ActionResult<Guid>> AddIngredient([FromBody] IngredientItem ingredient)
         {
             try
             {

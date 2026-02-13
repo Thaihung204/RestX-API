@@ -42,24 +42,24 @@ namespace RestX.BLL.Services
             return mapper.Map<IngredientItem>(ingredient);
         }
 
-        public async Task<Guid> UpsertIngredient(IngredientItem dto)
+        public async Task<Guid> UpsertIngredient(IngredientItem ingredientItem)
         {
             Ingredient ingredient;
 
-            if (dto.Id != null)
+            if (ingredientItem.Id != null)
             {
-                ingredient = await Repo.GetByIdAsync<Ingredient>(dto.Id.Value);
+                ingredient = await Repo.GetByIdAsync<Ingredient>(ingredientItem.Id);
                 if (ingredient == null)
                     return Guid.Empty;
 
-                ingredient.Name = dto.Name;
-                ingredient.Code = dto.Code;
-                ingredient.Unit = dto.Unit;
-                ingredient.MinStockLevel = dto.MinStockLevel;
-                ingredient.MaxStockLevel = dto.MaxStockLevel;
-                ingredient.SupplierId = dto.SupplierId;
-                ingredient.Type = dto.Type;
-                ingredient.IsActive = dto.IsActive;
+                ingredient.Name = ingredientItem.Name;
+                ingredient.Code = ingredientItem.Code;
+                ingredient.Unit = ingredientItem.Unit;
+                ingredient.MinStockLevel = ingredientItem.MinStockLevel;
+                ingredient.MaxStockLevel = ingredientItem.MaxStockLevel;
+                ingredient.SupplierId = ingredientItem.SupplierId;
+                ingredient.Type = ingredientItem.Type;
+                ingredient.IsActive = ingredientItem.IsActive;
 
                 Repo.Update(ingredient);
                 await Repo.SaveAsync();
@@ -69,19 +69,17 @@ namespace RestX.BLL.Services
 
             ingredient = new Ingredient
             {
-                Id = Guid.NewGuid(),
-                Name = dto.Name,
-                Code = dto.Code,
-                Unit = dto.Unit,
-                MinStockLevel = dto.MinStockLevel,
-                MaxStockLevel = dto.MaxStockLevel,
-                SupplierId = dto.SupplierId,
-                Type = dto.Type,
-                IsActive = dto.IsActive
+                Name = ingredientItem.Name,
+                Code = ingredientItem.Code,
+                Unit = ingredientItem.Unit,
+                MinStockLevel = ingredientItem.MinStockLevel,
+                MaxStockLevel = ingredientItem.MaxStockLevel,
+                SupplierId = ingredientItem.SupplierId,
+                Type = ingredientItem.Type,
+                IsActive = ingredientItem.IsActive
             };
 
             Repo.Create(ingredient);
-            await Repo.SaveAsync();
 
             return ingredient.Id;
         }

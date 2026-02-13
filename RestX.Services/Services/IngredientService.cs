@@ -79,7 +79,7 @@ namespace RestX.BLL.Services
                 IsActive = ingredientItem.IsActive
             };
 
-            Repo.Create(ingredient);
+            await Repo.CreateAsync(ingredient);
 
             return ingredient.Id;
         }

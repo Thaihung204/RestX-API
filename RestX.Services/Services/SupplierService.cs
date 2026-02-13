@@ -66,7 +66,7 @@ namespace RestX.BLL.Services
                 IsActive = supplierItem.IsActive
             };
 
-            Repo.Create(supplier);
+            await Repo.CreateAsync(supplier);
 
             return supplier.Id;
         }

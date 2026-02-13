@@ -1,5 +1,6 @@
 ﻿using AutoMapper;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using RestX.BLL.Helpers;
 using RestX.BLL.Interfaces;
@@ -11,17 +12,17 @@ namespace RestX.WebApp.Controllers;
 
 [Route("api/forms")]
 [ApiController]
+[Authorize(AuthenticationSchemes = "Bearer")]
 public class FormController : BaseController
 {
     public FormController(
             IMapper mapper,
             UserManager<ApplicationUser> userManager,
             IExceptionHandler exceptionHandler,
-            IEnumerable<ActiveTenant> tenant) : base(mapper, userManager, exceptionHandler, tenant)
-    {
-    }
+            IEnumerable<ActiveTenant> tenant) : base(mapper, userManager, exceptionHandler, tenant) { }
 
     [HttpGet("get-lists/{name}")]
+    [AllowAnonymous]
     public IActionResult GetLists([FromRoute] string name)
     {
         try

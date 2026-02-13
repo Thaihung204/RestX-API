@@ -1,6 +1,6 @@
 ﻿using AutoMapper;
 using RestX.BLL.DataTranferObjects.Category;
-using RestX.BLL.DataTranferObjects.StatusValue;
+using RestX.BLL.DataTranferObjects.Status;
 using RestX.BLL.DataTranferObjects.Table;
 using RestX.BLL.DataTranferObjects.Tenants;
 using RestX.BLL.DataTranferObjects.Dish;
@@ -82,8 +82,8 @@ namespace RestX.BLL.Helpers
                 .ForMember(dest => dest.Id, opt => opt.Ignore())
                 .ForMember(dest => dest.Table3DModel, opt => opt.Ignore());
 
-            CreateMap<StatusValue, StatusValueItem>();
-            CreateMap<StatusValueItem, StatusValue>()
+            CreateMap<StatusValue, StatusValues>();
+            CreateMap<StatusValues, StatusValue>()
                 .ForMember(dest => dest.Id, opt => opt.Ignore())
                 .ForMember(dest => dest.StatusTypeId, opt => opt.Ignore())
                 .ForMember(dest => dest.StatusType, opt => opt.Ignore());

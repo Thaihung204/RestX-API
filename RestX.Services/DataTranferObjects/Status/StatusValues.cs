@@ -1,8 +1,8 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace RestX.BLL.DataTranferObjects.StatusValue
+namespace RestX.BLL.DataTranferObjects.Status
 {
-    public class StatusValueItem
+    public class StatusValues
     {
         public int Id { get; set; }
         [Required]

@@ -1,9 +1,10 @@
 using AutoMapper;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using RestX.BLL.DataTranferObjects.StatusValue;
+using RestX.BLL.DataTranferObjects.Status;
 using RestX.BLL.Interfaces;
-using RestX.BLL.Interfaces.StatusValues;
+using RestX.BLL.Interfaces.Status;
 using RestX.Models.Identity;
 using RestX.Models.Tenants;
 using RestX.WebApp.Controllers.BaseControllers;
@@ -11,7 +12,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace RestX.WebApp.Controllers;
 
-[Route("api/status-values")]
+[Route("api/status")]
 [ApiController]
 public class StatusValuesController : BaseController
 {
@@ -28,11 +29,11 @@ public class StatusValuesController : BaseController
     }
 
     [HttpGet("{typeCode}")]
-    public async Task<ActionResult<IEnumerable<StatusValueItem>>> GetByType([FromRoute] string typeCode)
+    public async Task<ActionResult<IEnumerable<StatusValues>>> GetStatusByType([FromRoute] string typeCode)
     {
         try
         {
-            var data = await statusValueService.GetByType(typeCode);
+            var data = await statusValueService.GetStatusByType(typeCode);
             return Ok(new { success = true, data });
         }
         catch (Exception ex)
@@ -43,11 +44,11 @@ public class StatusValuesController : BaseController
     }
 
     [HttpGet("{typeCode}/{id}")]
-    public async Task<ActionResult<StatusValueItem>> GetById([FromRoute] string typeCode, [Required] int id)
+    public async Task<ActionResult<StatusValues>> GetStatusById([FromRoute] string typeCode, [Required] int id)
     {
         try
         {
-            var data = await statusValueService.GetById(id);
+            var data = await statusValueService.GetStatusById(id);
             if (data == null)
                 return NotFound(new { success = false, message = "Status value not found" });
             return Ok(new { success = true, data });
@@ -60,13 +61,13 @@ public class StatusValuesController : BaseController
     }
 
     [HttpPost("{typeCode}")]
-    public async Task<ActionResult<StatusValueItem>> Create(
+    public async Task<ActionResult<StatusValues>> CreateStatus(
         [FromRoute] string typeCode,
-        [FromBody] StatusValueItem request)
+        [FromBody] StatusValues request)
     {
         try
         {
-            var data = await statusValueService.Upsert(typeCode, null, request);
+            var data = await statusValueService.UpsertStatus(typeCode, null, request);
             return Ok(new { success = true, data });
         }
         catch (Exception ex)
@@ -77,14 +78,14 @@ public class StatusValuesController : BaseController
     }
 
     [HttpPut("{typeCode}/{id}")]
-    public async Task<ActionResult<StatusValueItem>> Update(
+    public async Task<ActionResult<StatusValues>> UpdateStatus(
         [FromRoute] string typeCode,
         [Required] int id,
-        [FromBody] StatusValueItem request)
+        [FromBody] StatusValues request)
     {
         try
         {
-            var data = await statusValueService.Upsert(typeCode, id, request);
+            var data = await statusValueService.UpsertStatus(typeCode, id, request);
             return Ok(new { success = true, data });
         }
         catch (Exception ex)
@@ -95,11 +96,11 @@ public class StatusValuesController : BaseController
     }
 
     [HttpDelete("{typeCode}/{id}")]
-    public async Task<IActionResult> Delete([FromRoute] string typeCode, [Required] int id)
+    public async Task<IActionResult> DeleteStatus([FromRoute] string typeCode, [Required] int id)
     {
         try
         {
-            await statusValueService.Delete(typeCode, id);
+            await statusValueService.DeleteStatus(typeCode, id);
             return Ok(new { success = true });
         }
         catch (Exception ex)

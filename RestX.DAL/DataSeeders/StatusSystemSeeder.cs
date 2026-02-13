@@ -38,7 +38,7 @@ namespace RestX.DAL.DataSeeders
                 new() { Code = "PAYMENT_STATUS" },
                 new() { Code = "RESERVATION_STATUS" },
                 new() { Code = "TABLE_STATUS" },
-                new() { Code = "ITEM_STATUS" }
+                new() { Code = "ORDER_DETAIL_STATUS" }
             };
         }
         private static List<StatusValue> CreateStatusValues(List<StatusType> statusTypes)
@@ -71,7 +71,7 @@ namespace RestX.DAL.DataSeeders
                 ("COMPLETED", "Completed", "#00C853", false),
                 ("CANCELLED", "Cancelled", "#F44336", false)
             }));
-            values.AddRange(CreateValuesForType(typeMap["ITEM_STATUS"], new[]
+            values.AddRange(CreateValuesForType(typeMap["ORDER_DETAIL_STATUS"], new[]
             {
                 ("PENDING", "Pending", "#FFA500", true),
                 ("PREPARING", "Preparing", "#2196F3", false),

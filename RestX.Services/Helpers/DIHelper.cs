@@ -33,6 +33,7 @@ namespace RestX.BLL.Helpers
             services.AddScoped<ICategoryService, CategoryService>();
             services.AddScoped<ITableService, TableService>();
             services.AddScoped<IIngredientService, IngredientService>();
+            services.AddScoped<ISupplierService, SupplierService>();
         }
     }
 }

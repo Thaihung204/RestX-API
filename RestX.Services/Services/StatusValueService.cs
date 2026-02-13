@@ -40,13 +40,13 @@ namespace RestX.BLL.Services
             return result;
         }
 
-        public async Task<StatusValues?> GetStatusById(int id)
+        public async Task<StatusValues?> GetStatusValueById(int id)
         {
             var value = await Repo.GetByIdAsync<StatusValue>(id);
             return value == null ? null : mapper.Map<StatusValues>(value);
         }
 
-        public async Task<StatusValues> UpsertStatus(string typeCode, int? id, StatusValues request)
+        public async Task<StatusValues> UpsertStatusValue(string typeCode, int? id, StatusValues request)
         {
             var statusType = await FindStatusTypeByCode(typeCode);
             StatusValue entity;
@@ -83,7 +83,7 @@ namespace RestX.BLL.Services
             return mapper.Map<StatusValues>(entity);
         }
 
-        public async Task DeleteStatus(string typeCode, int id)
+        public async Task DeleteStatusValue(string typeCode, int id)
         {
             var statusType = await FindStatusTypeByCode(typeCode);
             var entity = await Repo.GetByIdAsync<StatusValue>(id);

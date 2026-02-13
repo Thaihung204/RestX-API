@@ -48,7 +48,7 @@ public class StatusValuesController : BaseController
     {
         try
         {
-            var data = await statusValueService.GetStatusById(id);
+            var data = await statusValueService.GetStatusValueById(id);
             if (data == null)
                 return NotFound(new { success = false, message = "Status value not found" });
             return Ok(new { success = true, data });
@@ -67,7 +67,7 @@ public class StatusValuesController : BaseController
     {
         try
         {
-            var data = await statusValueService.UpsertStatus(typeCode, null, request);
+            var data = await statusValueService.UpsertStatusValue(typeCode, null, request);
             return Ok(new { success = true, data });
         }
         catch (Exception ex)
@@ -85,7 +85,7 @@ public class StatusValuesController : BaseController
     {
         try
         {
-            var data = await statusValueService.UpsertStatus(typeCode, id, request);
+            var data = await statusValueService.UpsertStatusValue(typeCode, id, request);
             return Ok(new { success = true, data });
         }
         catch (Exception ex)
@@ -100,7 +100,7 @@ public class StatusValuesController : BaseController
     {
         try
         {
-            await statusValueService.DeleteStatus(typeCode, id);
+            await statusValueService.DeleteStatusValue(typeCode, id);
             return Ok(new { success = true });
         }
         catch (Exception ex)

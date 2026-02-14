@@ -2,6 +2,7 @@ using AutoMapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using RestX.App.Helpers;
 using RestX.BLL.DataTranferObjects.Authentication;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Auth;
@@ -17,13 +18,16 @@ namespace RestX.WebApp.Controllers
     public class AuthController : BaseController
     {
         private readonly IAuthService authService;
+        private readonly RestXCookieManager cookieManager;
         public AuthController(IAuthService authService,
+            RestXCookieManager cookieManager,
             IMapper mapper,
             UserManager<ApplicationUser> userManager,
             IExceptionHandler exceptionHandler,
             IEnumerable<ActiveTenant> tenant) : base(mapper, userManager, exceptionHandler, tenant)
         {
             this.authService = authService;
+            this.cookieManager = cookieManager;
         }
         [HttpPost("login")]
         [AllowAnonymous]
@@ -40,6 +44,8 @@ namespace RestX.WebApp.Controllers
                 {
                     return BadRequest(result);
                 }
+                if (result.Data is LoginResponse login)
+                    cookieManager.SetTokenCookies(HttpContext, login.AccessToken, login.ExpiresAt, login.RefreshToken);
                 return Ok(result);
             }
             catch (Exception ex)
@@ -64,6 +70,7 @@ namespace RestX.WebApp.Controllers
                 {
                     return BadRequest(result);
                 }
+                cookieManager.ClearTokenCookies(HttpContext);
                 return Ok(result);
             }
             catch (Exception ex)
@@ -162,6 +169,8 @@ namespace RestX.WebApp.Controllers
                 {
                     return BadRequest(result);
                 }
+                if (result.Data is LoginResponse login)
+                    cookieManager.SetTokenCookies(HttpContext, login.AccessToken, login.ExpiresAt, login.RefreshToken);
                 return Ok(result);
             }
             catch (Exception ex)
@@ -179,6 +188,8 @@ namespace RestX.WebApp.Controllers
             }
             return Guid.TryParse(userIdClaim, out var userId) ? userId : null;
         }
+
+
         [HttpPost("customer/check-phone")]
         [AllowAnonymous]
         public async Task<IActionResult> CheckPhoneNumber([FromBody] CheckPhoneRequest request)
@@ -213,6 +224,8 @@ namespace RestX.WebApp.Controllers
                 {
                     return BadRequest(result);
                 }
+                if (result.Data is LoginResponse login)
+                    cookieManager.SetTokenCookies(HttpContext, login.AccessToken, login.ExpiresAt, login.RefreshToken);
                 return Ok(result);
             }
             catch (Exception ex)
@@ -236,6 +249,8 @@ namespace RestX.WebApp.Controllers
                 {
                     return BadRequest(result);
                 }
+                if (result.Data is LoginResponse login)
+                    cookieManager.SetTokenCookies(HttpContext, login.AccessToken, login.ExpiresAt, login.RefreshToken);
                 return Ok(result);
             }
             catch (Exception ex)

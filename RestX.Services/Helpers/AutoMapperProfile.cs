@@ -81,6 +81,11 @@ namespace RestX.BLL.Helpers
             CreateMap<TableItem, Table>()
                 .ForMember(dest => dest.Id, opt => opt.Ignore())
                 .ForMember(dest => dest.Table3DModel, opt => opt.Ignore());
+            CreateMap<Models.Tenants.TenantRequest, DataTranferObjects.Tenants.TenantRequest>().ReverseMap();
+            CreateMap<Models.Tenants.TenantRequest, TenantItem>().ReverseMap();
+            CreateMap<Ingredient, IngredientItem>()
+                 .ReverseMap();
+            CreateMap<Supplier, SupplierItem>().ReverseMap();
 
             CreateMap<IngredientCategory, IngredientCategories>().ReverseMap();
         }

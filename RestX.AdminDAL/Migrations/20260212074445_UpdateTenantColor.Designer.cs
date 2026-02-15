@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using RestX.AdminDAL.Context;
 
@@ -11,9 +12,11 @@ using RestX.AdminDAL.Context;
 namespace RestX.AdminDAL.Migrations
 {
     [DbContext(typeof(RestxAdminContext))]
-    partial class RestxAdminContextModelSnapshot : ModelSnapshot
+    [Migration("20260212074445_UpdateTenantColor")]
+    partial class UpdateTenantColor
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -376,65 +379,6 @@ namespace RestX.AdminDAL.Migrations
                         .IsUnique();
 
                     b.ToTable("Tenants");
-                });
-
-            modelBuilder.Entity("RestX.Models.Tenants.TenantRequest", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("BusinessAddressLine1")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("BusinessAddressLine2")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("BusinessAddressLine3")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("BusinessAddressLine4")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("BusinessCountry")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("BusinessEmailAddress")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("BusinessName")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("BusinessPrimaryPhone")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("CreatedBy")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<DateTime>("CreatedDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Hostname")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<bool?>("IsAccepted")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("ModifiedBy")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<DateTime?>("ModifiedDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("TenantRequests");
                 });
 
             modelBuilder.Entity("RestX.Models.Tenants.TenantSetting", b =>

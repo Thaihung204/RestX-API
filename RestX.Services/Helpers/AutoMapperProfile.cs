@@ -14,6 +14,8 @@ using RestX.Models.Customers;
 using RestX.Models.HR;
 using RestX.Models.Identity;
 using RestX.Models.Tables;
+using RestX.BLL.DataTranferObjects.Inventory;
+using RestX.Models.Inventory;
 
 namespace RestX.BLL.Helpers
 {
@@ -79,13 +81,11 @@ namespace RestX.BLL.Helpers
             CreateMap<TableItem, Table>()
                 .ForMember(dest => dest.Id, opt => opt.Ignore())
                 .ForMember(dest => dest.Table3DModel, opt => opt.Ignore());
-            CreateMap<Models.Tenants.TenantRequest, DataTranferObjects.Tenants.TenantRequest>()
-                .ReverseMap()
-                .ForMember(d => d.tenantRequestStatus, o =>
-                {
-                    o.PreCondition(s => s.tenantRequestStatus.HasValue);
-                    o.MapFrom(s => s.tenantRequestStatus!.Value);
-                }); CreateMap<Models.Tenants.TenantRequest, TenantItem>().ReverseMap();
+            CreateMap<Models.Tenants.TenantRequest, DataTranferObjects.Tenants.TenantRequest>().ReverseMap();
+            CreateMap<Models.Tenants.TenantRequest, TenantItem>().ReverseMap();
+            CreateMap<Ingredient, IngredientItem>()
+                 .ReverseMap();
+            CreateMap<Supplier, SupplierItem>().ReverseMap();
         }
     }
 }

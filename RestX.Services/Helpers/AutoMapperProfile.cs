@@ -14,9 +14,8 @@ using RestX.Models.Customers;
 using RestX.Models.HR;
 using RestX.Models.Identity;
 using RestX.Models.Tables;
-using RestX.BLL.DataTranferObjects.IngredientCategory;
+using RestX.BLL.DataTranferObjects.Inventory;
 using RestX.Models.Inventory;
-
 namespace RestX.BLL.Helpers
 {
     public class AutoMapperProfile : Profile
@@ -87,7 +86,7 @@ namespace RestX.BLL.Helpers
                  .ReverseMap();
             CreateMap<Supplier, SupplierItem>().ReverseMap();
 
-            CreateMap<IngredientCategory, IngredientCategories>().ReverseMap();
+            CreateMap<Models.Inventory.IngredientCategory, DataTranferObjects.Inventory.IngredientCategory>().ReverseMap();
         }
     }
 }

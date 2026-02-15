@@ -1,0 +1,16 @@
+﻿using RestX.BLL.DataTranferObjects.Inventory;
+
+namespace RestX.BLL.Interfaces.Inventory
+{
+    public interface IIngredientService
+    {
+        Task<IEnumerable<IngredientItem>> GetAllIngredients();
+        Task<IngredientItem?> GetIngredientById(Guid id);
+        Task<Guid> UpsertIngredient(IngredientItem ingredientItem);
+        Task DeleteIngredient(Guid id);
+        Task<IEnumerable<IngredientCategory>> GetAllIngredientCategories();
+        Task<IngredientCategory?> GetIngredientCategoryById(Guid id);
+        Task<IngredientCategory> UpsertIngredientCategory(IngredientCategory model, string userName);
+        Task<bool> DeleteIngredientCategory(Guid id);
+    }
+}

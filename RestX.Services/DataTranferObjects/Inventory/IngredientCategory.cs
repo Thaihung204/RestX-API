@@ -1,6 +1,6 @@
-namespace RestX.BLL.DataTranferObjects.IngredientCategory
+namespace RestX.BLL.DataTranferObjects.Inventory
 {
-    public class IngredientCategories
+    public class IngredientCategory
     {
         public Guid? Id { get; set; }
         public string Name { get; set; } = string.Empty;

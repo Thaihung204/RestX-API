@@ -227,8 +227,10 @@ namespace RestX.BLL.Services
             }
             return tenant;
         }
+
         private async Task<string?> HandleUploadTenantImage(IFormFile? file, string folder, string publicId)
         {
+            if (file == null) return null;
             await using var stream = file.OpenReadStream();
 
             var upload = await cloudinaryService.UploadAsync(
@@ -264,6 +266,7 @@ namespace RestX.BLL.Services
                 throw new Exception($"Failed to seed data for tenant {tenant.Name}. Tenant creation aborted.", ex);
             }
         }
+
         public async Task DeleteTenant(string id)
         {
             var tenant = await adminRepo.GetByIdAsync<Tenant>(Guid.Parse(id));
@@ -310,6 +313,88 @@ namespace RestX.BLL.Services
             cmd.Parameters.Add(new SqlParameter("@dbName", System.Data.SqlDbType.NVarChar, 128) { Value = dbName });
 
             await cmd.ExecuteNonQueryAsync();
+        }
+
+        public async Task<IEnumerable<DataTranferObjects.Tenants.TenantRequest>> GetAllTenantRequests()
+        {
+            var entities = (await Repo.GetAllAsync<RestX.Models.Tenants.TenantRequest>(
+                orderBy: q => q.OrderByDescending(r => r.CreatedDate)
+            )).ToList();
+
+            return mapper.Map<List<DataTranferObjects.Tenants.TenantRequest>>(entities);
+        }
+
+        public async Task<DataTranferObjects.Tenants.TenantRequest?> GetTenantRequestById(Guid tenantRequestsId)
+        {
+            var entity = await Repo.GetOneAsync<RestX.Models.Tenants.TenantRequest>(r => r.Id == tenantRequestsId);
+            return mapper.Map<DataTranferObjects.Tenants.TenantRequest>(entity);
+        }
+
+        public async Task<Guid> AddTenantRequest(DataTranferObjects.Tenants.TenantRequest tenantRequest)
+        {
+            var entity = new Models.Tenants.TenantRequest
+            {
+                Name = tenantRequest.Name,
+                Hostname = tenantRequest.Hostname,
+
+                BusinessName = tenantRequest.BusinessName,
+                BusinessPrimaryPhone = tenantRequest.BusinessPrimaryPhone,
+                BusinessEmailAddress = tenantRequest.BusinessEmailAddress,
+
+                BusinessAddressLine1 = tenantRequest.BusinessAddressLine1,
+                BusinessAddressLine2 = tenantRequest.BusinessAddressLine2,
+                BusinessAddressLine3 = tenantRequest.BusinessAddressLine3,
+                BusinessAddressLine4 = tenantRequest.BusinessAddressLine4,
+                BusinessCountry = tenantRequest.BusinessCountry,
+
+                IsAccepted = null
+            };
+
+            await Repo.CreateAsync(entity);
+
+            return entity.Id;
+        }
+
+        public async Task<Guid> AcceptTenantRequest(Guid tenantRequestsId)
+        {
+            var tenantRequest = await Repo.GetByIdAsync<Models.Tenants.TenantRequest>(tenantRequestsId);
+            if (tenantRequest == null)
+                return Guid.Empty;
+
+            tenantRequest.IsAccepted = true;
+            Repo.Update(tenantRequest);
+            await Repo.SaveAsync();
+
+            var tenantItem = mapper.Map<TenantItem>(tenantRequest);
+            tenantItem.Id = null;
+
+            var tenant = await UpsertTenant(tenantItem);
+
+            return tenant.Id;
+        }
+
+        public async Task<Guid> DeclineTenantRequest(Guid tenantRequestsId)
+        {
+            var request = await Repo.GetByIdAsync<Models.Tenants.TenantRequest>(tenantRequestsId);
+            if (request == null)
+                return Guid.Empty;
+
+            request.IsAccepted = false;
+
+            Repo.Update(request);
+            await Repo.SaveAsync();
+
+            return request.Id;
+        }
+
+        public async Task DeleteTenantRequest(Guid tenantRequestsId)
+        {
+            var entity = await Repo.GetByIdAsync<RestX.Models.Tenants.TenantRequest>(tenantRequestsId);
+            if (entity == null)
+                return;
+
+            Repo.Delete<RestX.Models.Tenants.TenantRequest>(tenantRequestsId);
+            await Repo.SaveAsync();
         }
     }
 }

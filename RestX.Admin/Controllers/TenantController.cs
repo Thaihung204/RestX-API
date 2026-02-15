@@ -93,5 +93,89 @@ namespace RestX.Admin.Controllers
             }
         }
 
+        [HttpGet("requests")]
+        public async Task<ActionResult<IEnumerable<BLL.DataTranferObjects.Tenants.TenantRequest>>> GetAllTenantRequests()
+        {
+            try
+            {
+                return Ok(await tenantService.GetAllTenantRequests());
+            }
+            catch (Exception ex)
+            {
+                this.exceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
+        [HttpGet("requests/{id:guid}")]
+        public async Task<ActionResult<BLL.DataTranferObjects.Tenants.TenantRequest>> GetTenantRequestById([Required] Guid id)
+        {
+            try
+            {
+                return Ok(await tenantService.GetTenantRequestById(id));
+            }
+            catch (Exception ex)
+            {
+                this.exceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
+        [HttpPost("requests")]
+        public async Task<ActionResult<Guid>> AddTenantRequest([FromBody] BLL.DataTranferObjects.Tenants.TenantRequest tenantRequest)
+        {
+            try
+            {
+                return Ok(await tenantService.AddTenantRequest(tenantRequest));
+            }
+            catch (Exception ex)
+            {
+                this.exceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
+        [HttpPost("requests/{id:guid}/accept")]
+        public async Task<ActionResult<Guid>> AcceptTenantRequest([Required] Guid id)
+        {
+            try
+            {
+                return Ok(await tenantService.AcceptTenantRequest(id));
+            }
+            catch (Exception ex)
+            {
+                this.exceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
+        [HttpPost("requests/{id:guid}/decline")]
+        public async Task<ActionResult<Guid>> DeclineTenantRequest([Required] Guid id)
+        {
+            try
+            {
+                return Ok(await tenantService.DeclineTenantRequest(id));
+            }
+            catch (Exception ex)
+            {
+                this.exceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
+        [HttpDelete("requests/{id:guid}")]
+        public async Task<IActionResult> DeleteTenantRequest([Required] Guid id)
+        {
+            try
+            {
+                await tenantService.DeleteTenantRequest(id);
+                return Ok();
+            }
+            catch (Exception ex)
+            {
+                this.exceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
     }
 }

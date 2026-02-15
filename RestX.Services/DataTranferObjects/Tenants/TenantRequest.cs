@@ -9,7 +9,7 @@ namespace RestX.BLL.DataTranferObjects.Tenants
         [Required]
         public string Name { get; set; } = string.Empty;
 
-        public string? Hostname { get; set; }
+        public string Hostname { get; set; }
 
         public string? BusinessName { get; set; }
         public string? BusinessPrimaryPhone { get; set; }

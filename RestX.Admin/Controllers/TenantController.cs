@@ -135,12 +135,26 @@ namespace RestX.Admin.Controllers
             }
         }
 
-        [HttpPatch("requests/{id:guid}/status")]
-        public async Task<ActionResult<Guid>> ChangeTenantRequestStatus([Required] Guid id, [FromQuery] bool? isAccepted)
+        [HttpPost("requests/{id:guid}/accept")]
+        public async Task<ActionResult<Guid>> AcceptTenantRequest([Required] Guid id)
         {
             try
             {
-                return Ok(await tenantService.ChangeStatus(id, isAccepted));
+                return Ok(await tenantService.AcceptTenantRequest(id));
+            }
+            catch (Exception ex)
+            {
+                this.exceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
+        [HttpPost("requests/{id:guid}/decline")]
+        public async Task<ActionResult<Guid>> DeclineTenantRequest([Required] Guid id)
+        {
+            try
+            {
+                return Ok(await tenantService.DeclineTenantRequest(id));
             }
             catch (Exception ex)
             {

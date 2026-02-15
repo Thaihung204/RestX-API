@@ -5,7 +5,7 @@ namespace RestX.Models.Tenants;
 public class TenantRequest : Entity<Guid>
 {
     public string Name { get; set; } = null!;
-    public string? Hostname { get; set; }
+    public string Hostname { get; set; }
 
     public string? BusinessName { get; set; }
     public string? BusinessPrimaryPhone { get; set; }

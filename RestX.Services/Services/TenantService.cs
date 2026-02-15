@@ -230,6 +230,7 @@ namespace RestX.BLL.Services
 
         private async Task<string?> HandleUploadTenantImage(IFormFile? file, string folder, string publicId)
         {
+            if (file == null) return null;
             await using var stream = file.OpenReadStream();
 
             var upload = await cloudinaryService.UploadAsync(
@@ -331,7 +332,7 @@ namespace RestX.BLL.Services
 
         public async Task<Guid> AddTenantRequest(DataTranferObjects.Tenants.TenantRequest tenantRequest)
         {
-            var entity = new RestX.Models.Tenants.TenantRequest
+            var entity = new Models.Tenants.TenantRequest
             {
                 Name = tenantRequest.Name,
                 Hostname = tenantRequest.Hostname,
@@ -346,27 +347,44 @@ namespace RestX.BLL.Services
                 BusinessAddressLine4 = tenantRequest.BusinessAddressLine4,
                 BusinessCountry = tenantRequest.BusinessCountry,
 
-                IsAccepted = tenantRequest.IsAccepted
+                IsAccepted = null
             };
 
             await Repo.CreateAsync(entity);
-            await Repo.SaveAsync();
 
             return entity.Id;
         }
 
-        public async Task<Guid> ChangeStatus(Guid tenantRequestsId, bool? isAccepted)
+        public async Task<Guid> AcceptTenantRequest(Guid tenantRequestsId)
         {
-            var entity = await Repo.GetByIdAsync<RestX.Models.Tenants.TenantRequest>(tenantRequestsId);
-            if (entity == null)
+            var tenantRequest = await Repo.GetByIdAsync<Models.Tenants.TenantRequest>(tenantRequestsId);
+            if (tenantRequest == null)
                 return Guid.Empty;
 
-            entity.IsAccepted = isAccepted;
-
-            Repo.Update(entity);
+            tenantRequest.IsAccepted = true;
+            Repo.Update(tenantRequest);
             await Repo.SaveAsync();
 
-            return entity.Id;
+            var tenantItem = mapper.Map<TenantItem>(tenantRequest);
+            tenantItem.Id = null;
+
+            var tenant = await UpsertTenant(tenantItem);
+
+            return tenant.Id;
+        }
+
+        public async Task<Guid> DeclineTenantRequest(Guid tenantRequestsId)
+        {
+            var request = await Repo.GetByIdAsync<Models.Tenants.TenantRequest>(tenantRequestsId);
+            if (request == null)
+                return Guid.Empty;
+
+            request.IsAccepted = false;
+
+            Repo.Update(request);
+            await Repo.SaveAsync();
+
+            return request.Id;
         }
 
         public async Task DeleteTenantRequest(Guid tenantRequestsId)

@@ -12,7 +12,8 @@ namespace RestX.BLL.Interfaces
         Task<IEnumerable<DataTranferObjects.Tenants.TenantRequest>> GetAllTenantRequests();
         Task<DataTranferObjects.Tenants.TenantRequest?> GetTenantRequestById(Guid tenantRequestsId);
         Task<Guid> AddTenantRequest(DataTranferObjects.Tenants.TenantRequest tenantRequest);
-        Task<Guid> ChangeStatus(Guid tenantRequestsId, bool? isAccepted);
+        Task<Guid> AcceptTenantRequest(Guid tenantRequestsId);
+        Task<Guid> DeclineTenantRequest(Guid tenantRequestsId);
         Task DeleteTenantRequest(Guid tenantRequestsId);
     }
 }

@@ -5,8 +5,8 @@ using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Inventory;
 using RestX.Models.Inventory;
 using RestX.Models.Tenants;
-using IngredientCategoryEntity = RestX.Models.Inventory.IngredientCategory;
-using IngredientCategoryDto = RestX.BLL.DataTranferObjects.Inventory.IngredientCategory;
+using IngredientCategory = RestX.Models.Inventory.IngredientCategory;
+using IngredientCategories = RestX.BLL.DataTranferObjects.Inventory.IngredientCategory;
 
 namespace RestX.BLL.Services
 {
@@ -92,33 +92,33 @@ namespace RestX.BLL.Services
         private string GetCategoryCacheKey()
             => $"IngredientCategory:{CurrentTenant.Hostname}";
 
-        public async Task<IEnumerable<IngredientCategoryDto>> GetAllIngredientCategories()
+        public async Task<IEnumerable<IngredientCategories>> GetAllIngredientCategories()
         {
-            var categories = await RedisService.GetAsync<List<IngredientCategoryEntity>>(GetCategoryCacheKey());
+            var categories = await RedisService.GetAsync<List<IngredientCategory>>(GetCategoryCacheKey());
             if (categories == null)
             {
-                categories = (await Repo.GetAllAsync<IngredientCategoryEntity>(
+                categories = (await Repo.GetAllAsync<IngredientCategory>(
                     orderBy: q => q.OrderBy(c => c.Name)
                 )).ToList();
                 await RedisService.SetAsync(GetCategoryCacheKey(), categories);
             }
-            return mapper.Map<List<IngredientCategoryDto>>(categories);
+            return mapper.Map<List<IngredientCategories>>(categories);
         }
 
-        public async Task<IngredientCategoryDto?> GetIngredientCategoryById(Guid id)
+        public async Task<IngredientCategories?> GetIngredientCategoryById(Guid id)
         {
-            var category = await Repo.GetOneAsync<IngredientCategoryEntity>(
+            var category = await Repo.GetOneAsync<IngredientCategory>(
                 filter: c => c.Id == id
             );
-            return mapper.Map<IngredientCategoryDto>(category);
+            return mapper.Map<IngredientCategories>(category);
         }
 
-        public async Task<IngredientCategoryDto> UpsertIngredientCategory(IngredientCategoryDto dto, string userName)
+        public async Task<IngredientCategories> UpsertIngredientCategory(IngredientCategories dto, string userName)
         {
-            IngredientCategoryEntity category;
+            IngredientCategory category;
             if (dto.Id != null)
             {
-                category = await Repo.GetByIdAsync<IngredientCategoryEntity>(dto.Id.Value);
+                category = await Repo.GetByIdAsync<IngredientCategory>(dto.Id.Value);
                 category.Name = dto.Name;
                 category.Code = dto.Code;
                 category.Description = dto.Description;
@@ -126,9 +126,9 @@ namespace RestX.BLL.Services
                 Repo.Update(category, userName);
                 await Repo.SaveAsync();
                 await RedisService.RemoveAsync(GetCategoryCacheKey());
-                return mapper.Map<IngredientCategoryDto>(category);
+                return mapper.Map<IngredientCategories>(category);
             }
-            category = new IngredientCategoryEntity
+            category = new IngredientCategory
             {
                 Id = Guid.NewGuid(),
                 Name = dto.Name,
@@ -138,12 +138,12 @@ namespace RestX.BLL.Services
             };
             await Repo.CreateAsync(category, userName);
             await RedisService.RemoveAsync(GetCategoryCacheKey());
-            return mapper.Map<IngredientCategoryDto>(category);
+            return mapper.Map<IngredientCategories>(category);
         }
 
         public async Task<bool> DeleteIngredientCategory(Guid id)
         {
-            var category = await Repo.GetByIdAsync<IngredientCategoryEntity>(id);
+            var category = await Repo.GetByIdAsync<IngredientCategory>(id);
             if (category == null)
                 return false;
             var hasIngredients = await Repo.GetExistsAsync<Ingredient>(
@@ -151,7 +151,7 @@ namespace RestX.BLL.Services
             );
             if (hasIngredients)
                 return false;
-            Repo.Delete<IngredientCategoryEntity>(id);
+            Repo.Delete<IngredientCategory>(id);
             await Repo.SaveAsync();
             await RedisService.RemoveAsync(GetCategoryCacheKey());
             return true;

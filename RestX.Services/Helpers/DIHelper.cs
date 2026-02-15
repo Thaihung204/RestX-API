@@ -30,6 +30,7 @@ namespace RestX.BLL.Helpers
             services.AddScoped<IExceptionHandler, ExceptionHandler>();
             services.AddScoped<IDishService, DishService>();
             services.AddScoped<ICategoryService, CategoryService>();
+            services.AddScoped<IIngredientCategoryService, IngredientCategoryService>();
             services.AddScoped<ITableService, TableService>();
         }
     }

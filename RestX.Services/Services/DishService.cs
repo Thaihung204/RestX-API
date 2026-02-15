@@ -200,10 +200,10 @@ namespace RestX.BLL.Services
                 includeProperties: "Category,DishImages"
             );
 
-            DishItem dto;
+            DishItem dishItem;
             try
             {
-                dto = mapper.Map<DishItem>(dish);
+                dishItem = mapper.Map<DishItem>(dish);
             }
             catch (Exception ex)
             {
@@ -212,7 +212,7 @@ namespace RestX.BLL.Services
                 throw;
             }
 
-            dto.Images = dish.DishImages?
+            dishItem.Images = dish.DishImages?
                 .OrderBy(x => x.DisplayOrder)
                 .ThenBy(x => x.Id)
                 .Select(x => new DishImageItem
@@ -225,30 +225,30 @@ namespace RestX.BLL.Services
                 })
                 .ToList() ?? new List<DishImageItem>();
 
-            return dto;
+            return dishItem;
         }
 
-        public async Task<Guid> UpsertDish(DishItem dto)
+        public async Task<Guid> UpsertDish(DishItem dishItem)
         {
             Dish dish;
 
-            if (dto.Id == null)
+            if (dishItem.Id == null)
             {
-                dish = mapper.Map<Dish>(dto);
+                dish = mapper.Map<Dish>(dishItem);
                 Repo.Create(dish);
             }
             else
             {
                 dish = await Repo.GetOneAsync<Dish>(
-                    filter: x => x.Id == dto.Id,
+                    filter: x => x.Id == dishItem.Id,
                     includeProperties: "Category,DishImages");
 
-                mapper.Map(dto, dish);
+                mapper.Map(dishItem, dish);
                 Repo.Update(dish);
             }
 
             var currentImageIds = dish.DishImages.Select(x => x.Id).ToList();
-            var incomingImageIds = dto.Images
+            var incomingImageIds = dishItem.Images
                 .Where(x => x.Id.HasValue)
                 .Select(x => x.Id.Value)
                 .ToList();
@@ -261,23 +261,23 @@ namespace RestX.BLL.Services
             }
 
             var uploadTasks = new List<Task<DishImage>>();
-            foreach (var imgDto in dto.Images)
+            foreach (var dishImageItem in dishItem.Images)
             {
-                if (imgDto.Id != null)
+                if (dishImageItem.Id != null)
                 {
-                    var existingImg = dish.DishImages.FirstOrDefault(x => x.Id == imgDto.Id);
+                    var existingImg = dish.DishImages.FirstOrDefault(x => x.Id == dishImageItem.Id);
                     if (existingImg != null)
                     {
-                        existingImg.DisplayOrder = imgDto.DisplayOrder ?? existingImg.DisplayOrder;
-                        existingImg.ImageType = imgDto.ImageType ?? existingImg.ImageType;
-                        existingImg.IsActive = imgDto.IsActive;
+                        existingImg.DisplayOrder = dishImageItem.DisplayOrder ?? existingImg.DisplayOrder;
+                        existingImg.ImageType = dishImageItem.ImageType ?? existingImg.ImageType;
+                        existingImg.IsActive = dishImageItem.IsActive;
                         Repo.Update(existingImg);
                     }
                 }
-                else if (imgDto.File != null)
+                else if (dishImageItem.File != null)
                 {
                     var newImageId = Guid.NewGuid();
-                    uploadTasks.Add(HandleImageUpload(imgDto, dish.Id, newImageId));
+                    uploadTasks.Add(HandleImageUpload(dishImageItem, dish.Id, newImageId));
                 }
             }
 
@@ -296,14 +296,14 @@ namespace RestX.BLL.Services
             return dish.Id;
         }
 
-        private async Task<DishImage> HandleImageUpload(DishImageItem imgDto, Guid dishId, Guid newImageId)
+        private async Task<DishImage> HandleImageUpload(DishImageItem dishImageItem, Guid dishId, Guid newImageId)
         {
-            using var stream = imgDto.File.OpenReadStream();
+            using var stream = dishImageItem.File.OpenReadStream();
 
             var uploadResult = await cloudinaryService.UploadAsync(
                 fileStream: stream,
-                fileName: imgDto.File.FileName,
-                folder: $"{CurrentTenant.Name.Replace(" ", "")}//dishes/{dishId}",
+                fileName: dishImageItem.File.FileName,
+                folder: $"{CurrentTenant.Name.Replace(" ", "")}/dishes/{dishId}",
                 publicId: newImageId.ToString(),
                 overwrite: true
             );
@@ -313,9 +313,9 @@ namespace RestX.BLL.Services
                 Id = newImageId,
                 DishId = dishId,
                 ImageUrl = uploadResult.Url,
-                ImageType = imgDto.ImageType ?? DishImageType.Main,
-                DisplayOrder = imgDto.DisplayOrder ?? 0,
-                IsActive = imgDto.IsActive
+                ImageType = dishImageItem.ImageType ?? DishImageType.Main,
+                DisplayOrder = dishImageItem.DisplayOrder ?? 0,
+                IsActive = dishImageItem.IsActive
             };
         }
 

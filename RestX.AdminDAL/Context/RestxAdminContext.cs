@@ -43,8 +43,7 @@ public partial class RestxAdminContext : IdentityDbContext<Admin>
         modelBuilder.Entity<TenantRequest>(entity =>
         {
             entity.Property(x => x.tenantRequestStatus)
-                  .HasConversion<int>()
-                  .HasDefaultValue(TenantRequestStatus.Pending);
+                  .HasConversion<int>();
         });
 
         base.OnModelCreating(modelBuilder);

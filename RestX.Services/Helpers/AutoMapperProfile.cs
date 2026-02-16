@@ -14,6 +14,7 @@ using RestX.Models.Customers;
 using RestX.Models.HR;
 using RestX.Models.Identity;
 using RestX.Models.Tables;
+using RestX.BLL.DataTranferObjects.Floor;
 using RestX.BLL.DataTranferObjects.Inventory;
 using RestX.Models.Inventory;
 
@@ -77,12 +78,23 @@ namespace RestX.BLL.Helpers
                 .ForMember(
                     dest => dest.TableStatusName,
                     opt => opt.MapFrom(src => src.TableStatusId.ToString())
+                )
+                .ForMember(
+                    dest => dest.FloorName,
+                    opt => opt.MapFrom(src => src.Floor != null ? src.Floor.Name : null)
                 );
             CreateMap<TableItem, Table>()
                 .ForMember(dest => dest.Id, opt => opt.Ignore())
+                .ForMember(dest => dest.Floor, opt => opt.Ignore())
                 .ForMember(dest => dest.Table3DModel, opt => opt.Ignore());
             CreateMap<Models.Tenants.TenantRequest, DataTranferObjects.Tenants.TenantRequest>().ReverseMap();
             CreateMap<Models.Tenants.TenantRequest, TenantItem>().ReverseMap();
+            CreateMap<Floor, FloorItem>()
+                .ForMember(dest => dest.Image, opt => opt.Ignore())
+                .ForMember(dest => dest.TableCount, opt => opt.MapFrom(src => src.Tables != null ? src.Tables.Count : 0));
+            CreateMap<FloorItem, Floor>()
+                .ForMember(dest => dest.Tables, opt => opt.Ignore())
+                .ForMember(dest => dest.ImageUrl, opt => opt.Ignore());
             CreateMap<Ingredient, IngredientItem>()
                  .ReverseMap();
             CreateMap<Supplier, SupplierItem>().ReverseMap();

@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using RestX.Models.Enum;
+using System.ComponentModel.DataAnnotations;
 
 namespace RestX.BLL.DataTranferObjects.Tenants
 {
@@ -23,6 +24,6 @@ namespace RestX.BLL.DataTranferObjects.Tenants
         public string? BusinessAddressLine4 { get; set; }
         public string? BusinessCountry { get; set; }
 
-        public bool? IsAccepted { get; set; }
+        public TenantRequestStatus? tenantRequestStatus { get; set; }
     }
 }

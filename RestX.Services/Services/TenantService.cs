@@ -8,6 +8,7 @@ using RestX.BLL.DataTranferObjects.Tenants;
 using RestX.BLL.Extensions;
 using RestX.BLL.Interfaces;
 using RestX.DAL.DataSeeders;
+using RestX.Models.Enum;
 using RestX.Models.Tenants;
 using Serilog;
 using System.Text.RegularExpressions;
@@ -346,8 +347,6 @@ namespace RestX.BLL.Services
                 BusinessAddressLine3 = tenantRequest.BusinessAddressLine3,
                 BusinessAddressLine4 = tenantRequest.BusinessAddressLine4,
                 BusinessCountry = tenantRequest.BusinessCountry,
-
-                IsAccepted = null
             };
 
             await Repo.CreateAsync(entity);
@@ -361,7 +360,7 @@ namespace RestX.BLL.Services
             if (tenantRequest == null)
                 return Guid.Empty;
 
-            tenantRequest.IsAccepted = true;
+            tenantRequest.tenantRequestStatus = TenantRequestStatus.Accepted;
             Repo.Update(tenantRequest);
             await Repo.SaveAsync();
 
@@ -379,7 +378,7 @@ namespace RestX.BLL.Services
             if (request == null)
                 return Guid.Empty;
 
-            request.IsAccepted = false;
+            request.tenantRequestStatus = TenantRequestStatus.Denied;
 
             Repo.Update(request);
             await Repo.SaveAsync();

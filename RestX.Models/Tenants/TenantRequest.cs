@@ -1,4 +1,5 @@
 ﻿using RestX.Models.BaseModel;
+using RestX.Models.Enum;
 
 namespace RestX.Models.Tenants;
 
@@ -17,5 +18,5 @@ public class TenantRequest : Entity<Guid>
     public string? BusinessAddressLine4 { get; set; }
     public string? BusinessCountry { get; set; }
 
-    public bool? IsAccepted { get; set; }
+    public TenantRequestStatus tenantRequestStatus { get; set; } = TenantRequestStatus.Pending;
 }

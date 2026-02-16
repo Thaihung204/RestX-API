@@ -386,7 +386,7 @@ namespace RestX.DAL.Context
                 entity.HasOne<Floor>(e => e.Floor)
                     .WithMany(f => f.Tables)
                     .HasForeignKey(e => e.FloorId)
-                    .OnDelete(DeleteBehavior.SetNull);
+                    .OnDelete(DeleteBehavior.Restrict);
 
                 entity.Property(e => e.Code).HasMaxLength(20).IsRequired();
                 entity.Property(e => e.Type).HasMaxLength(20);

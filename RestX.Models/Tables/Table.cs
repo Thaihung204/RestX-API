@@ -14,7 +14,7 @@ namespace RestX.Models.Tables
 {
     public partial class Table : Entity<Guid>
     {
-        public Guid? FloorId { get; set; }
+        public Guid FloorId { get; set; }
 
         [Required]
         [MaxLength(20)]
@@ -65,7 +65,7 @@ namespace RestX.Models.Tables
         public string? QRCodeUrl { get; set; }
 
         public bool IsActive { get; set; } = true;
-        public virtual Floor? Floor { get; set; }
+        public virtual Floor Floor { get; set; }
         public virtual Table3DModel? Table3DModel { get; set; }
         public virtual ICollection<TableSession> TableSessions { get; set; } = new HashSet<TableSession>();
         public virtual ICollection<ReservationTable> ReservationTables { get; set; } = new HashSet<ReservationTable>();

@@ -8,8 +8,8 @@ namespace RestX.BLL.DataTranferObjects.Table
     {
         public Guid Id { get; set; }
 
-        public Guid? FloorId { get; set; }
-        public string? FloorName { get; set; }
+        public Guid FloorId { get; set; }
+        public string FloorName { get; set; } = string.Empty;
 
         [Required]
         [MaxLength(20)]

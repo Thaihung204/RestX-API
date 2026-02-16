@@ -65,15 +65,15 @@ namespace RestX.WebApp.Controllers
 
         [HttpPost]
         [Authorize(Roles = "Admin,System Admin")]
-        public async Task<IActionResult> AddFloor([FromForm] FloorItem request)
+        public async Task<IActionResult> AddFloor([FromForm] Floor request)
         {
             try
             {
                 if (!ModelState.IsValid)
                     return BadRequest(new { success = false, message = "Invalid data", errors = ModelState });
                 var user = await GetCurrentUserAsync();
-                var result = await floorService.UpsertFloor(request, user?.UserName);
-                return Ok(new { success = true, message = "Floor created successfully", data = result });
+                var floorId = await floorService.UpsertFloor(request, user?.Id.ToString());
+                return Ok(new { success = true, message = "Floor created successfully", data = new { id = floorId } });
             }
             catch (Exception ex)
             {
@@ -84,7 +84,7 @@ namespace RestX.WebApp.Controllers
 
         [HttpPut("{id}")]
         [Authorize(Roles = "Admin,System Admin")]
-        public async Task<IActionResult> EditFloor([Required] Guid id, [FromForm] FloorItem request)
+        public async Task<IActionResult> EditFloor([Required] Guid id, [FromForm] Floor request)
         {
             try
             {
@@ -92,8 +92,8 @@ namespace RestX.WebApp.Controllers
                     return BadRequest(new { success = false, message = "Invalid data", errors = ModelState });
                 request.Id = id;
                 var user = await GetCurrentUserAsync();
-                var result = await floorService.UpsertFloor(request, user?.UserName);
-                return Ok(new { success = true, message = "Floor updated successfully", data = result });
+                var floorId = await floorService.UpsertFloor(request, user?.Id.ToString());
+                return Ok(new { success = true, message = "Floor updated successfully", data = new { id = floorId } });
             }
             catch (InvalidOperationException)
             {
@@ -133,7 +133,7 @@ namespace RestX.WebApp.Controllers
                 if (!ModelState.IsValid)
                     return BadRequest(new { success = false, message = "Invalid data", errors = ModelState });
                 var user = await GetCurrentUserAsync();
-                var success = await floorService.SaveLayout(floorId, request, user?.UserName);
+                var success = await floorService.SaveLayout(floorId, request, user?.Id.ToString());
                 if (!success)
                     return NotFound(new { success = false, message = "Floor layout not found" });
 

@@ -3,8 +3,8 @@ using RestX.BLL.DataTranferObjects.Floor;
 using RestX.BLL.Extensions;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Tables;
-using RestX.Models.Tables;
 using RestX.Models.Tenants;
+using FloorEntity = RestX.Models.Tables.Floor;
 
 namespace RestX.BLL.Services
 {
@@ -26,35 +26,35 @@ namespace RestX.BLL.Services
 
         private string GetCacheKey() => $"Floor:{CurrentTenant.Hostname}";
 
-        public async Task<IEnumerable<FloorItem>> GetAllFloors()
+        public async Task<IEnumerable<Floor>> GetAllFloors()
         {
-            var cached = await RedisService.GetAsync<List<FloorItem>>(GetCacheKey());
+            var cached = await RedisService.GetAsync<List<Floor>>(GetCacheKey());
             if (cached != null) return cached;
-            var floors = (await Repo.GetAllAsync<Floor>(
+            var floors = (await Repo.GetAllAsync<FloorEntity>(
                 orderBy: q => q.OrderBy(f => f.Name),
                 includeProperties: "Tables"
             )).ToList();
-            var result = mapper.Map<List<FloorItem>>(floors);
+            var result = mapper.Map<List<Floor>>(floors);
             await RedisService.SetAsync(GetCacheKey(), result);
             return result;
         }
 
-        public async Task<FloorItem?> GetFloorById(Guid id)
+        public async Task<Floor?> GetFloorById(Guid id)
         {
-            var floor = await Repo.GetOneAsync<Floor>(
+            var floor = await Repo.GetOneAsync<FloorEntity>(
                 filter: f => f.Id == id,
                 includeProperties: "Tables"
             );
             if (floor == null) return null;
-            return mapper.Map<FloorItem>(floor);
+            return mapper.Map<Floor>(floor);
         }
 
-        public async Task<FloorItem> UpsertFloor(FloorItem request, string? currentUser = null)
+        public async Task<Guid> UpsertFloor(Floor request, string? currentUser = null)
         {
-            Floor floor;
+            FloorEntity floor;
             if (request.Id != null)
             {
-                floor = await Repo.GetOneAsync<Floor>(
+                floor = await Repo.GetOneAsync<FloorEntity>(
                     filter: f => f.Id == request.Id,
                     includeProperties: "Tables"
                 );
@@ -85,7 +85,7 @@ namespace RestX.BLL.Services
             }
             else
             {
-                floor = mapper.Map<Floor>(request);
+                floor = mapper.Map<FloorEntity>(request);
                 floor.Id = Guid.NewGuid();
                 if (request.Image != null)
                 {
@@ -103,12 +103,12 @@ namespace RestX.BLL.Services
             }
             await Repo.SaveAsync();
             await RedisService.RemoveAsync(GetCacheKey());
-            return mapper.Map<FloorItem>(floor);
+            return floor.Id;
         }
 
         public async Task<FloorLayoutResponse?> GetFloorLayout(Guid floorId)
         {
-            var floor = await Repo.GetOneAsync<Floor>(
+            var floor = await Repo.GetOneAsync<FloorEntity>(
                 filter: f => f.Id == floorId,
                 includeProperties: "Tables"
             );
@@ -144,7 +144,7 @@ namespace RestX.BLL.Services
 
         public async Task<bool> SaveLayout(Guid floorId, SaveLayoutRequest request, string? currentUser = null)
         {
-            var floor = await Repo.GetOneAsync<Floor>(
+            var floor = await Repo.GetOneAsync<FloorEntity>(
                 filter: f => f.Id == floorId,
                 includeProperties: "Tables"
             );
@@ -166,7 +166,7 @@ namespace RestX.BLL.Services
 
         public async Task<bool> DeleteFloor(Guid id)
         {
-            var floor = await Repo.GetByIdAsync<Floor>(id);
+            var floor = await Repo.GetByIdAsync<FloorEntity>(id);
             if (floor == null) return false;
             if (!string.IsNullOrEmpty(floor.ImageUrl))
             {

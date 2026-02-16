@@ -6,7 +6,7 @@ using System.Text.Json.Serialization;
 
 namespace RestX.BLL.DataTranferObjects.Floor
 {
-    public class FloorItem
+    public class Floor
     {
         [BindNever]
         public Guid? Id { get; set; }
@@ -18,7 +18,7 @@ namespace RestX.BLL.DataTranferObjects.Floor
         [Range(0, 999999.99)]
         public decimal Height { get; set; } = 900;
         [BindNever]
-        public string? ImageUrl { get; set; }
+        public string ImageUrl { get; set; } = string.Empty;
         [JsonIgnore]
         public IFormFile? Image { get; set; }
         public bool IsActive { get; set; } = true;

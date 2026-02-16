@@ -19,7 +19,7 @@ namespace RestX.Models.Tables
         public decimal Height { get; set; } = 900;
         [MaxLength(500)]
         [Url]
-        public string? ImageUrl { get; set; }
+        public string ImageUrl { get; set; } = string.Empty;
         public bool IsActive { get; set; } = true;
         public virtual ICollection<Table> Tables { get; set; } = new HashSet<Table>();
     }

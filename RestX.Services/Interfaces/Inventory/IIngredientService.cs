@@ -10,7 +10,7 @@ namespace RestX.BLL.Interfaces.Inventory
         Task DeleteIngredient(Guid id);
         Task<IEnumerable<IngredientCategory>> GetAllIngredientCategories();
         Task<IngredientCategory?> GetIngredientCategoryById(Guid id);
-        Task<IngredientCategory> UpsertIngredientCategory(IngredientCategory model, string userName);
+        Task<Guid> UpsertIngredientCategory(IngredientCategory model, string userId);
         Task<bool> DeleteIngredientCategory(Guid id);
     }
 }

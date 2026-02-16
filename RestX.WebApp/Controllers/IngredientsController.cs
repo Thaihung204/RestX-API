@@ -137,12 +137,12 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpPost("categories")]
-        public async Task<ActionResult<IngredientCategory>> AddIngredientCategory([FromBody] IngredientCategory category)
+        public async Task<ActionResult<Guid>> AddIngredientCategory([FromBody] IngredientCategory category)
         {
             try
             {
                 var user = await GetCurrentUserAsync();
-                var result = await ingredientService.UpsertIngredientCategory(category, user?.UserName);
+                var result = await ingredientService.UpsertIngredientCategory(category, user?.Id.ToString());
                 return Ok(result);
             }
             catch (Exception ex)
@@ -153,13 +153,13 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpPut("categories/{id}")]
-        public async Task<ActionResult<IngredientCategory>> EditIngredientCategory([Required] Guid id, [FromBody] IngredientCategory category)
+        public async Task<ActionResult<Guid>> EditIngredientCategory([Required] Guid id, [FromBody] IngredientCategory category)
         {
             try
             {
                 var user = await GetCurrentUserAsync();
                 category.Id = id;
-                var result = await ingredientService.UpsertIngredientCategory(category, user?.UserName);
+                var result = await ingredientService.UpsertIngredientCategory(category, user?.Id.ToString());
                 return Ok(result);
             }
             catch (Exception ex)

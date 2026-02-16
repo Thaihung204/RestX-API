@@ -113,32 +113,32 @@ namespace RestX.BLL.Services
             return mapper.Map<IngredientCategories>(category);
         }
 
-        public async Task<IngredientCategories> UpsertIngredientCategory(IngredientCategories dto, string userName)
+        public async Task<Guid> UpsertIngredientCategory(IngredientCategories request, string userId)
         {
             IngredientCategory category;
-            if (dto.Id != null)
+            if (request.Id != null)
             {
-                category = await Repo.GetByIdAsync<IngredientCategory>(dto.Id.Value);
-                category.Name = dto.Name;
-                category.Code = dto.Code;
-                category.Description = dto.Description;
-                category.IsActive = dto.IsActive;
-                Repo.Update(category, userName);
+                category = await Repo.GetByIdAsync<IngredientCategory>(request.Id.Value);
+                category.Name = request.Name;
+                category.Code = request.Code;
+                category.Description = request.Description;
+                category.IsActive = request.IsActive;
+                Repo.Update(category, userId);
                 await Repo.SaveAsync();
                 await RedisService.RemoveAsync(GetCategoryCacheKey());
-                return mapper.Map<IngredientCategories>(category);
+                return category.Id;
             }
             category = new IngredientCategory
             {
                 Id = Guid.NewGuid(),
-                Name = dto.Name,
-                Code = dto.Code,
-                Description = dto.Description,
-                IsActive = dto.IsActive
+                Name = request.Name,
+                Code = request.Code,
+                Description = request.Description,
+                IsActive = request.IsActive
             };
-            await Repo.CreateAsync(category, userName);
+            await Repo.CreateAsync(category, userId);
             await RedisService.RemoveAsync(GetCategoryCacheKey());
-            return mapper.Map<IngredientCategories>(category);
+            return category.Id;
         }
 
         public async Task<bool> DeleteIngredientCategory(Guid id)

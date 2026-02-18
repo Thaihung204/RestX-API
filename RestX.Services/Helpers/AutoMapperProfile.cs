@@ -1,21 +1,23 @@
 ﻿using AutoMapper;
+using RestX.BLL.DataTranferObjects.Authentication;
 using RestX.BLL.DataTranferObjects.Category;
+using RestX.BLL.DataTranferObjects.Customer;
+using RestX.BLL.DataTranferObjects.Dish;
+using RestX.BLL.DataTranferObjects.Employee;
+using RestX.BLL.DataTranferObjects.Inventory;
+using RestX.BLL.DataTranferObjects.Orders;
 using RestX.BLL.DataTranferObjects.Table;
 using RestX.BLL.DataTranferObjects.Tenants;
-using RestX.BLL.DataTranferObjects.Dish;
-using RestX.Models.Enum;
-using RestX.Models.Menu;
-using RestX.Models.Tenants;
-using System.Globalization;
-using RestX.BLL.DataTranferObjects.Authentication;
-using RestX.BLL.DataTranferObjects.Customer;
-using RestX.BLL.DataTranferObjects.Employee;
 using RestX.Models.Customers;
+using RestX.Models.Enum;
 using RestX.Models.HR;
 using RestX.Models.Identity;
-using RestX.Models.Tables;
-using RestX.BLL.DataTranferObjects.Inventory;
 using RestX.Models.Inventory;
+using RestX.Models.Menu;
+using RestX.Models.Orders;
+using RestX.Models.Tables;
+using RestX.Models.Tenants;
+using System.Globalization;
 
 namespace RestX.BLL.Helpers
 {
@@ -86,6 +88,11 @@ namespace RestX.BLL.Helpers
             CreateMap<Ingredient, IngredientItem>()
                  .ReverseMap();
             CreateMap<Supplier, SupplierItem>().ReverseMap();
+            CreateMap<OrderDetail, OrderDetailItem>().ReverseMap();
+            CreateMap<Order, OrderItem>()
+                .ForMember(dest => dest.TableIds, opt => opt.MapFrom(src => src.OrderTables.Select(x => x.TableId)))
+                .ForMember(dest => dest.Details, opt => opt.MapFrom(src => src.OrderDetails)).ReverseMap();
+
         }
     }
 }

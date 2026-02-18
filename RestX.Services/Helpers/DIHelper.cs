@@ -34,6 +34,7 @@ namespace RestX.BLL.Helpers
             services.AddScoped<ITableService, TableService>();
             services.AddScoped<IIngredientService, IngredientService>();
             services.AddScoped<ISupplierService, SupplierService>();
+            services.AddScoped<IOrderService, OrderService>();
         }
     }
 }

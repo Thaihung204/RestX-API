@@ -1,41 +1,40 @@
 ﻿using AutoMapper;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using RestX.BLL.DataTranferObjects.Category;
+using RestX.BLL.DataTranferObjects.Inventory;
 using RestX.BLL.Interfaces;
+using RestX.BLL.Interfaces.Inventory;
 using RestX.Models.Identity;
-using RestX.Models.Menu;
 using RestX.Models.Tenants;
 using RestX.WebApp.Controllers.BaseControllers;
 using System.ComponentModel.DataAnnotations;
 
 namespace RestX.WebApp.Controllers
 {
-    [Route("api/categories")]
+    [Route("api/ingredients")]
     [ApiController]
-    [Authorize(AuthenticationSchemes = "Bearer")]
-    public class CategoriesController : BaseController
+    public class IngredientsController : BaseController
     {
-        private readonly ICategoryService categoryService;
+        private readonly IIngredientService ingredientService;
 
-        public CategoriesController(ICategoryService categoryService,
+        public IngredientsController(
+            IIngredientService ingredientService,
             IMapper mapper,
             UserManager<ApplicationUser> userManager,
             IExceptionHandler exceptionHandler,
-            IEnumerable<ActiveTenant> tenant) : base(mapper, userManager, exceptionHandler, tenant)
+            IEnumerable<ActiveTenant> tenant
+        ) : base(mapper, userManager, exceptionHandler, tenant)
         {
-            this.categoryService = categoryService;
+            this.ingredientService = ingredientService;
         }
 
         [HttpGet]
-        [AllowAnonymous]
-        public async Task<ActionResult<IEnumerable<CategoryItem>>> GetAllCategories()
+        public async Task<ActionResult<IEnumerable<IngredientItem>>> GetAllIngredients()
         {
             try
             {
-                var categories = await categoryService.GetAllCategories();
-                return Ok(categories);
+                var ingredients = await ingredientService.GetAllIngredients();
+                return Ok(ingredients);
             }
             catch (Exception ex)
             {
@@ -45,13 +44,12 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpGet("{id}")]
-        [AllowAnonymous]
-        public async Task<ActionResult<CategoryItem>> GetCategoryById([Required] Guid id)
+        public async Task<ActionResult<IngredientItem>> GetIngredientById([Required] Guid id)
         {
             try
             {
-                var category = await categoryService.GetCategoryById(id);
-                return Ok(category);
+                var ingredient = await ingredientService.GetIngredientById(id);
+                return Ok(ingredient);
             }
             catch (Exception ex)
             {
@@ -60,16 +58,14 @@ namespace RestX.WebApp.Controllers
             }
         }
 
-
         [HttpPut("{id}")]
-        [Authorize(Roles = "Admin,System Admin")]
-        public async Task<IActionResult> EditCategory([Required] Guid id, [FromForm] CategoryItem category)
+        public async Task<IActionResult> EditIngredient([Required] Guid id, [FromBody] IngredientItem ingredient)
         {
             try
             {
-                category.Id = id;
-                var categoryId = await categoryService.UpsertCategory(category);
-                return Ok(categoryId);
+                ingredient.Id = id;
+                var ingredientId = await ingredientService.UpsertIngredient(ingredient);
+                return Ok(ingredientId);
             }
             catch (Exception ex)
             {
@@ -79,13 +75,12 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpPost]
-        [Authorize(Roles = "Admin,System Admin")]
-        public async Task<ActionResult<Guid>> AddCategory([FromForm] CategoryItem category)
+        public async Task<ActionResult<Guid>> AddIngredient([FromBody] IngredientItem ingredient)
         {
             try
             {
-                var categoryId = await categoryService.UpsertCategory(category);
-                return Ok(categoryId);
+                var ingredientId = await ingredientService.UpsertIngredient(ingredient);
+                return Ok(ingredientId);
             }
             catch (Exception ex)
             {
@@ -95,12 +90,11 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpDelete("{id}")]
-        [Authorize(Roles = "Admin,System Admin")]
-        public async Task<IActionResult> DeleteCategory([Required] Guid id)
+        public async Task<IActionResult> DeleteIngredient([Required] Guid id)
         {
             try
             {
-                await categoryService.DeleteCategory(id);
+                await ingredientService.DeleteIngredient(id);
                 return Ok();
             }
             catch (Exception ex)

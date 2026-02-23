@@ -29,48 +29,64 @@ namespace RestX.DAL.DataSeeders
         private static List<LoyaltyPointBand> CreateLoyaltyBands()
         {
             return new List<LoyaltyPointBand>
-            {
+    {
                 new()
                 {
                     Id = Guid.NewGuid(),
                     Name = "Bronze",
                     Min = 0,
-                    Max = 1000,
+                    Max = 999,
                     DiscountPercentage = 0,
                     BenefitDescription = "Thành viên cơ bản - Tích điểm cho mọi giao dịch",
+                    LogoColor = "#CD7F32",
                     IsActive = true
                 },
                 new()
                 {
                     Id = Guid.NewGuid(),
                     Name = "Silver",
-                    Min = 1001,
-                    Max = 5000,
-                    DiscountPercentage = 5,
-                    BenefitDescription = "Giảm 5% cho mọi đơn hàng - Ưu đãi sinh nhật",
+                    Min = 1000,
+                    Max = 4999,
+                    DiscountPercentage = 3,
+                    BenefitDescription = "Giảm 3% cho mọi đơn hàng - Ưu đãi sinh nhật",
+                    LogoColor = "#C0C0C0",
                     IsActive = true
                 },
                 new()
                 {
                     Id = Guid.NewGuid(),
                     Name = "Gold",
-                    Min = 5001,
-                    Max = 10000,
-                    DiscountPercentage = 10,
-                    BenefitDescription = "Giảm 10% cho mọi đơn hàng - Ưu tiên đặt bàn - Voucher sinh nhật",
+                    Min = 5000,
+                    Max = 14999,
+                    DiscountPercentage = 7,
+                    BenefitDescription = "Giảm 7% cho mọi đơn hàng - Ưu tiên đặt bàn - Voucher sinh nhật",
+                    LogoColor = "#FFD700",
                     IsActive = true
                 },
                 new()
                 {
                     Id = Guid.NewGuid(),
                     Name = "Platinum",
-                    Min = 10001,
+                    Min = 15000,
+                    Max = 29999,
+                    DiscountPercentage = 10,
+                    BenefitDescription = "Giảm 10% - Ưu tiên đặt bàn - Quà sinh nhật cao cấp - Hỗ trợ đặt phòng riêng",
+                    LogoColor = "#E5E4E2",
+                    IsActive = true
+                },
+                new()
+                {
+                    Id = Guid.NewGuid(),
+                    Name = "Diamond",
+                    Min = 30000,
                     Max = null,
-                    DiscountPercentage = 15,
-                    BenefitDescription = "Giảm 15% cho mọi đơn hàng - VIP treatment - Phòng riêng - Quà sinh nhật cao cấp",
+                    DiscountPercentage = 12,
+                    BenefitDescription = "Giảm 12% - VIP treatment - Phòng riêng miễn phí - Quà sinh nhật đặc biệt - Ưu đãi sự kiện riêng",
+                    LogoColor = "#B9F2FF",
                     IsActive = true
                 }
             };
         }
+
     }
 }

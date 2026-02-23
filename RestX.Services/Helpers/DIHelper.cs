@@ -8,6 +8,7 @@ namespace RestX.BLL.Helpers
     using RestX.BLL.Interfaces.Customers;
     using RestX.BLL.Interfaces.Employees;
     using RestX.BLL.Interfaces.Status;
+    using RestX.BLL.Interfaces.Inventory;
     using RestX.BLL.Interfaces.Tables;
     using RestX.BLL.Services;
     using RestX.BLL.Services.Auth;
@@ -32,6 +33,8 @@ namespace RestX.BLL.Helpers
             services.AddScoped<IDishService, DishService>();
             services.AddScoped<ICategoryService, CategoryService>();
             services.AddScoped<ITableService, TableService>();
+            services.AddScoped<IIngredientService, IngredientService>();
+            services.AddScoped<ISupplierService, SupplierService>();
             services.AddScoped<IStatusValueService, StatusValueService>();
         }
     }

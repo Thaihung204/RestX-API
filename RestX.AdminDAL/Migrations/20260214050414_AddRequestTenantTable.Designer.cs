@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using RestX.AdminDAL.Context;
 
@@ -11,9 +12,11 @@ using RestX.AdminDAL.Context;
 namespace RestX.AdminDAL.Migrations
 {
     [DbContext(typeof(RestxAdminContext))]
-    partial class RestxAdminContextModelSnapshot : ModelSnapshot
+    [Migration("20260214050414_AddRequestTenantTable")]
+    partial class AddRequestTenantTable
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -416,8 +419,10 @@ namespace RestX.AdminDAL.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<string>("Hostname")
-                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool?>("IsAccepted")
+                        .HasColumnType("bit");
 
                     b.Property<string>("ModifiedBy")
                         .HasMaxLength(100)
@@ -429,11 +434,6 @@ namespace RestX.AdminDAL.Migrations
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("tenantRequestStatus")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasDefaultValue(0);
 
                     b.HasKey("Id");
 

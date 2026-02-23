@@ -10,12 +10,13 @@
         public string Hostname { get; set; }
         public bool IsActive { get; set; }
         public string Prefix { get; set; }
-        public string BaseColor { get; set; }
         public string PrimaryColor { get; set; }
-        public string PrimaryDocsColor { get; set; }
-        public string SecondaryColor { get; set; }
-        public string HeaderColor { get; set; }
-        public string FooterColor { get; set; }
+        public string LightBaseColor { get; set; }
+        public string LightSurfaceColor { get; set; }
+        public string LightCardColor { get; set; }
+        public string DarkBaseColor { get; set; }
+        public string DarkSurfaceColor { get; set; }
+        public string DarkCardColor { get; set; }
         public string FaviconUrl { get; set; }
         public string LogoUrl { get; set; }
         public DateTime? ModifiedDate { get; set; }

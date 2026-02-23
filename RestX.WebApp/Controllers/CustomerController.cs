@@ -1,5 +1,6 @@
-using AutoMapper;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
+using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
 using RestX.BLL.DataTranferObjects.Customer;
 using RestX.BLL.Interfaces;
@@ -13,6 +14,7 @@ namespace RestX.WebApp.Controllers
 {
     [Route("api/customers")]
     [ApiController]
+    [Authorize(AuthenticationSchemes = "Bearer")]
     public class CustomerController : BaseController
     {
         private readonly ICustomerService customerService;
@@ -23,9 +25,9 @@ namespace RestX.WebApp.Controllers
             IEnumerable<ActiveTenant> tenant) : base(mapper, userManager, exceptionHandler, tenant)
         {
             this.customerService = customerService;
-            this.customerService = customerService;
         }
         [HttpGet]
+        [Authorize(Roles = "Admin,System Admin")]
         public async Task<IActionResult> GetAllCustomers([FromQuery] CustomerFilterParams filter)
         {
             try
@@ -40,6 +42,7 @@ namespace RestX.WebApp.Controllers
             }
         }
         [HttpGet("{id}")]
+        [Authorize(Roles = "Admin,System Admin,Customer")]
         public async Task<IActionResult> GetCustomerById([Required] Guid id)
         {
             try
@@ -58,6 +61,7 @@ namespace RestX.WebApp.Controllers
             }
         }
         [HttpPost]
+        [Authorize(Roles = "Admin,System Admin,Customer")]
         public async Task<IActionResult> CreateCustomer([FromForm] CreateCustomer dto)
         {
             try
@@ -80,6 +84,7 @@ namespace RestX.WebApp.Controllers
             }
         }
         [HttpPut("{id}")]
+        [Authorize(Roles = "Admin,System Admin,Customer")]
         public async Task<IActionResult> UpdateCustomer([Required] Guid id, [FromForm] UpdateCustomer dto)
         {
             try
@@ -106,6 +111,7 @@ namespace RestX.WebApp.Controllers
             }
         }
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Admin,System Admin")]
         public async Task<IActionResult> DeleteCustomer([Required] Guid id)
         {
             try

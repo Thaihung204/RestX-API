@@ -1,41 +1,40 @@
 ﻿using AutoMapper;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using RestX.BLL.DataTranferObjects.Category;
+using RestX.BLL.DataTranferObjects.Inventory;
 using RestX.BLL.Interfaces;
+using RestX.BLL.Interfaces.Inventory;
 using RestX.Models.Identity;
-using RestX.Models.Menu;
 using RestX.Models.Tenants;
 using RestX.WebApp.Controllers.BaseControllers;
 using System.ComponentModel.DataAnnotations;
 
 namespace RestX.WebApp.Controllers
 {
-    [Route("api/categories")]
+    [Route("api/suppliers")]
     [ApiController]
-    [Authorize(AuthenticationSchemes = "Bearer")]
-    public class CategoriesController : BaseController
+    public class SuppliersController : BaseController
     {
-        private readonly ICategoryService categoryService;
+        private readonly ISupplierService supplierService;
 
-        public CategoriesController(ICategoryService categoryService,
+        public SuppliersController(
+            ISupplierService supplierService,
             IMapper mapper,
             UserManager<ApplicationUser> userManager,
             IExceptionHandler exceptionHandler,
-            IEnumerable<ActiveTenant> tenant) : base(mapper, userManager, exceptionHandler, tenant)
+            IEnumerable<ActiveTenant> tenant
+        ) : base(mapper, userManager, exceptionHandler, tenant)
         {
-            this.categoryService = categoryService;
+            this.supplierService = supplierService;
         }
 
         [HttpGet]
-        [AllowAnonymous]
-        public async Task<ActionResult<IEnumerable<CategoryItem>>> GetAllCategories()
+        public async Task<ActionResult<IEnumerable<SupplierItem>>> GetAllSuppliers()
         {
             try
             {
-                var categories = await categoryService.GetAllCategories();
-                return Ok(categories);
+                var suppliers = await supplierService.GetAllSuppliers();
+                return Ok(suppliers);
             }
             catch (Exception ex)
             {
@@ -45,13 +44,12 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpGet("{id}")]
-        [AllowAnonymous]
-        public async Task<ActionResult<CategoryItem>> GetCategoryById([Required] Guid id)
+        public async Task<ActionResult<SupplierItem>> GetSupplierById([Required] Guid id)
         {
             try
             {
-                var category = await categoryService.GetCategoryById(id);
-                return Ok(category);
+                var supplier = await supplierService.GetSupplierById(id);
+                return Ok(supplier);
             }
             catch (Exception ex)
             {
@@ -60,16 +58,14 @@ namespace RestX.WebApp.Controllers
             }
         }
 
-
         [HttpPut("{id}")]
-        [Authorize(Roles = "Admin,System Admin")]
-        public async Task<IActionResult> EditCategory([Required] Guid id, [FromForm] CategoryItem category)
+        public async Task<IActionResult> EditSupplier([Required] Guid id, [FromBody] SupplierItem supplier)
         {
             try
             {
-                category.Id = id;
-                var categoryId = await categoryService.UpsertCategory(category);
-                return Ok(categoryId);
+                supplier.Id = id;
+                var supplierId = await supplierService.UpsertSupplier(supplier);
+                return Ok(supplierId);
             }
             catch (Exception ex)
             {
@@ -79,13 +75,12 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpPost]
-        [Authorize(Roles = "Admin,System Admin")]
-        public async Task<ActionResult<Guid>> AddCategory([FromForm] CategoryItem category)
+        public async Task<ActionResult<Guid>> AddSupplier([FromBody] SupplierItem supplier)
         {
             try
             {
-                var categoryId = await categoryService.UpsertCategory(category);
-                return Ok(categoryId);
+                var supplierId = await supplierService.UpsertSupplier(supplier);
+                return Ok(supplierId);
             }
             catch (Exception ex)
             {
@@ -95,12 +90,11 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpDelete("{id}")]
-        [Authorize(Roles = "Admin,System Admin")]
-        public async Task<IActionResult> DeleteCategory([Required] Guid id)
+        public async Task<IActionResult> DeleteSupplier([Required] Guid id)
         {
             try
             {
-                await categoryService.DeleteCategory(id);
+                await supplierService.DeleteSupplier(id);
                 return Ok();
             }
             catch (Exception ex)

@@ -60,7 +60,6 @@ namespace RestX.WebApp
         {
             // Multi Tenant Support
             services.AddControllers();
-            services.AddSingleton<RestXCookieManager>();
             services.AddScoped<IRedisService, RedisService>();
 
             services.AddMultitenancy<ActiveTenant, TenantResolver>();
@@ -123,23 +122,7 @@ namespace RestX.WebApp
                      ClockSkew = TimeSpan.Zero,
                      RoleClaimType = ClaimTypes.Role
                  };
-                 cfg.Events = new JwtBearerEvents
-                 {
-                     OnTokenValidated = context =>
-                     {
-                         var tenantHostnameClaim = context.Principal?.FindFirst("tenant_hostname")?.Value;
-                         if (!string.IsNullOrEmpty(tenantHostnameClaim))
-                         {
-                             var requestHost = context.HttpContext.Request.Headers["X-Forwarded-Host"].FirstOrDefault()
-                                 ?? context.HttpContext.Request.Host.Value;
-                             if (!string.Equals(tenantHostnameClaim, requestHost, StringComparison.OrdinalIgnoreCase))
-                             {
-                                 context.Fail("Token does not belong to this tenant");
-                             }
-                         }
-                         return Task.CompletedTask;
-                     }
-                 };
+                
              });
 
             services.AddAuthorization(options =>
@@ -314,7 +297,7 @@ namespace RestX.WebApp
             app.UseAuthentication();
             app.UseAuthorization();
             app.UseMiddleware<TelemetryExtender>();
-            //app.ApplyMigrations();
+            app.ApplyMigrations();
             app.UseEndpoints(endpoints =>
             {
                 endpoints.MapControllers();

@@ -19,11 +19,11 @@ namespace RestX.BLL.Services.Auth
             this.jwtSettings = jwtSettings.Value;
         }
 
-        public string GenerateAccessToken(ApplicationUser user, IList<string> roles, string hostname)
+        public string GenerateAccessToken(ApplicationUser user, IList<string> roles)
         {
-            var claims = BuildClaims(user, roles, hostname);
+            var claims = BuildClaims(user, roles);
             var key = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(jwtSettings.Secret));
-             var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+            var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
             var token = new JwtSecurityToken(
                 issuer: jwtSettings.Issuer,
@@ -50,15 +50,14 @@ namespace RestX.BLL.Services.Auth
         public DateTime GetRefreshTokenExpiry()
             => DateTime.UtcNow.AddDays(jwtSettings.RefreshTokenExpiryDays);
 
-        private static List<Claim> BuildClaims(ApplicationUser user, IList<string> roles, string hostname)
+        private static List<Claim> BuildClaims(ApplicationUser user, IList<string> roles)
         {
             var claims = new List<Claim>
             {
                 new(ClaimTypes.NameIdentifier, user.Id.ToString()),
                 new(ClaimTypes.Email, user.Email ?? string.Empty),
                 new(ClaimTypes.Name, user.UserName ?? string.Empty),
-                new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-                new("tenant_hostname", hostname ?? string.Empty)
+                new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
             };
 
             claims.AddRange(roles.Select(role => new Claim(ClaimTypes.Role, role)));

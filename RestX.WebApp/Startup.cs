@@ -121,8 +121,7 @@ namespace RestX.WebApp
                      ValidateLifetime = true,
                      ClockSkew = TimeSpan.Zero,
                      RoleClaimType = ClaimTypes.Role
-                 };
-                
+                 };               
              });
 
             services.AddAuthorization(options =>

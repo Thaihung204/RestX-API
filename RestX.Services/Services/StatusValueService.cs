@@ -24,13 +24,13 @@ namespace RestX.BLL.Services
         private string GetCacheKey(string typeCode)
             => $"StatusValue:{CurrentTenant?.Hostname}:{typeCode.ToUpperInvariant()}";
 
-        public async Task<IEnumerable<StatusValues>> GetStatusByType(string typeCode)
+        public async Task<IEnumerable<StatusValues>> GetStatuses(string typeCode)
         {
             var cacheKey = GetCacheKey(typeCode);
             var cached = await RedisService.GetAsync<List<StatusValues>>(cacheKey);
             if (cached != null)
                 return cached;
-            var statusType = await FindStatusTypeByCode(typeCode);
+            var statusType = await GetStatusType(typeCode);
             var values = (await Repo.GetAsync<StatusValue>(
                 filter: sv => sv.StatusTypeId == statusType.Id,
                 orderBy: q => q.OrderBy(sv => sv.Id)
@@ -48,7 +48,7 @@ namespace RestX.BLL.Services
 
         public async Task<StatusValues> UpsertStatusValue(string typeCode, int? id, StatusValues request)
         {
-            var statusType = await FindStatusTypeByCode(typeCode);
+            var statusType = await GetStatusType(typeCode);
             StatusValue entity;
             if (id.HasValue && id.Value > 0)
             {
@@ -85,7 +85,7 @@ namespace RestX.BLL.Services
 
         public async Task DeleteStatusValue(string typeCode, int id)
         {
-            var statusType = await FindStatusTypeByCode(typeCode);
+            var statusType = await GetStatusType(typeCode);
             var entity = await Repo.GetByIdAsync<StatusValue>(id);
             if (entity == null || entity.StatusTypeId != statusType.Id)
                throw new InvalidOperationException("Status value not found");
@@ -94,7 +94,7 @@ namespace RestX.BLL.Services
             await RedisService.RemoveAsync(GetCacheKey(typeCode));
         }
 
-        private async Task<StatusType> FindStatusTypeByCode(string typeCode)
+        private async Task<StatusType> GetStatusType(string typeCode)
         {
             var code = typeCode.ToUpperInvariant();
             var statusType = await Repo.GetOneAsync<StatusType>(

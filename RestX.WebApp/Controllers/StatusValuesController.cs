@@ -12,7 +12,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace RestX.WebApp.Controllers;
 
-[Route("api/status")]
+[Route("api/statuses")]
 [ApiController]
 public class StatusValuesController : BaseController
 {
@@ -33,7 +33,7 @@ public class StatusValuesController : BaseController
     {
         try
         {
-            var data = await statusValueService.GetStatusByType(typeCode);
+            var data = await statusValueService.GetStatuses(typeCode);
             return Ok(new { success = true, data });
         }
         catch (Exception ex)

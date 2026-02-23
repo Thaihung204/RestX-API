@@ -24,19 +24,13 @@ namespace RestX.BLL.Services
             this.mapper = mapper;
         }
 
-        private string GetCacheKey() => $"Floor:{CurrentTenant.Hostname}";
-
         public async Task<IEnumerable<Floor>> GetAllFloors()
         {
-            var cached = await RedisService.GetAsync<List<Floor>>(GetCacheKey());
-            if (cached != null) return cached;
             var floors = (await Repo.GetAllAsync<FloorEntity>(
                 orderBy: q => q.OrderBy(f => f.Name),
                 includeProperties: "Tables"
             )).ToList();
-            var result = mapper.Map<List<Floor>>(floors);
-            await RedisService.SetAsync(GetCacheKey(), result);
-            return result;
+            return mapper.Map<List<Floor>>(floors);
         }
 
         public async Task<Floor?> GetFloorById(Guid id)
@@ -102,7 +96,6 @@ namespace RestX.BLL.Services
                 Repo.Create(floor, currentUser);
             }
             await Repo.SaveAsync();
-            await RedisService.RemoveAsync(GetCacheKey());
             return floor.Id;
         }
 
@@ -174,7 +167,6 @@ namespace RestX.BLL.Services
             }
             Repo.Delete(floor);
             await Repo.SaveAsync();
-            await RedisService.RemoveAsync(GetCacheKey());
             return true;
         }
     }

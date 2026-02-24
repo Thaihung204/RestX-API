@@ -18,7 +18,6 @@ using RestX.BLL.DataTranferObjects.Floor;
 using FloorEntity = RestX.Models.Tables.Floor;
 using RestX.BLL.DataTranferObjects.Inventory;
 using RestX.Models.Inventory;
-
 namespace RestX.BLL.Helpers
 {
     public class AutoMapperProfile : Profile
@@ -99,6 +98,8 @@ namespace RestX.BLL.Helpers
             CreateMap<Ingredient, IngredientItem>()
                  .ReverseMap();
             CreateMap<Supplier, SupplierItem>().ReverseMap();
+
+            CreateMap<Models.Inventory.IngredientCategory, DataTranferObjects.Inventory.IngredientCategory>().ReverseMap();
         }
     }
 }

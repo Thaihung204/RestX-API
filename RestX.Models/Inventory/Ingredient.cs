@@ -34,12 +34,15 @@ namespace RestX.Models.Inventory
 
         public Guid? SupplierId { get; set; }
 
+        public Guid? IngredientCategoryId { get; set; }
+
         [MaxLength(50)]
         public string? Type { get; set; }
 
         public bool IsActive { get; set; } = true;
 
         public virtual Supplier? Supplier { get; set; }
+        public virtual IngredientCategory? IngredientCategory { get; set; }
         public virtual ICollection<DishRecipe> DishRecipes { get; set; } = new HashSet<DishRecipe>();
         public virtual InventoryStock? InventoryStock { get; set; }
         public virtual ICollection<StockTransaction> StockTransactions { get; set; } = new HashSet<StockTransaction>();

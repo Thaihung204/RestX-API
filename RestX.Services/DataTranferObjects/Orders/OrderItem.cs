@@ -1,10 +1,5 @@
 ﻿using RestX.Models.Enum;
-using System;
-using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace RestX.BLL.DataTranferObjects.Orders
 {
@@ -14,6 +9,9 @@ namespace RestX.BLL.DataTranferObjects.Orders
 
         [MaxLength(20)]
         public string? Reference { get; set; }
+
+        [Required]
+        public Guid TableId { get; set; }
 
         public Guid? CustomerId { get; set; }
         public Guid? ReservationId { get; set; }
@@ -40,8 +38,8 @@ namespace RestX.BLL.DataTranferObjects.Orders
         public DateTime? CancelledAt { get; set; }
         public Guid? HandledBy { get; set; }
 
-        public List<Guid> TableIds { get; set; } = new();
-
-        public List<OrderDetailItem> Details { get; set; } = new();
+        public List<Guid>? TableIds { get; set; } = new();
+        [MinLength(1)]
+        public List<OrderDetailItem> OrderDetails { get; set; } = new();
     }
 }

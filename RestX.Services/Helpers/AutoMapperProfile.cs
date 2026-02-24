@@ -91,7 +91,7 @@ namespace RestX.BLL.Helpers
             CreateMap<OrderDetail, OrderDetailItem>().ReverseMap();
             CreateMap<Order, OrderItem>()
                 .ForMember(dest => dest.TableIds, opt => opt.MapFrom(src => src.OrderTables.Select(x => x.TableId)))
-                .ForMember(dest => dest.Details, opt => opt.MapFrom(src => src.OrderDetails)).ReverseMap();
+                .ForMember(dest => dest.OrderDetails, opt => opt.MapFrom(src => src.OrderDetails)).ReverseMap();
 
         }
     }

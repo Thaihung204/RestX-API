@@ -1,8 +1,8 @@
 ﻿using AutoMapper;
-using RestX.BLL.DataTranferObjects.Order;
 using RestX.BLL.DataTranferObjects.Orders;
 using RestX.BLL.Interfaces;
-using RestX.BLL.Interfaces.Orders;
+using RestX.Models.Enum;
+using RestX.Models.Menu;
 using RestX.Models.Orders;
 using RestX.Models.Tenants;
 
@@ -75,9 +75,9 @@ namespace RestX.BLL.Services
                         Repo.Delete<OrderDetail>(d.Id);
                 }
 
-                if (request.Details?.Any() == true)
+                if (request.OrderDetails?.Any() == true)
                 {
-                    foreach (var d in request.Details)
+                    foreach (var d in request.OrderDetails)
                     {
                         var detail = new OrderDetail
                         {
@@ -124,9 +124,9 @@ namespace RestX.BLL.Services
                 await Repo.CreateAsync(order);
                 await Repo.SaveAsync();
 
-                if (request.Details?.Any() == true)
+                if (request.OrderDetails?.Any() == true)
                 {
-                    foreach (var d in request.Details)
+                    foreach (var d in request.OrderDetails)
                     {
                         await Repo.CreateAsync(new OrderDetail
                         {
@@ -164,6 +164,70 @@ namespace RestX.BLL.Services
 
             Repo.Delete<Order>(id);
             await Repo.SaveAsync();
+        }
+        public async Task<OrderItem> CreateOrder(OrderItem orderItem)
+        {
+            var activeOrderTable = await Repo.GetOneAsync<OrderTable>(
+                filter: ot =>
+                    ot.TableId == orderItem.TableId &&
+                    (ot.Order.OrderStatusId == OrderStatus.Serving),
+                includeProperties: "Order"
+            );
+
+            var dishes = (await Repo.GetAsync<Dish>(filter: d => orderItem.OrderDetails.Select(x => x.DishId).Distinct().ToList().Contains(d.Id))).ToList();
+            var dishById = dishes.ToDictionary(d => d.Id, d => d);
+
+            var order = new Order
+            {
+                Reference = string.IsNullOrWhiteSpace(orderItem.Reference)
+                    ? $"ord{(await Repo.GetCountAsync<Order>(o => o.CreatedDate >= DateTime.UtcNow.Date && o.CreatedDate < DateTime.UtcNow.Date.AddDays(1))) + 1}"
+                    : orderItem.Reference,
+                CustomerId = orderItem.CustomerId,
+                ReservationId = orderItem.ReservationId,
+                OrderStatusId = orderItem.OrderStatusId == default ? OrderStatus.Reserved : orderItem.OrderStatusId,
+                PaymentStatusId = orderItem.PaymentStatusId,
+                DiscountAmount = orderItem.DiscountAmount,
+                TaxAmount = orderItem.TaxAmount,
+                ServiceCharge = orderItem.ServiceCharge,
+                SubTotal = 0,
+                TotalAmount = 0,
+                HandledBy = orderItem.HandledBy
+            };
+
+            await Repo.CreateAsync(order);
+            await Repo.CreateAsync(new OrderTable
+            {
+                OrderId = order.Id,
+                TableId = orderItem.TableId
+            });
+
+            foreach (var orderDetails in orderItem.OrderDetails)
+            {
+                await Repo.CreateAsync(new OrderDetail
+                {
+                    OrderId = order.Id,
+                    DishId = orderDetails.DishId,
+                    Quantity = orderDetails.Quantity,
+                    Note = orderDetails.Note,
+                    ItemStatusId = orderDetails.ItemStatusId
+                });
+            }
+
+            order.SubTotal = orderItem.OrderDetails.Sum(x => x.Quantity * dishById[x.DishId].Price);
+            order.TotalAmount = order.SubTotal - order.DiscountAmount + order.TaxAmount + order.ServiceCharge;
+
+            Repo.Update(order);
+            await Repo.SaveAsync();
+
+            orderItem.Id = order.Id;
+            orderItem.Reference = order.Reference;
+            orderItem.SubTotal = order.SubTotal;
+            orderItem.TotalAmount = order.TotalAmount;
+
+            if (orderItem.TableIds == null) orderItem.TableIds = new List<Guid>();
+            if (!orderItem.TableIds.Contains(orderItem.TableId)) orderItem.TableIds.Add(orderItem.TableId);
+
+            return orderItem;
         }
     }
 }

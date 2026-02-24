@@ -101,5 +101,20 @@ namespace RestX.WebApp.Controllers
                 return BadRequest("An internal error occurred");
             }
         }
+
+        [HttpPost("customer")]
+        public async Task<ActionResult<OrderItem>> CreateOrderByCustomer([FromBody] OrderItem order)
+        {
+            try
+            {
+                var result = await orderService.CreateOrder(order);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                this.ExceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
     }
 }

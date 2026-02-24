@@ -16,10 +16,15 @@ namespace RestX.DAL.Migrations
                 table: "Tables");
 
             migrationBuilder.Sql(@"
-                DELETE FROM TableSessions  WHERE TableId IN (SELECT Id FROM Tables WHERE FloorId IS NULL);
-                DELETE FROM ReservationTables WHERE TableId IN (SELECT Id FROM Tables WHERE FloorId IS NULL);
-                DELETE FROM OrderTables    WHERE TableId IN (SELECT Id FROM Tables WHERE FloorId IS NULL);
-                DELETE FROM Tables         WHERE FloorId IS NULL;
+                DECLARE @defaultFloorId UNIQUEIDENTIFIER = NEWID();
+
+                IF EXISTS (SELECT 1 FROM Tables WHERE FloorId IS NULL)
+                BEGIN
+                    INSERT INTO Floors (Id, Name, Width, Height, ImageUrl, IsActive, CreatedDate)
+                    VALUES (@defaultFloorId, N'Default Floor', 1400, 900, '', 1, GETUTCDATE());
+
+                    UPDATE Tables SET FloorId = @defaultFloorId WHERE FloorId IS NULL;
+                END
             ");
 
             migrationBuilder.AlterColumn<Guid>(

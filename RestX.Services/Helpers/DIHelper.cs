@@ -8,6 +8,7 @@ namespace RestX.BLL.Helpers
     using RestX.BLL.Interfaces.Customers;
     using RestX.BLL.Interfaces.Employees;
     using RestX.BLL.Interfaces.Inventory;
+    using RestX.BLL.Interfaces.Loyalty;
     using RestX.BLL.Interfaces.Tables;
     using RestX.BLL.Services;
     using RestX.BLL.Services.Auth;
@@ -35,6 +36,7 @@ namespace RestX.BLL.Helpers
             services.AddScoped<IFloorService, FloorService>();
             services.AddScoped<IIngredientService, IngredientService>();
             services.AddScoped<ISupplierService, SupplierService>();
+            services.AddScoped<ILoyaltyPointBandService, LoyaltyPointBandService>();
         }
     }
 }

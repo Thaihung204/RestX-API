@@ -11,7 +11,7 @@ namespace RestX.BLL.Interfaces
     {
         Task<IEnumerable<OrderItem>> GetAllOrders();
         Task<OrderItem?> GetOrderById(Guid id);
-        Task<Guid> UpsertOrder(OrderItem order);
+        Task<Guid> UpsertOrder(OrderItem orderItem);
         Task DeleteOrder(Guid id);
         Task<OrderItem> CreateOrder(OrderItem orderItem);
     }

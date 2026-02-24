@@ -42,42 +42,41 @@ namespace RestX.BLL.Services
             return mapper.Map<OrderItem>(order);
         }
 
-        public async Task<Guid> UpsertOrder(OrderItem request)
+        public async Task<Guid> UpsertOrder(OrderItem orderItem)
         {
-            if (request.Id.HasValue && request.Id.Value != Guid.Empty)
+            if (orderItem.Id.HasValue && orderItem.Id.Value != Guid.Empty)
             {
                 var order = await Repo.GetOneAsync<Order>(
-                    filter: o => o.Id == request.Id.Value,
+                    filter: o => o.Id == orderItem.Id.Value,
                     includeProperties: "OrderDetails,OrderTables"
                 );
 
                 if (order == null)
                     return Guid.Empty;
 
-                order.Reference = request.Reference ?? order.Reference;
-                order.CustomerId = request.CustomerId;
-                order.ReservationId = request.ReservationId;
-                order.OrderStatusId = request.OrderStatusId;
-                order.PaymentStatusId = request.PaymentStatusId;
-                order.SubTotal = request.SubTotal;
-                order.DiscountAmount = request.DiscountAmount;
-                order.TaxAmount = request.TaxAmount;
-                order.ServiceCharge = request.ServiceCharge;
-                order.TotalAmount = request.TotalAmount;
-                order.CompletedAt = request.CompletedAt;
-                order.CancelledAt = request.CancelledAt;
-                order.HandledBy = request.HandledBy;
+                order.Reference = orderItem.Reference ?? order.Reference;
+                order.CustomerId = orderItem.CustomerId;
+                order.ReservationId = orderItem.ReservationId;
+                order.OrderStatusId = orderItem.OrderStatusId;
+                order.PaymentStatusId = orderItem.PaymentStatusId;
+                order.SubTotal = orderItem.SubTotal;
+                order.DiscountAmount = orderItem.DiscountAmount;
+                order.TaxAmount = orderItem.TaxAmount;
+                order.ServiceCharge = orderItem.ServiceCharge;
+                order.TotalAmount = orderItem.TotalAmount;
+                order.CompletedAt = orderItem.CompletedAt;
+                order.CancelledAt = orderItem.CancelledAt;
+                order.HandledBy = orderItem.HandledBy;
 
-                // replace details
                 if (order.OrderDetails?.Any() == true)
                 {
                     foreach (var d in order.OrderDetails.ToList())
                         Repo.Delete<OrderDetail>(d.Id);
                 }
 
-                if (request.OrderDetails?.Any() == true)
+                if (orderItem.OrderDetails?.Any() == true)
                 {
-                    foreach (var d in request.OrderDetails)
+                    foreach (var d in orderItem.OrderDetails)
                     {
                         var detail = new OrderDetail
                         {
@@ -97,9 +96,9 @@ namespace RestX.BLL.Services
                         Repo.Delete<OrderTable>(ot.Id);
                 }
 
-                if (request.TableIds?.Any() == true)
+                if (orderItem.TableIds?.Any() == true)
                 {
-                    foreach (var tableId in request.TableIds.Distinct())
+                    foreach (var tableId in orderItem.TableIds.Distinct())
                     {
                         await Repo.CreateAsync(new OrderTable
                         {
@@ -115,18 +114,18 @@ namespace RestX.BLL.Services
             }
             else
             {
-                var order = mapper.Map<Order>(request);
+                var order = mapper.Map<Order>(orderItem);
 
-                order.Reference = string.IsNullOrWhiteSpace(request.Reference)
+                order.Reference = string.IsNullOrWhiteSpace(orderItem.Reference)
                     ? $"ORD{DateTime.UtcNow:yyyyMMddHHmmss}"
-                    : request.Reference;
+                    : orderItem.Reference;
 
                 await Repo.CreateAsync(order);
                 await Repo.SaveAsync();
 
-                if (request.OrderDetails?.Any() == true)
+                if (orderItem.OrderDetails?.Any() == true)
                 {
-                    foreach (var d in request.OrderDetails)
+                    foreach (var d in orderItem.OrderDetails)
                     {
                         await Repo.CreateAsync(new OrderDetail
                         {
@@ -139,9 +138,9 @@ namespace RestX.BLL.Services
                     }
                 }
 
-                if (request.TableIds?.Any() == true)
+                if (orderItem.TableIds?.Any() == true)
                 {
-                    foreach (var tableId in request.TableIds.Distinct())
+                    foreach (var tableId in orderItem.TableIds.Distinct())
                     {
                         await Repo.CreateAsync(new OrderTable
                         {

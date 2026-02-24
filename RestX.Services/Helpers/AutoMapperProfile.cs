@@ -18,18 +18,7 @@ using RestX.Models.Orders;
 using RestX.Models.Tables;
 using RestX.Models.Tenants;
 using System.Globalization;
-
-using RestX.BLL.DataTranferObjects.Authentication;
-using RestX.BLL.DataTranferObjects.Customer;
-using RestX.BLL.DataTranferObjects.Employee;
-using RestX.Models.Customers;
-using RestX.Models.HR;
-using RestX.Models.Identity;
-using RestX.Models.Tables;
-using RestX.BLL.DataTranferObjects.Floor;
 using FloorEntity = RestX.Models.Tables.Floor;
-using RestX.BLL.DataTranferObjects.Inventory;
-using RestX.Models.Inventory;
 namespace RestX.BLL.Helpers
 {
     public class AutoMapperProfile : Profile

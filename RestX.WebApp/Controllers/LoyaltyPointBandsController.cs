@@ -14,7 +14,7 @@ namespace RestX.WebApp.Controllers
 {
     [Route("api/loyalty-point-bands")]
     [ApiController]
-    //[Authorize(AuthenticationSchemes = "Bearer")]
+    [Authorize(AuthenticationSchemes = "Bearer")]
     public class LoyaltyPointBandsController : BaseController
     {
         private readonly ILoyaltyPointBandService loyaltyPointBandService;
@@ -31,7 +31,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpGet]
-        //[AllowAnonymous]
+        [AllowAnonymous]
         public async Task<IActionResult> GetAllLoyaltyPointBands()
         {
             try
@@ -47,7 +47,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpGet("{id}")]
-        //[AllowAnonymous]
+        [AllowAnonymous]
         public async Task<IActionResult> GetLoyaltyPointBandById([Required] Guid id)
         {
             try
@@ -65,7 +65,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpPost]
-        //[Authorize(Roles = "Admin,System Admin")]
+        [Authorize(Roles = "Admin,System Admin")]
         public async Task<IActionResult> AddLoyaltyPointBand([FromBody] LoyaltyPointBandItem request)
         {
             try
@@ -88,7 +88,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpPut("{id}")]
-        //[Authorize(Roles = "Admin,System Admin")]
+        [Authorize(Roles = "Admin,System Admin")]
         public async Task<IActionResult> EditLoyaltyPointBand([Required] Guid id, [FromBody] LoyaltyPointBandItem request)
         {
             try
@@ -114,7 +114,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpDelete("{id}")]
-        //[Authorize(Roles = "Admin,System Admin")]
+        [Authorize(Roles = "Admin,System Admin")]
         public async Task<IActionResult> DeleteLoyaltyPointBand([Required] Guid id)
         {
             try

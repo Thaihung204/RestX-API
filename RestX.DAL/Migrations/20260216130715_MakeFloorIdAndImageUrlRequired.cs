@@ -15,6 +15,18 @@ namespace RestX.DAL.Migrations
                 name: "FK_Tables_Floors_FloorId",
                 table: "Tables");
 
+            migrationBuilder.Sql(@"
+                DECLARE @defaultFloorId UNIQUEIDENTIFIER = NEWID();
+
+                IF EXISTS (SELECT 1 FROM Tables WHERE FloorId IS NULL)
+                BEGIN
+                    INSERT INTO Floors (Id, Name, Width, Height, ImageUrl, IsActive, CreatedDate)
+                    VALUES (@defaultFloorId, N'Default Floor', 1400, 900, '', 1, GETUTCDATE());
+
+                    UPDATE Tables SET FloorId = @defaultFloorId WHERE FloorId IS NULL;
+                END
+            ");
+
             migrationBuilder.AlterColumn<Guid>(
                 name: "FloorId",
                 table: "Tables",

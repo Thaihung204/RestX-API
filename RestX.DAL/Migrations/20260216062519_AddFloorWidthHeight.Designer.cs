@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using RestX.DAL.Context;
 
@@ -11,9 +12,11 @@ using RestX.DAL.Context;
 namespace RestX.DAL.Migrations
 {
     [DbContext(typeof(TenantDbContext))]
-    partial class TenantDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260216062519_AddFloorWidthHeight")]
+    partial class AddFloorWidthHeight
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1756,7 +1759,6 @@ namespace RestX.DAL.Migrations
                         .HasColumnType("decimal(8,2)");
 
                     b.Property<string>("ImageUrl")
-                        .IsRequired()
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
@@ -1805,7 +1807,7 @@ namespace RestX.DAL.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
-                    b.Property<Guid>("FloorId")
+                    b.Property<Guid?>("FloorId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<bool>("Has3DView")
@@ -2424,8 +2426,7 @@ namespace RestX.DAL.Migrations
                     b.HasOne("RestX.Models.Tables.Floor", "Floor")
                         .WithMany("Tables")
                         .HasForeignKey("FloorId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("Floor");
                 });

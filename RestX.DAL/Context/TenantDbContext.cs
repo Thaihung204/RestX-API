@@ -66,6 +66,7 @@ namespace RestX.DAL.Context
         #endregion
 
         #region DbSets - Table Management
+        public virtual DbSet<Floor> Floors { get; set; }
         public virtual DbSet<Table> Tables { get; set; }
         public virtual DbSet<Table3DModel> Table3DModels { get; set; }
         public virtual DbSet<TableSession> TableSessions { get; set; }
@@ -365,11 +366,27 @@ namespace RestX.DAL.Context
 
         private void ConfigureTables(ModelBuilder modelBuilder)
         {
+            modelBuilder.Entity<Floor>(entity =>
+            {
+                entity.ToTable("Floors");
+                entity.HasKey(e => e.Id);
+
+                entity.Property(e => e.Name).HasMaxLength(255).IsRequired();
+                entity.Property(e => e.Width).HasColumnType("decimal(8,2)");
+                entity.Property(e => e.Height).HasColumnType("decimal(8,2)");
+                entity.Property(e => e.ImageUrl).HasMaxLength(500);
+            });
+
             modelBuilder.Entity<Table>(entity =>
             {
                 entity.ToTable("Tables");
                 entity.HasKey(e => e.Id);
                 entity.HasIndex(e => e.Code).IsUnique();
+
+                entity.HasOne<Floor>(e => e.Floor)
+                    .WithMany(f => f.Tables)
+                    .HasForeignKey(e => e.FloorId)
+                    .OnDelete(DeleteBehavior.Restrict);
 
                 entity.Property(e => e.Code).HasMaxLength(20).IsRequired();
                 entity.Property(e => e.Type).HasMaxLength(20);

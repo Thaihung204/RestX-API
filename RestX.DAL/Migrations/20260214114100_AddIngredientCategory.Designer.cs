@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using RestX.DAL.Context;
 
@@ -11,9 +12,11 @@ using RestX.DAL.Context;
 namespace RestX.DAL.Migrations
 {
     [DbContext(typeof(TenantDbContext))]
-    partial class TenantDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260214114100_AddIngredientCategory")]
+    partial class AddIngredientCategory
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -839,11 +842,6 @@ namespace RestX.DAL.Migrations
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
-
-                    b.Property<string>("LogoColor")
-                        .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("nvarchar(10)");
 
                     b.Property<int?>("Max")
                         .HasColumnType("int");
@@ -1789,50 +1787,6 @@ namespace RestX.DAL.Migrations
                     b.ToTable("TableSessions", (string)null);
                 });
 
-            modelBuilder.Entity("RestX.Models.Tables.Floor", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("CreatedBy")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<DateTime>("CreatedDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<decimal>("Height")
-                        .HasColumnType("decimal(8,2)");
-
-                    b.Property<string>("ImageUrl")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("ModifiedBy")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<DateTime?>("ModifiedDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
-                    b.Property<decimal>("Width")
-                        .HasColumnType("decimal(8,2)");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("Floors", (string)null);
-                });
-
             modelBuilder.Entity("RestX.Models.Tables.Table", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1854,9 +1808,6 @@ namespace RestX.DAL.Migrations
                     b.Property<string>("DefaultViewUrl")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
-
-                    b.Property<Guid>("FloorId")
-                        .HasColumnType("uniqueidentifier");
 
                     b.Property<bool>("Has3DView")
                         .HasColumnType("bit");
@@ -1913,8 +1864,6 @@ namespace RestX.DAL.Migrations
 
                     b.HasIndex("Code")
                         .IsUnique();
-
-                    b.HasIndex("FloorId");
 
                     b.ToTable("Tables", (string)null);
                 });
@@ -2476,17 +2425,6 @@ namespace RestX.DAL.Migrations
                     b.Navigation("Table");
                 });
 
-            modelBuilder.Entity("RestX.Models.Tables.Table", b =>
-                {
-                    b.HasOne("RestX.Models.Tables.Floor", "Floor")
-                        .WithMany("Tables")
-                        .HasForeignKey("FloorId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Floor");
-                });
-
             modelBuilder.Entity("RestX.Models.Tables.Table3DModel", b =>
                 {
                     b.HasOne("RestX.Models.Tables.Table", "Table")
@@ -2610,11 +2548,6 @@ namespace RestX.DAL.Migrations
                     b.Navigation("ReservationTables");
 
                     b.Navigation("TableSessions");
-                });
-
-            modelBuilder.Entity("RestX.Models.Tables.Floor", b =>
-                {
-                    b.Navigation("Tables");
                 });
 
             modelBuilder.Entity("RestX.Models.Tables.Table", b =>

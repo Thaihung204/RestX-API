@@ -103,5 +103,89 @@ namespace RestX.WebApp.Controllers
                 return BadRequest("An internal error occurred");
             }
         }
+
+        #region Ingredient Category
+
+        [HttpGet("categories")]
+        public async Task<ActionResult<IEnumerable<IngredientCategory>>> GetAllIngredientCategories()
+        {
+            try
+            {
+                var categories = await ingredientService.GetAllIngredientCategories();
+                return Ok(categories);
+            }
+            catch (Exception ex)
+            {
+                this.ExceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
+        [HttpGet("categories/{id}")]
+        public async Task<ActionResult<IngredientCategory>> GetIngredientCategoryById([Required] Guid id)
+        {
+            try
+            {
+                var category = await ingredientService.GetIngredientCategoryById(id);
+                return Ok(category);
+            }
+            catch (Exception ex)
+            {
+                this.ExceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
+        [HttpPost("categories")]
+        public async Task<ActionResult<Guid>> AddIngredientCategory([FromBody] IngredientCategory category)
+        {
+            try
+            {
+                var user = await GetCurrentUserAsync();
+                var result = await ingredientService.UpsertIngredientCategory(category, user?.Id.ToString());
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                this.ExceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
+        [HttpPut("categories/{id}")]
+        public async Task<ActionResult<Guid>> EditIngredientCategory([Required] Guid id, [FromBody] IngredientCategory category)
+        {
+            try
+            {
+                var user = await GetCurrentUserAsync();
+                category.Id = id;
+                var result = await ingredientService.UpsertIngredientCategory(category, user?.Id.ToString());
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                this.ExceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
+        [HttpDelete("categories/{id}")]
+        public async Task<IActionResult> DeleteIngredientCategory([Required] Guid id)
+        {
+            try
+            {
+                var result = await ingredientService.DeleteIngredientCategory(id);
+                if (!result)
+                    return BadRequest("Cannot delete category. It may not exist or still has ingredients assigned.");
+                return Ok();
+            }
+            catch (Exception ex)
+            {
+                this.ExceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
+        #endregion
     }
 }

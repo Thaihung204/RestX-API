@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using RestX.DAL.Context;
 
@@ -11,9 +12,11 @@ using RestX.DAL.Context;
 namespace RestX.DAL.Migrations
 {
     [DbContext(typeof(TenantDbContext))]
-    partial class TenantDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260216130715_MakeFloorIdAndImageUrlRequired")]
+    partial class MakeFloorIdAndImageUrlRequired
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -590,9 +593,6 @@ namespace RestX.DAL.Migrations
                     b.Property<DateTime>("CreatedDate")
                         .HasColumnType("datetime2");
 
-                    b.Property<Guid?>("IngredientCategoryId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
@@ -631,56 +631,9 @@ namespace RestX.DAL.Migrations
                     b.HasIndex("Code")
                         .IsUnique();
 
-                    b.HasIndex("IngredientCategoryId");
-
                     b.HasIndex("SupplierId");
 
                     b.ToTable("Ingredients", (string)null);
-                });
-
-            modelBuilder.Entity("RestX.Models.Inventory.IngredientCategory", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("Code")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<string>("CreatedBy")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<DateTime>("CreatedDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("ModifiedBy")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<DateTime?>("ModifiedDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Code")
-                        .IsUnique();
-
-                    b.ToTable("IngredientCategories", (string)null);
                 });
 
             modelBuilder.Entity("RestX.Models.Inventory.InventoryStock", b =>
@@ -2126,17 +2079,10 @@ namespace RestX.DAL.Migrations
 
             modelBuilder.Entity("RestX.Models.Inventory.Ingredient", b =>
                 {
-                    b.HasOne("RestX.Models.Inventory.IngredientCategory", "IngredientCategory")
-                        .WithMany("Ingredients")
-                        .HasForeignKey("IngredientCategoryId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
                     b.HasOne("RestX.Models.Inventory.Supplier", "Supplier")
                         .WithMany("Ingredients")
                         .HasForeignKey("SupplierId")
                         .OnDelete(DeleteBehavior.SetNull);
-
-                    b.Navigation("IngredientCategory");
 
                     b.Navigation("Supplier");
                 });
@@ -2538,11 +2484,6 @@ namespace RestX.DAL.Migrations
                     b.Navigation("InventoryStock");
 
                     b.Navigation("StockTransactions");
-                });
-
-            modelBuilder.Entity("RestX.Models.Inventory.IngredientCategory", b =>
-                {
-                    b.Navigation("Ingredients");
                 });
 
             modelBuilder.Entity("RestX.Models.Inventory.Supplier", b =>

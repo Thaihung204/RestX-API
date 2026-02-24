@@ -66,7 +66,7 @@ namespace RestX.WebApp.Controllers
 
         [HttpPost]
         [Authorize(Roles = "Admin,System Admin")]
-        public async Task<IActionResult> AddLoyaltyPointBand([FromBody] LoyaltyPointBandItem request)
+        public async Task<IActionResult> AddLoyaltyPointBand([FromBody] LoyaltyPointBand request)
         {
             try
             {
@@ -89,7 +89,7 @@ namespace RestX.WebApp.Controllers
 
         [HttpPut("{id}")]
         [Authorize(Roles = "Admin,System Admin")]
-        public async Task<IActionResult> EditLoyaltyPointBand([Required] Guid id, [FromBody] LoyaltyPointBandItem request)
+        public async Task<IActionResult> EditLoyaltyPointBand([Required] Guid id, [FromBody] LoyaltyPointBand request)
         {
             try
             {

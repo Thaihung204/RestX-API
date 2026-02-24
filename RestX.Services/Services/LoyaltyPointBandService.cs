@@ -1,15 +1,16 @@
 using AutoMapper;
-using RestX.BLL.DataTranferObjects.Loyalty;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Loyalty;
-using RestX.Models.Loyalty;
 using RestX.Models.Tenants;
+using LoyaltyPointBandDto = RestX.BLL.DataTranferObjects.Loyalty.LoyaltyPointBand;
+using LoyaltyPointBandEntity = RestX.Models.Loyalty.LoyaltyPointBand;
 
 namespace RestX.BLL.Services
 {
     public class LoyaltyPointBandService : BaseService, ILoyaltyPointBandService
     {
         private readonly IMapper mapper;
+
         public LoyaltyPointBandService(
             IMapper mapper,
             IRepository repo,
@@ -19,28 +20,33 @@ namespace RestX.BLL.Services
         {
             this.mapper = mapper;
         }
-        public async Task<IEnumerable<LoyaltyPointBandItem>> GetAllLoyaltyPointBands()
+
+        public async Task<IEnumerable<LoyaltyPointBandDto>> GetAllLoyaltyPointBands()
         {
-            var bands = (await Repo.GetAllAsync<LoyaltyPointBand>(
+            var bands = (await Repo.GetAllAsync<LoyaltyPointBandEntity>(
                 orderBy: q => q.OrderBy(b => b.Min)
             )).ToList();
-            return mapper.Map<List<LoyaltyPointBandItem>>(bands);
+            return mapper.Map<List<LoyaltyPointBandDto>>(bands);
         }
-        public async Task<LoyaltyPointBandItem?> GetLoyaltyPointBandById(Guid id)
+
+        public async Task<LoyaltyPointBandDto?> GetLoyaltyPointBandById(Guid id)
         {
-            var band = await Repo.GetOneAsync<LoyaltyPointBand>(
+            var band = await Repo.GetOneAsync<LoyaltyPointBandEntity>(
                 filter: b => b.Id == id
             );
-            return mapper.Map<LoyaltyPointBandItem>(band);
+            return mapper.Map<LoyaltyPointBandDto>(band);
         }
-        public async Task<Guid> UpsertLoyaltyPointBand(LoyaltyPointBandItem item, string userId)
+
+        public async Task<Guid> UpsertLoyaltyPointBand(LoyaltyPointBandDto item, string userId)
         {
             await ValidateLoyaltyBand(item);
+
             if (item.Id != null)
             {
-                var band = await Repo.GetByIdAsync<LoyaltyPointBand>(item.Id.Value);
+                var band = await Repo.GetByIdAsync<LoyaltyPointBandEntity>(item.Id.Value);
                 if (band == null)
                     return Guid.Empty;
+
                 band.Name = item.Name;
                 band.Min = item.Min;
                 band.Max = item.Max;
@@ -53,7 +59,8 @@ namespace RestX.BLL.Services
                 await Repo.SaveAsync();
                 return band.Id;
             }
-            var newBand = new LoyaltyPointBand
+
+            var newBand = new LoyaltyPointBandEntity
             {
                 Name = item.Name,
                 Min = item.Min,
@@ -63,33 +70,39 @@ namespace RestX.BLL.Services
                 LogoColor = item.LogoColor,
                 IsActive = item.IsActive
             };
+
             await Repo.CreateAsync(newBand, userId);
             return newBand.Id;
         }
 
         public async Task<bool> DeleteLoyaltyPointBand(Guid id)
         {
-            var band = await Repo.GetByIdAsync<LoyaltyPointBand>(id);
+            var band = await Repo.GetByIdAsync<LoyaltyPointBandEntity>(id);
             if (band == null)
                 return false;
-            Repo.Delete<LoyaltyPointBand>(id);
+
+            Repo.Delete<LoyaltyPointBandEntity>(id);
             await Repo.SaveAsync();
             return true;
         }
 
-        private async Task ValidateLoyaltyBand(LoyaltyPointBandItem item)
+        private async Task ValidateLoyaltyBand(LoyaltyPointBandDto item)
         {
             var currentId = item.Id ?? Guid.Empty;
+
             if (item.Max.HasValue && item.Max.Value <= item.Min)
                 throw new ArgumentException("Max points must be greater than Min points");
-            var nameExists = await Repo.GetExistsAsync<LoyaltyPointBand>(
+
+            var nameExists = await Repo.GetExistsAsync<LoyaltyPointBandEntity>(
                 filter: b => b.Name == item.Name && b.Id != currentId
             );
             if (nameExists)
                 throw new ArgumentException($"A loyalty point band named '{item.Name}' already exists");
+
             var maxValue = item.Max;
             var minValue = item.Min;
-            var overlapping = await Repo.GetOneAsync<LoyaltyPointBand>(
+
+            var overlapping = await Repo.GetOneAsync<LoyaltyPointBandEntity>(
                 filter: b => b.Id != currentId &&
                              (maxValue == null || maxValue > b.Min) &&
                              (b.Max == null || b.Max > minValue)

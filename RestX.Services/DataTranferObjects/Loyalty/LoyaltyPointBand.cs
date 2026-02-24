@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace RestX.BLL.DataTranferObjects.Loyalty
 {
-    public class LoyaltyPointBandItem
+    public class LoyaltyPointBand
     {
         public Guid? Id { get; set; }
         [Required]

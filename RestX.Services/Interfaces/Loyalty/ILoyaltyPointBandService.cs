@@ -4,9 +4,9 @@ namespace RestX.BLL.Interfaces.Loyalty
 {
     public interface ILoyaltyPointBandService
     {
-        Task<IEnumerable<LoyaltyPointBandItem>> GetAllLoyaltyPointBands();
-        Task<LoyaltyPointBandItem?> GetLoyaltyPointBandById(Guid id);
-        Task<Guid> UpsertLoyaltyPointBand(LoyaltyPointBandItem item, string userId);
+        Task<IEnumerable<LoyaltyPointBand>> GetAllLoyaltyPointBands();
+        Task<LoyaltyPointBand?> GetLoyaltyPointBandById(Guid id);
+        Task<Guid> UpsertLoyaltyPointBand(LoyaltyPointBand item, string userId);
         Task<bool> DeleteLoyaltyPointBand(Guid id);
     }
 }

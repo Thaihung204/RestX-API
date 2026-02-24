@@ -15,6 +15,13 @@ namespace RestX.DAL.Migrations
                 name: "FK_Tables_Floors_FloorId",
                 table: "Tables");
 
+            migrationBuilder.Sql(@"
+                DELETE FROM TableSessions  WHERE TableId IN (SELECT Id FROM Tables WHERE FloorId IS NULL);
+                DELETE FROM ReservationTables WHERE TableId IN (SELECT Id FROM Tables WHERE FloorId IS NULL);
+                DELETE FROM OrderTables    WHERE TableId IN (SELECT Id FROM Tables WHERE FloorId IS NULL);
+                DELETE FROM Tables         WHERE FloorId IS NULL;
+            ");
+
             migrationBuilder.AlterColumn<Guid>(
                 name: "FloorId",
                 table: "Tables",

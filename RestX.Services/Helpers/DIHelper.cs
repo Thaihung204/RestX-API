@@ -10,8 +10,6 @@ namespace RestX.BLL.Helpers
     using RestX.BLL.Interfaces.Status;
     using RestX.BLL.Interfaces.Inventory;
     using RestX.BLL.Interfaces.Loyalty;
-    using RestX.BLL.Interfaces.Status;
-    using RestX.BLL.Interfaces.Inventory;
     using RestX.BLL.Interfaces.Tables;
     using RestX.BLL.Services;
     using RestX.BLL.Services.Auth;

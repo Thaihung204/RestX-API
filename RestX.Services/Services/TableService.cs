@@ -27,7 +27,7 @@ namespace RestX.BLL.Services
         {
             var tables = (await Repo.GetAllAsync<Table>(
                         orderBy: q => q.OrderBy(t => t.Code),
-                        includeProperties: "Table3DModel"
+                        includeProperties: "Table3DModel,Floor"
                     )).ToList();
             return mapper.Map<List<TableItem>>(tables);
         }
@@ -36,7 +36,7 @@ namespace RestX.BLL.Services
         {
             var table = await Repo.GetOneAsync<Table>(
                 filter: t => t.Id == id,
-                includeProperties: "Table3DModel"
+                includeProperties: "Table3DModel,Floor"
             );
             return mapper.Map<TableItem>(table);
         }
@@ -50,6 +50,7 @@ namespace RestX.BLL.Services
                 table = await Repo.GetByIdAsync<Table>(id.Value);
                 if (table == null)
                     throw new InvalidOperationException("Table not found");
+                table.FloorId = request.FloorId;
                 table.Code = request.Code;
                 table.Type = request.Type;
                 table.Shape = request.Shape;
@@ -79,6 +80,7 @@ namespace RestX.BLL.Services
                 Repo.Update(table);
                 await Repo.SaveAsync();
             }
+            await RedisService.RemoveAsync($"Floor:{CurrentTenant?.Hostname}");
             return mapper.Map<TableItem>(table);
         }
 
@@ -89,6 +91,7 @@ namespace RestX.BLL.Services
                 return;
             Repo.Delete<Table>(id);
             await Repo.SaveAsync();
+            await RedisService.RemoveAsync($"Floor:{CurrentTenant?.Hostname}");
         }
 
         public async Task<TableItem> ChangeTableStatus(Guid tableId, TableStatus status)

@@ -66,6 +66,7 @@ namespace RestX.DAL.Context
         #endregion
 
         #region DbSets - Table Management
+        public virtual DbSet<Floor> Floors { get; set; }
         public virtual DbSet<Table> Tables { get; set; }
         public virtual DbSet<Table3DModel> Table3DModels { get; set; }
         public virtual DbSet<TableSession> TableSessions { get; set; }
@@ -112,6 +113,7 @@ namespace RestX.DAL.Context
 
         #region DbSets - Inventory
         public virtual DbSet<Supplier> Suppliers { get; set; }
+        public virtual DbSet<IngredientCategory> IngredientCategories { get; set; }
         public virtual DbSet<Ingredient> Ingredients { get; set; }
         public virtual DbSet<InventoryStock> InventoryStocks { get; set; }
         public virtual DbSet<StockTransaction> StockTransactions { get; set; }
@@ -365,11 +367,27 @@ namespace RestX.DAL.Context
 
         private void ConfigureTables(ModelBuilder modelBuilder)
         {
+            modelBuilder.Entity<Floor>(entity =>
+            {
+                entity.ToTable("Floors");
+                entity.HasKey(e => e.Id);
+
+                entity.Property(e => e.Name).HasMaxLength(255).IsRequired();
+                entity.Property(e => e.Width).HasColumnType("decimal(8,2)");
+                entity.Property(e => e.Height).HasColumnType("decimal(8,2)");
+                entity.Property(e => e.ImageUrl).HasMaxLength(500);
+            });
+
             modelBuilder.Entity<Table>(entity =>
             {
                 entity.ToTable("Tables");
                 entity.HasKey(e => e.Id);
                 entity.HasIndex(e => e.Code).IsUnique();
+
+                entity.HasOne<Floor>(e => e.Floor)
+                    .WithMany(f => f.Tables)
+                    .HasForeignKey(e => e.FloorId)
+                    .OnDelete(DeleteBehavior.Restrict);
 
                 entity.Property(e => e.Code).HasMaxLength(20).IsRequired();
                 entity.Property(e => e.Type).HasMaxLength(20);
@@ -745,6 +763,17 @@ namespace RestX.DAL.Context
                 entity.Property(e => e.Address).HasMaxLength(500);
             });
 
+            modelBuilder.Entity<IngredientCategory>(entity =>
+            {
+                entity.ToTable("IngredientCategories");
+                entity.HasKey(e => e.Id);
+                entity.HasIndex(e => e.Code).IsUnique();
+
+                entity.Property(e => e.Name).HasMaxLength(255).IsRequired();
+                entity.Property(e => e.Code).HasMaxLength(20).IsRequired();
+                entity.Property(e => e.Description).HasMaxLength(500);
+            });
+
             modelBuilder.Entity<Ingredient>(entity =>
             {
                 entity.ToTable("Ingredients");
@@ -761,6 +790,11 @@ namespace RestX.DAL.Context
                 entity.HasOne<Supplier>(e => e.Supplier)
                     .WithMany(s => s.Ingredients)
                     .HasForeignKey(e => e.SupplierId)
+                    .OnDelete(DeleteBehavior.SetNull);
+
+                entity.HasOne<IngredientCategory>(e => e.IngredientCategory)
+                    .WithMany(ic => ic.Ingredients)
+                    .HasForeignKey(e => e.IngredientCategoryId)
                     .OnDelete(DeleteBehavior.SetNull);
             });
 

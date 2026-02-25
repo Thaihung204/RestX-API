@@ -1,5 +1,6 @@
 ﻿using AutoMapper;
 using RestX.BLL.DataTranferObjects.Category;
+using RestX.BLL.DataTranferObjects.Status;
 using RestX.BLL.DataTranferObjects.Table;
 using RestX.BLL.DataTranferObjects.Tenants;
 using RestX.BLL.DataTranferObjects.Dish;
@@ -12,11 +13,14 @@ using RestX.BLL.DataTranferObjects.Customer;
 using RestX.BLL.DataTranferObjects.Employee;
 using RestX.Models.Customers;
 using RestX.Models.HR;
+using RestX.Models.Common;
 using RestX.Models.Identity;
 using RestX.Models.Tables;
+using RestX.BLL.DataTranferObjects.Floor;
+using FloorEntity = RestX.Models.Tables.Floor;
 using RestX.BLL.DataTranferObjects.Inventory;
 using RestX.Models.Inventory;
-
+using LoyaltyPointBandEntity = RestX.Models.Loyalty.LoyaltyPointBand;
 namespace RestX.BLL.Helpers
 {
     public class AutoMapperProfile : Profile
@@ -77,15 +81,36 @@ namespace RestX.BLL.Helpers
                 .ForMember(
                     dest => dest.TableStatusName,
                     opt => opt.MapFrom(src => src.TableStatusId.ToString())
+                )
+                .ForMember(
+                    dest => dest.FloorName,
+                    opt => opt.MapFrom(src => src.Floor != null ? src.Floor.Name : string.Empty)
                 );
             CreateMap<TableItem, Table>()
                 .ForMember(dest => dest.Id, opt => opt.Ignore())
+                .ForMember(dest => dest.Floor, opt => opt.Ignore())
                 .ForMember(dest => dest.Table3DModel, opt => opt.Ignore());
             CreateMap<Models.Tenants.TenantRequest, DataTranferObjects.Tenants.TenantRequest>().ReverseMap();
             CreateMap<Models.Tenants.TenantRequest, TenantItem>().ReverseMap();
+            CreateMap<FloorEntity, DataTranferObjects.Floor.Floor>()
+                .ForMember(dest => dest.Image, opt => opt.Ignore())
+                .ForMember(dest => dest.TableCount, opt => opt.MapFrom(src => src.Tables != null ? src.Tables.Count : 0));
+            CreateMap<DataTranferObjects.Floor.Floor, FloorEntity>()
+                .ForMember(dest => dest.Tables, opt => opt.Ignore())
+                .ForMember(dest => dest.ImageUrl, opt => opt.Ignore());
             CreateMap<Ingredient, IngredientItem>()
                  .ReverseMap();
             CreateMap<Supplier, SupplierItem>().ReverseMap();
+
+            CreateMap<Models.Inventory.IngredientCategory, DataTranferObjects.Inventory.IngredientCategory>().ReverseMap();
+
+            CreateMap<LoyaltyPointBandEntity, DataTranferObjects.Loyalty.LoyaltyPointBand>().ReverseMap();
+
+            CreateMap<StatusValue, StatusValues>();
+            CreateMap<StatusValues, StatusValue>()
+                .ForMember(dest => dest.Id, opt => opt.Ignore())
+                .ForMember(dest => dest.StatusTypeId, opt => opt.Ignore())
+                .ForMember(dest => dest.StatusType, opt => opt.Ignore());
         }
     }
 }

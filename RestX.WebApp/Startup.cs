@@ -183,10 +183,23 @@ namespace RestX.WebApp
             {
                 options.AddPolicy("CustomCorsPolicy", builder =>
                 {
-                        builder
-                            .AllowAnyOrigin()
-                            .AllowAnyMethod()
-                            .AllowAnyHeader();
+                    builder
+                        .AllowAnyOrigin()
+                        .AllowAnyMethod()
+                        .AllowAnyHeader();
+                });
+                options.AddPolicy("LocalDevPolicy", builder =>
+                {
+                    builder
+                        .WithOrigins(
+                            "http://localhost:3000",
+                            "https://localhost:3000",
+                            "http://demo.localhost:3000",
+                            "https://demo.localhost:3000"
+                        )
+                        .AllowAnyMethod()
+                        .AllowAnyHeader()
+                        .AllowCredentials();
                 });
             });
 

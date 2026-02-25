@@ -3,6 +3,7 @@ using RestX.BLL.DataTranferObjects.Inventory;
 using RestX.BLL.Extensions;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Inventory;
+using RestX.Models.Enum;
 using RestX.Models.Inventory;
 using RestX.Models.Tenants;
 using IngredientCategory = RestX.Models.Inventory.IngredientCategory;
@@ -77,6 +78,19 @@ namespace RestX.BLL.Services
             };
             await Repo.CreateAsync(ingredient);
             return ingredient.Id;
+        }
+
+        public async Task UpdateIngredientStatus(Guid id, decimal currentQuantity)
+        {
+            var ingredient = await Repo.GetByIdAsync<Ingredient>(id);
+            if (ingredient == null) return;
+            ingredient.Status = currentQuantity == 0
+                ? IngredientStatus.OutOfStock
+                : ingredient.MinStockLevel > 0 && currentQuantity <= ingredient.MinStockLevel
+                    ? IngredientStatus.LowStock
+                    : IngredientStatus.InStock;
+            Repo.Update(ingredient);
+            await Repo.SaveAsync();
         }
 
         public async Task DeleteIngredient(Guid id)

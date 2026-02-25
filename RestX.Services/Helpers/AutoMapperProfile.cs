@@ -98,12 +98,6 @@ namespace RestX.BLL.Helpers
             CreateMap<Ingredient, IngredientItem>()
                 .ForMember(dest => dest.CurrentQuantity, opt => opt.MapFrom(src =>
                     src.InventoryStock != null ? src.InventoryStock.CurrentQuantity : 0))
-                .ForMember(dest => dest.Status, opt => opt.MapFrom(src =>
-                    src.InventoryStock == null || src.InventoryStock.CurrentQuantity == 0
-                        ? IngredientStatus.OutOfStock
-                        : src.MinStockLevel > 0 && src.InventoryStock.CurrentQuantity <= src.MinStockLevel
-                            ? IngredientStatus.LowStock
-                            : IngredientStatus.InStock))
                 .ReverseMap()
                 .ForMember(dest => dest.InventoryStock, opt => opt.Ignore())
                 .ForMember(dest => dest.Supplier, opt => opt.Ignore());

@@ -1,4 +1,5 @@
 ﻿using RestX.Models.BaseModel;
+using RestX.Models.Enum;
 using RestX.Models.Menu;
 using System;
 using System.Collections.Generic;
@@ -38,6 +39,8 @@ namespace RestX.Models.Inventory
 
         [MaxLength(50)]
         public string? Type { get; set; }
+
+        public IngredientStatus Status { get; set; } = IngredientStatus.OutOfStock;
 
         public bool IsActive { get; set; } = true;
 

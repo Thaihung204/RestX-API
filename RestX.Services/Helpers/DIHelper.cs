@@ -7,6 +7,7 @@ namespace RestX.BLL.Helpers
     using RestX.BLL.Interfaces.Auth;
     using RestX.BLL.Interfaces.Customers;
     using RestX.BLL.Interfaces.Employees;
+    using RestX.BLL.Interfaces.Status;
     using RestX.BLL.Interfaces.Inventory;
     using RestX.BLL.Interfaces.Loyalty;
     using RestX.BLL.Interfaces.Status;

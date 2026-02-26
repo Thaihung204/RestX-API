@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using RestX.Models.Enum;
+using System.ComponentModel.DataAnnotations;
 
 namespace RestX.BLL.DataTranferObjects.Inventory
 {
@@ -31,5 +32,9 @@ namespace RestX.BLL.DataTranferObjects.Inventory
         public string? Type { get; set; }
 
         public bool IsActive { get; set; } = true;
+
+        public decimal CurrentQuantity { get; set; } = 0;
+
+        public IngredientStatus Status { get; set; }
     }
 }

@@ -9,10 +9,10 @@ namespace RestX.BLL.Interfaces
 {
     public interface IOrderService
     {
-        Task<IEnumerable<OrderItem>> GetAllOrders();
-        Task<OrderItem?> GetOrderById(Guid id);
-        Task<Guid> UpsertOrder(OrderItem orderItem);
+        Task<IEnumerable<Order>> GetAllOrders();
+        Task<Order?> GetOrderById(Guid id);
+        Task<Guid> CreateOrder(Order order, string userId);
+        Task<Guid> UpdateOrder(Guid id, Order order, string userId);
         Task DeleteOrder(Guid id);
-        Task<OrderItem> CreateOrder(OrderItem orderItem);
     }
 }

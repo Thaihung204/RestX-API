@@ -2,7 +2,7 @@
 
 namespace RestX.BLL.DataTranferObjects.Orders
 {
-    public class OrderDetailItem
+    public class OrderDetail
     {
         public Guid? Id { get; set; }
 
@@ -15,6 +15,6 @@ namespace RestX.BLL.DataTranferObjects.Orders
         [MaxLength(500)]
         public string? Note { get; set; }
 
-        public int ItemStatusId { get; set; }
+        public int? StatusId { get; set; }
     }
 }

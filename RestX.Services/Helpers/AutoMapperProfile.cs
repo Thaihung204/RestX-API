@@ -99,10 +99,8 @@ namespace RestX.BLL.Helpers
             CreateMap<Ingredient, IngredientItem>()
                  .ReverseMap();
             CreateMap<Supplier, SupplierItem>().ReverseMap();
-            CreateMap<OrderDetail, OrderDetailItem>().ReverseMap();
-            CreateMap<Order, OrderItem>()
-                .ForMember(dest => dest.TableIds, opt => opt.MapFrom(src => src.OrderTables.Select(x => x.TableId)))
-                .ForMember(dest => dest.OrderDetails, opt => opt.MapFrom(src => src.OrderDetails)).ReverseMap();
+            CreateMap<Models.Orders.OrderDetail, DataTranferObjects.Orders.OrderDetail>().ReverseMap();
+            CreateMap<Models.Orders.Order, DataTranferObjects.Orders.Order>().ReverseMap();
             CreateMap<Models.Inventory.IngredientCategory, DataTranferObjects.Inventory.IngredientCategory>().ReverseMap();
         }
     }

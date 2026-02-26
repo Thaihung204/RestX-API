@@ -13,6 +13,7 @@ namespace RestX.WebApp.Controllers
 {
     [Route("api/orders")]
     [ApiController]
+    [Authorize(AuthenticationSchemes = "Bearer")]
     public class OrdersController : BaseController
     {
         private readonly IOrderService orderService;
@@ -29,7 +30,8 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<OrderItem>>> GetAllOrders()
+        [Authorize(Roles = "Admin,Kitchen Staff,Waiter")]
+        public async Task<ActionResult<IEnumerable<Order>>> GetAllOrders()
         {
             try
             {
@@ -37,57 +39,81 @@ namespace RestX.WebApp.Controllers
             }
             catch (Exception ex)
             {
-                this.ExceptionHandler.RaiseException(ex);
+                ExceptionHandler.RaiseException(ex);
                 return BadRequest("An internal error occurred");
             }
         }
 
         [HttpGet("{id:guid}")]
-        public async Task<ActionResult<OrderItem>> GetOrderById([Required] Guid id)
+        public async Task<ActionResult<Order>> GetOrderById([Required] Guid id)
         {
             try
             {
                 var order = await orderService.GetOrderById(id);
+                if (order == null)
+                    return NotFound(new { success = false, message = "Order not found" });
+
                 return Ok(order);
             }
             catch (Exception ex)
             {
-                this.ExceptionHandler.RaiseException(ex);
+                ExceptionHandler.RaiseException(ex);
                 return BadRequest("An internal error occurred");
             }
         }
 
         [HttpPost]
-        public async Task<ActionResult<Guid>> CreateOrder([FromBody] OrderItem order)
+        [Authorize(Roles = "Admin,Waiter")]
+        public async Task<ActionResult<Guid>> CreateOrder([FromBody] Order order)
         {
             try
             {
-                var id = await orderService.UpsertOrder(order);
+                var currentUser = await GetCurrentUserAsync();
+                var userId = string.Empty;
+                if (currentUser?.Id != null)
+                    userId = currentUser.Id.ToString();
+                else userId = order.CustomerId.ToString();
+
+                var id = await orderService.CreateOrder(order, userId);
+                if (id == Guid.Empty)
+                    return BadRequest(new { success = false, message = "Create order failed" });
+
                 return Ok(id);
             }
             catch (Exception ex)
             {
-                this.ExceptionHandler.RaiseException(ex);
+                ExceptionHandler.RaiseException(ex);
                 return BadRequest("An internal error occurred");
             }
         }
 
         [HttpPut("{id:guid}")]
-        public async Task<ActionResult<Guid>> UpdateOrder([Required] Guid id, [FromBody] OrderItem order)
+        [Authorize(Roles = "Admin,Waiter")]
+        public async Task<ActionResult<Guid>> UpdateOrder([Required] Guid id, [FromBody] Order order)
         {
             try
             {
-                order.Id = id;
-                return Ok(await orderService.UpsertOrder(order));
+                var currentUser = await GetCurrentUserAsync();
+                var userId = string.Empty;
+                if (currentUser?.Id != null)
+                    userId = currentUser.Id.ToString();
+                else userId = order.CustomerId.ToString();
+
+                    var updatedId = await orderService.UpdateOrder(id, order, userId);
+                if (updatedId == Guid.Empty)
+                    return NotFound(new { success = false, message = "Order not found" });
+
+                return Ok(updatedId);
             }
             catch (Exception ex)
             {
-                this.ExceptionHandler.RaiseException(ex);
+                ExceptionHandler.RaiseException(ex);
                 return BadRequest("An internal error occurred");
             }
         }
 
         [HttpDelete("{id:guid}")]
+        [Authorize(Roles = "Admin,Waiter")]
         public async Task<IActionResult> DeleteOrder([Required] Guid id)
         {
             try
@@ -97,22 +123,7 @@ namespace RestX.WebApp.Controllers
             }
             catch (Exception ex)
             {
-                this.ExceptionHandler.RaiseException(ex);
-                return BadRequest("An internal error occurred");
-            }
-        }
-
-        [HttpPost("customer")]
-        public async Task<ActionResult<OrderItem>> CreateOrderByCustomer([FromBody] OrderItem order)
-        {
-            try
-            {
-                var result = await orderService.CreateOrder(order);
-                return Ok(result);
-            }
-            catch (Exception ex)
-            {
-                this.ExceptionHandler.RaiseException(ex);
+                ExceptionHandler.RaiseException(ex);
                 return BadRequest("An internal error occurred");
             }
         }

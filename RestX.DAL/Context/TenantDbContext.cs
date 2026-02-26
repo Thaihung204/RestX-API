@@ -513,11 +513,6 @@ namespace RestX.DAL.Context
                     .HasForeignKey(e => e.ReservationId)
                     .OnDelete(DeleteBehavior.SetNull);
 
-                entity.HasOne<StatusValue>(e => e.PaymentStatus)
-                    .WithMany()
-                    .HasForeignKey(e => e.PaymentStatusId)
-                    .OnDelete(DeleteBehavior.Restrict);
-
                 entity.HasOne<Employee>(e => e.Handler)
                     .WithMany(emp => emp.HandledOrders)
                     .HasForeignKey(e => e.HandledBy)

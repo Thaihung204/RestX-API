@@ -30,7 +30,9 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpGet]
-        [Authorize(Roles = "Admin,Kitchen Staff,Waiter")]
+        //[Authorize(Roles = "Admin,Kitchen Staff,Waiter")]
+        [AllowAnonymous]
+
         public async Task<ActionResult<IEnumerable<Order>>> GetAllOrders()
         {
             try
@@ -45,6 +47,8 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpGet("{id:guid}")]
+        [AllowAnonymous]
+
         public async Task<ActionResult<Order>> GetOrderById([Required] Guid id)
         {
             try
@@ -63,7 +67,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpPost]
-        [Authorize(Roles = "Admin,Waiter")]
+        [AllowAnonymous]
         public async Task<ActionResult<Guid>> CreateOrder([FromBody] Order order)
         {
             try

@@ -11,9 +11,6 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace RestX.Models.Orders
 {
@@ -46,17 +43,15 @@ namespace RestX.Models.Orders
 
         [Column(TypeName = "decimal(18,2)")]
         [Range(0, 999999999.99)]
-        public decimal TotalAmount { get; set; } = 0;
+        public decimal TotalAmount { get; private set; } = 0;
 
         public DateTime? CompletedAt { get; set; }
-
         public DateTime? CancelledAt { get; set; }
-
         public Guid? HandledBy { get; set; }
 
         public virtual Customer? Customer { get; set; }
         public virtual Reservation? Reservation { get; set; }
-        public virtual StatusValue PaymentStatus { get; set; }
+        public virtual StatusValue PaymentStatus { get; set; } = null!;
         public virtual Employee? Handler { get; set; }
         public virtual ICollection<OrderDetail> OrderDetails { get; set; } = new HashSet<OrderDetail>();
         public virtual ICollection<OrderTable> OrderTables { get; set; } = new HashSet<OrderTable>();
@@ -64,5 +59,10 @@ namespace RestX.Models.Orders
         public virtual ICollection<PromotionHistory> PromotionHistories { get; set; } = new HashSet<PromotionHistory>();
         public virtual ICollection<PointsTransaction> PointsTransactions { get; set; } = new HashSet<PointsTransaction>();
         public virtual ICollection<Feedback> Feedbacks { get; set; } = new HashSet<Feedback>();
+
+        public void CalculateTotalAmount()
+        {
+            TotalAmount = (SubTotal - DiscountAmount) + TaxAmount + ServiceCharge;
+        }
     }
 }

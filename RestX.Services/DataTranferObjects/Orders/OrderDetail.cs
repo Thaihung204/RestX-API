@@ -15,6 +15,6 @@ namespace RestX.BLL.DataTranferObjects.Orders
         [MaxLength(500)]
         public string? Note { get; set; }
 
-        public int? StatusId { get; set; }
+        public string? Status { get; set; }
     }
 }

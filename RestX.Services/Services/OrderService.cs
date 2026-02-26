@@ -1,6 +1,8 @@
 ﻿using AutoMapper;
 using RestX.BLL.DataTranferObjects.Orders;
 using RestX.BLL.Interfaces;
+using RestX.BLL.Interfaces.Status;
+using RestX.Models.Common;
 using RestX.Models.Enum;
 using RestX.Models.Menu;
 using RestX.Models.Orders;
@@ -11,14 +13,17 @@ namespace RestX.BLL.Services
     public class OrderService : BaseService, IOrderService
     {
         private readonly IMapper mapper;
+        private readonly IStatusValueService statusValueService;
 
         public OrderService(
+            IStatusValueService statusValueService,
             IMapper mapper,
             IRepository repo,
             IRedisService redisService,
             IEnumerable<ActiveTenant> tenant = null
         ) : base(repo, redisService, tenant)
         {
+            this.statusValueService = statusValueService;
             this.mapper = mapper;
         }
 
@@ -26,7 +31,7 @@ namespace RestX.BLL.Services
         {
             var orders = (await Repo.GetAllAsync<Models.Orders.Order>(
                 orderBy: q => q.OrderByDescending(o => o.CreatedDate),
-                includeProperties: "OrderDetails,OrderTables"
+                includeProperties: "OrderDetails,OrderDetails.ItemStatus,OrderTables"
             )).ToList();
 
             return mapper.Map<List<DataTranferObjects.Orders.Order>>(orders);
@@ -36,7 +41,7 @@ namespace RestX.BLL.Services
         {
             var order = await Repo.GetOneAsync<Models.Orders.Order>(
                 filter: o => o.Id == id,
-                includeProperties: "OrderDetails,OrderTables"
+                includeProperties: "OrderDetails,OrderDetails.ItemStatus,OrderTables"
             );
 
             return mapper.Map<DataTranferObjects.Orders.Order>(order);
@@ -57,7 +62,8 @@ namespace RestX.BLL.Services
             var serviceCharge = order.ServiceCharge ?? 0m;
 
             var subTotal = order.OrderDetails.Sum(x => x.Quantity * dishesById[x.DishId].Price);
-            var totalAmount = (subTotal - discountAmount) + taxAmount + serviceCharge;
+
+            var itemStatuses = (await statusValueService.GetStatuses("order-detail")).ToList();
 
             var orderEntity = new Models.Orders.Order
             {
@@ -74,7 +80,6 @@ namespace RestX.BLL.Services
                 ServiceCharge = serviceCharge,
 
                 SubTotal = subTotal,
-                TotalAmount = totalAmount,
 
                 OrderTables = new List<OrderTable>
                 {
@@ -86,14 +91,17 @@ namespace RestX.BLL.Services
                     DishId = d.DishId,
                     Quantity = d.Quantity,
                     Note = d.Note,
-                    ItemStatusId = d.StatusId ?? 0
+                    ItemStatusId = itemStatuses.First(x => x.IsDefault).Id,
                 }).ToList()
             };
+
+            orderEntity.CalculateTotalAmount();
 
             await Repo.CreateAsync(orderEntity, userId);
 
             return orderEntity.Id;
         }
+
         public async Task<Guid> UpdateOrder(Guid id, DataTranferObjects.Orders.Order orderDto, string userId)
         {
             var orderEntity = await Repo.GetOneAsync<Models.Orders.Order>(
@@ -104,13 +112,29 @@ namespace RestX.BLL.Services
             if (orderEntity == null)
                 return Guid.Empty;
 
+            var dishIds = (orderDto.OrderDetails ?? new List<DataTranferObjects.Orders.OrderDetail>())
+                .Select(x => x.DishId)
+                .Distinct()
+                .ToList();
+
+            var dishes = (await Repo.GetAsync<Dish>(filter: d => dishIds.Contains(d.Id))).ToList();
+            var dishesById = dishes.ToDictionary(d => d.Id, d => d);
+
+            var discountAmount = orderDto.DiscountAmount ?? 0m;
+            var taxAmount = orderDto.TaxAmount ?? 0m;
+            var serviceCharge = orderDto.ServiceCharge ?? 0m;
+
+            var subTotal = (orderDto.OrderDetails?.Sum(x => x.Quantity * dishesById[x.DishId].Price)) ?? 0m;
+
+            var itemStatuses = (await statusValueService.GetStatuses("order-detail")).ToList();
+
             orderEntity.Reference = orderDto.Reference ?? orderEntity.Reference;
             orderEntity.CustomerId = orderDto.CustomerId;
             orderEntity.ReservationId = orderDto.ReservationId;
 
-            orderEntity.DiscountAmount = orderDto.DiscountAmount ?? 0m;
-            orderEntity.TaxAmount = orderDto.TaxAmount ?? 0m;
-            orderEntity.ServiceCharge = orderDto.ServiceCharge ?? 0m;
+            orderEntity.DiscountAmount = discountAmount;
+            orderEntity.TaxAmount = taxAmount;
+            orderEntity.ServiceCharge = serviceCharge;
 
             orderEntity.CompletedAt = orderDto.CompletedAt;
             orderEntity.CancelledAt = orderDto.CancelledAt;
@@ -132,7 +156,7 @@ namespace RestX.BLL.Services
                         DishId = d.DishId,
                         Quantity = d.Quantity,
                         Note = d.Note,
-                        ItemStatusId = d.StatusId ?? 0
+                        ItemStatusId = itemStatuses.First(x => x.IsDefault).Id
                     });
                 }
             }
@@ -157,25 +181,15 @@ namespace RestX.BLL.Services
                 });
             }
 
-            if (orderDto.OrderDetails?.Any() == true)
-            {
-                var dishIds = orderDto.OrderDetails.Select(x => x.DishId).Distinct().ToList();
-                var dishes = (await Repo.GetAsync<Dish>(filter: d => dishIds.Contains(d.Id))).ToList();
-                var dishById = dishes.ToDictionary(d => d.Id, d => d);
-
-                orderEntity.SubTotal = orderDto.OrderDetails.Sum(x => x.Quantity * dishById[x.DishId].Price);
-            }
-
-            orderEntity.TotalAmount =
-                (orderEntity.SubTotal - orderEntity.DiscountAmount) +
-                orderEntity.TaxAmount +
-                orderEntity.ServiceCharge;
+            orderEntity.SubTotal = subTotal;
+            orderEntity.CalculateTotalAmount();
 
             Repo.Update(orderEntity);
             await Repo.SaveAsync();
 
             return orderEntity.Id;
         }
+
         private async Task<string> GetNextOrderReference()
         {
             var tenantPrefix = CurrentTenant.Prefix;

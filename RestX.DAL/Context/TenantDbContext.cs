@@ -502,6 +502,9 @@ namespace RestX.DAL.Context
                 entity.Property(e => e.TaxAmount).HasColumnType("decimal(18,2)");
                 entity.Property(e => e.ServiceCharge).HasColumnType("decimal(18,2)");
                 entity.Property(e => e.TotalAmount).HasColumnType("decimal(18,2)");
+                entity.Property(x => x.PaymentStatusId)
+                    .HasConversion<int>();
+                entity.Ignore(x => x.PaymentStatus);
 
                 entity.HasOne<Customer>(e => e.Customer)
                     .WithMany(c => c.Orders)

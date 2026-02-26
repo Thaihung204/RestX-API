@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using RestX.DAL.Context;
 
@@ -11,9 +12,11 @@ using RestX.DAL.Context;
 namespace RestX.DAL.Migrations
 {
     [DbContext(typeof(TenantDbContext))]
-    partial class TenantDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260226073930_changePaymentStatusId")]
+    partial class changePaymentStatusId
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -613,9 +616,6 @@ namespace RestX.DAL.Migrations
                         .IsRequired()
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("int");
 
                     b.Property<Guid?>("SupplierId")
                         .HasColumnType("uniqueidentifier");
@@ -1313,6 +1313,9 @@ namespace RestX.DAL.Migrations
                     b.Property<int>("PaymentStatusId")
                         .HasColumnType("int");
 
+                    b.Property<int>("PaymentStatusId1")
+                        .HasColumnType("int");
+
                     b.Property<string>("Reference")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -1338,6 +1341,8 @@ namespace RestX.DAL.Migrations
                     b.HasIndex("CustomerId");
 
                     b.HasIndex("HandledBy");
+
+                    b.HasIndex("PaymentStatusId1");
 
                     b.HasIndex("Reference")
                         .IsUnique();
@@ -1660,10 +1665,6 @@ namespace RestX.DAL.Migrations
                     b.Property<DateTime?>("CheckedInAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("ConfirmationCode")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
                     b.Property<string>("CreatedBy")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
@@ -1671,7 +1672,7 @@ namespace RestX.DAL.Migrations
                     b.Property<DateTime>("CreatedDate")
                         .HasColumnType("datetime2");
 
-                    b.Property<Guid?>("CustomerId")
+                    b.Property<Guid>("CustomerId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<decimal>("DepositAmount")
@@ -1679,18 +1680,6 @@ namespace RestX.DAL.Migrations
 
                     b.Property<bool>("DepositPaid")
                         .HasColumnType("bit");
-
-                    b.Property<string>("GuestEmail")
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
-                    b.Property<string>("GuestName")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("GuestPhone")
-                        .HasMaxLength(15)
-                        .HasColumnType("nvarchar(15)");
 
                     b.Property<string>("ModifiedBy")
                         .HasMaxLength(100)
@@ -1714,15 +1703,9 @@ namespace RestX.DAL.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ConfirmationCode")
-                        .IsUnique()
-                        .HasFilter("[ConfirmationCode] IS NOT NULL");
-
-                    b.HasIndex("CustomerId");
-
                     b.HasIndex("ReservationStatusId");
 
-                    b.HasIndex("Time");
+                    b.HasIndex("CustomerId", "Time");
 
                     b.ToTable("Reservations", (string)null);
                 });
@@ -2287,6 +2270,12 @@ namespace RestX.DAL.Migrations
                         .HasForeignKey("HandledBy")
                         .OnDelete(DeleteBehavior.SetNull);
 
+                    b.HasOne("RestX.Models.Common.StatusValue", "PaymentStatus")
+                        .WithMany()
+                        .HasForeignKey("PaymentStatusId1")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.HasOne("RestX.Models.Reservations.Reservation", "Reservation")
                         .WithMany("Orders")
                         .HasForeignKey("ReservationId")
@@ -2295,6 +2284,8 @@ namespace RestX.DAL.Migrations
                     b.Navigation("Customer");
 
                     b.Navigation("Handler");
+
+                    b.Navigation("PaymentStatus");
 
                     b.Navigation("Reservation");
                 });
@@ -2433,7 +2424,8 @@ namespace RestX.DAL.Migrations
                     b.HasOne("RestX.Models.Customers.Customer", "Customer")
                         .WithMany("Reservations")
                         .HasForeignKey("CustomerId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
                     b.HasOne("RestX.Models.Common.StatusValue", "ReservationStatus")
                         .WithMany()

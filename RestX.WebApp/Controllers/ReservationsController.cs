@@ -196,7 +196,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpPut("{id:guid}/status")]
-        [Authorize(Roles = "Admin,System Admin,Waiter,Customer")]
+        [AllowAnonymous]
         public async Task<IActionResult> UpdateStatus(Guid id, [FromBody] UpdateReservationStatusRequest request)
         {
             try

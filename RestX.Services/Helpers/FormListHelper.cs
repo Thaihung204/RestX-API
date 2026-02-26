@@ -14,7 +14,8 @@ public static class FormListHelper
             // Add more enum names here
             "table-statuses" => ConvertEnumToList(typeof(TableStatus)),
             "dish-image-types" => ConvertEnumToList(typeof(DishImageType)),
-            "order-statuses" => ConvertEnumToList(typeof(OrderStatus))
+            "order-statuses" => ConvertEnumToList(typeof(OrderStatus)),
+            "payment-statuses" => ConvertEnumToList(typeof(PaymentStatus))
         };
     }
 

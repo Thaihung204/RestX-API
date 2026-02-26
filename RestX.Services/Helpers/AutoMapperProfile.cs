@@ -19,6 +19,12 @@ using RestX.Models.Tables;
 using RestX.Models.Tenants;
 using System.Globalization;
 using FloorEntity = RestX.Models.Tables.Floor;
+using RestX.BLL.DataTranferObjects.Inventory;
+using RestX.Models.Inventory;
+using LoyaltyPointBandEntity = RestX.Models.Loyalty.LoyaltyPointBand;
+using RestX.BLL.DataTranferObjects.Status;
+using RestX.Models.Common;
+
 namespace RestX.BLL.Helpers
 {
     public class AutoMapperProfile : Profile
@@ -97,11 +103,22 @@ namespace RestX.BLL.Helpers
                 .ForMember(dest => dest.Tables, opt => opt.Ignore())
                 .ForMember(dest => dest.ImageUrl, opt => opt.Ignore());
             CreateMap<Ingredient, IngredientItem>()
-                 .ReverseMap();
+                .ForMember(dest => dest.CurrentQuantity, opt => opt.MapFrom(src =>
+                    src.InventoryStock != null ? src.InventoryStock.CurrentQuantity : 0))
+                .ReverseMap()
+                .ForMember(dest => dest.InventoryStock, opt => opt.Ignore())
+                .ForMember(dest => dest.Supplier, opt => opt.Ignore());
             CreateMap<Supplier, SupplierItem>().ReverseMap();
             CreateMap<Models.Orders.OrderDetail, DataTranferObjects.Orders.OrderDetail>().ReverseMap();
             CreateMap<Models.Orders.Order, DataTranferObjects.Orders.Order>().ReverseMap();
             CreateMap<Models.Inventory.IngredientCategory, DataTranferObjects.Inventory.IngredientCategory>().ReverseMap();
+
+            CreateMap<LoyaltyPointBandEntity, DataTranferObjects.Loyalty.LoyaltyPointBand>().ReverseMap();
+            CreateMap<StatusValue, StatusValues>();
+            CreateMap<StatusValues, StatusValue>()
+                .ForMember(dest => dest.Id, opt => opt.Ignore())
+                .ForMember(dest => dest.StatusTypeId, opt => opt.Ignore())
+                .ForMember(dest => dest.StatusType, opt => opt.Ignore());
         }
     }
 }

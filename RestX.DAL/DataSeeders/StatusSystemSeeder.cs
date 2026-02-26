@@ -34,18 +34,18 @@ namespace RestX.DAL.DataSeeders
         {
             return new List<StatusType>
             {
-                new() { Code = "ORDER_STATUS" },
-                new() { Code = "PAYMENT_STATUS" },
-                new() { Code = "RESERVATION_STATUS" },
-                new() { Code = "TABLE_STATUS" },
-                new() { Code = "ITEM_STATUS" }
+                new() { Code = "ORDER" },
+                new() { Code = "PAYMENT" },
+                new() { Code = "RESERVATION" },
+                new() { Code = "TABLE" },
+                new() { Code = "ORDER-DETAIL" }
             };
         }
         private static List<StatusValue> CreateStatusValues(List<StatusType> statusTypes)
         {
             var values = new List<StatusValue>();
             var typeMap = statusTypes.ToDictionary(t => t.Code, t => t.Id);
-            values.AddRange(CreateValuesForType(typeMap["ORDER_STATUS"], new[]
+            values.AddRange(CreateValuesForType(typeMap["ORDER"], new[]
             {
                 (nameof(OrderStatus.Reserved), "Reserved", "#FFA500", true),
                 (nameof(OrderStatus.Serving), "Serving", "#9C27B0", false),
@@ -58,20 +58,20 @@ namespace RestX.DAL.DataSeeders
                 (nameof(TableStatus.Reserved), "Reserved", "#FF9800", false),
                 (nameof(TableStatus.Occupied), "Occupied", "#F44336", false)
             }));
-            values.AddRange(CreateValuesForType(typeMap["PAYMENT_STATUS"], new[]
+            values.AddRange(CreateValuesForType(typeMap["PAYMENT"], new[]
             {
                 ("UNPAID", "Unpaid", "#FF9800", true),
                 ("PAID", "Paid", "#4CAF50", false),
                 ("REFUNDED", "Refunded", "#9E9E9E", false)
             }));
-            values.AddRange(CreateValuesForType(typeMap["RESERVATION_STATUS"], new[]
+            values.AddRange(CreateValuesForType(typeMap["RESERVATION"], new[]
             {
                 ("PENDING", "Pending", "#FFA500", true),
                 ("CONFIRMED", "Confirmed", "#4CAF50", false),
                 ("COMPLETED", "Completed", "#00C853", false),
                 ("CANCELLED", "Cancelled", "#F44336", false)
             }));
-            values.AddRange(CreateValuesForType(typeMap["ITEM_STATUS"], new[]
+            values.AddRange(CreateValuesForType(typeMap["ORDER-DETAIL"], new[]
             {
                 ("PENDING", "Pending", "#FFA500", true),
                 ("PREPARING", "Preparing", "#2196F3", false),

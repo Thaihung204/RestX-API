@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using RestX.DAL.Context;
 
@@ -11,9 +12,11 @@ using RestX.DAL.Context;
 namespace RestX.DAL.Migrations
 {
     [DbContext(typeof(TenantDbContext))]
-    partial class TenantDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260225134417_AddIngredientStatus")]
+    partial class AddIngredientStatus
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1313,9 +1316,6 @@ namespace RestX.DAL.Migrations
                     b.Property<int>("PaymentStatusId")
                         .HasColumnType("int");
 
-                    b.Property<int>("PaymentStatusId1")
-                        .HasColumnType("int");
-
                     b.Property<string>("Reference")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -1342,7 +1342,7 @@ namespace RestX.DAL.Migrations
 
                     b.HasIndex("HandledBy");
 
-                    b.HasIndex("PaymentStatusId1");
+                    b.HasIndex("PaymentStatusId");
 
                     b.HasIndex("Reference")
                         .IsUnique();
@@ -2272,8 +2272,8 @@ namespace RestX.DAL.Migrations
 
                     b.HasOne("RestX.Models.Common.StatusValue", "PaymentStatus")
                         .WithMany()
-                        .HasForeignKey("PaymentStatusId1")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasForeignKey("PaymentStatusId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("RestX.Models.Reservations.Reservation", "Reservation")

@@ -502,6 +502,9 @@ namespace RestX.DAL.Context
                 entity.Property(e => e.TaxAmount).HasColumnType("decimal(18,2)");
                 entity.Property(e => e.ServiceCharge).HasColumnType("decimal(18,2)");
                 entity.Property(e => e.TotalAmount).HasColumnType("decimal(18,2)");
+                entity.Property(x => x.PaymentStatusId)
+                    .HasConversion<int>();
+                entity.Ignore(x => x.PaymentStatus);
 
                 entity.HasOne<Customer>(e => e.Customer)
                     .WithMany(c => c.Orders)
@@ -512,11 +515,6 @@ namespace RestX.DAL.Context
                     .WithMany(r => r.Orders)
                     .HasForeignKey(e => e.ReservationId)
                     .OnDelete(DeleteBehavior.SetNull);
-
-                entity.HasOne<StatusValue>(e => e.PaymentStatus)
-                    .WithMany()
-                    .HasForeignKey(e => e.PaymentStatusId)
-                    .OnDelete(DeleteBehavior.Restrict);
 
                 entity.HasOne<Employee>(e => e.Handler)
                     .WithMany(emp => emp.HandledOrders)

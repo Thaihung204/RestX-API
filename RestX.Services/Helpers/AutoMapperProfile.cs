@@ -1,20 +1,23 @@
 ﻿using AutoMapper;
+using RestX.BLL.DataTranferObjects.Authentication;
 using RestX.BLL.DataTranferObjects.Category;
+using RestX.BLL.DataTranferObjects.Customer;
+using RestX.BLL.DataTranferObjects.Dish;
+using RestX.BLL.DataTranferObjects.Employee;
+using RestX.BLL.DataTranferObjects.Inventory;
+using RestX.BLL.DataTranferObjects.Orders;
 using RestX.BLL.DataTranferObjects.Table;
 using RestX.BLL.DataTranferObjects.Tenants;
-using RestX.BLL.DataTranferObjects.Dish;
-using RestX.Models.Enum;
-using RestX.Models.Menu;
-using RestX.Models.Tenants;
-using System.Globalization;
-using RestX.BLL.DataTranferObjects.Authentication;
-using RestX.BLL.DataTranferObjects.Customer;
-using RestX.BLL.DataTranferObjects.Employee;
 using RestX.Models.Customers;
+using RestX.Models.Enum;
 using RestX.Models.HR;
 using RestX.Models.Identity;
+using RestX.Models.Inventory;
+using RestX.Models.Menu;
+using RestX.Models.Orders;
 using RestX.Models.Tables;
-using RestX.BLL.DataTranferObjects.Floor;
+using RestX.Models.Tenants;
+using System.Globalization;
 using FloorEntity = RestX.Models.Tables.Floor;
 using RestX.BLL.DataTranferObjects.Inventory;
 using RestX.Models.Inventory;
@@ -106,8 +109,31 @@ namespace RestX.BLL.Helpers
                 .ForMember(dest => dest.InventoryStock, opt => opt.Ignore())
                 .ForMember(dest => dest.Supplier, opt => opt.Ignore());
             CreateMap<Supplier, SupplierItem>().ReverseMap();
+            CreateMap<Models.Orders.OrderDetail, DataTranferObjects.Orders.OrderDetail>()
+                .ForMember(dest => dest.Status, opt => opt.MapFrom(src => src.ItemStatus != null ? src.ItemStatus.Name : null));
 
-            CreateMap<Models.Inventory.IngredientCategory, DataTranferObjects.Inventory.IngredientCategory>().ReverseMap();
+            CreateMap<DataTranferObjects.Orders.OrderDetail, Models.Orders.OrderDetail>()
+                .ForMember(dest => dest.ItemStatusId, opt => opt.Ignore())
+                .ForMember(dest => dest.ItemStatus, opt => opt.Ignore())
+                .ForMember(dest => dest.Order, opt => opt.Ignore())
+                .ForMember(dest => dest.Dish, opt => opt.Ignore()); CreateMap<Models.Orders.Order, DataTranferObjects.Orders.Order>()
+                .ForMember(
+                    dest => dest.TableIds,
+                    opt => opt.MapFrom(src => src.OrderTables != null
+                        ? src.OrderTables.Select(ot => ot.TableId).ToList()
+                        : new List<Guid>())
+                )
+                .ForMember(
+                    dest => dest.TableId,
+                    opt => opt.MapFrom(src =>
+                        src.OrderTables != null && src.OrderTables.Any()
+                            ? src.OrderTables.Select(ot => ot.TableId).FirstOrDefault()
+                            : Guid.Empty)
+                );
+
+            CreateMap<DataTranferObjects.Orders.Order, Models.Orders.Order>()
+                .ForMember(dest => dest.OrderTables, opt => opt.Ignore())
+                .ForMember(dest => dest.OrderDetails, opt => opt.Ignore()); CreateMap<Models.Inventory.IngredientCategory, DataTranferObjects.Inventory.IngredientCategory>().ReverseMap();
 
             CreateMap<LoyaltyPointBandEntity, DataTranferObjects.Loyalty.LoyaltyPointBand>().ReverseMap();
             CreateMap<StatusValue, StatusValues>();

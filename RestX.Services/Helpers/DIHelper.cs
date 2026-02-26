@@ -13,6 +13,7 @@ namespace RestX.BLL.Helpers
     using RestX.BLL.Services;
     using RestX.BLL.Services.Auth;
     using RestX.DAL.Context;
+    using RestX.BLL.Interfaces.Status;
 
     public static class DIHelper
     {
@@ -37,6 +38,7 @@ namespace RestX.BLL.Helpers
             services.AddScoped<IIngredientService, IngredientService>();
             services.AddScoped<ISupplierService, SupplierService>();
             services.AddScoped<ILoyaltyPointBandService, LoyaltyPointBandService>();
+            services.AddScoped<IStatusValueService, StatusValueService>();
         }
     }
 }

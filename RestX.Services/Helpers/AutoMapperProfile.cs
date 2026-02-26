@@ -19,6 +19,9 @@ using FloorEntity = RestX.Models.Tables.Floor;
 using RestX.BLL.DataTranferObjects.Inventory;
 using RestX.Models.Inventory;
 using LoyaltyPointBandEntity = RestX.Models.Loyalty.LoyaltyPointBand;
+using RestX.BLL.DataTranferObjects.Status;
+using RestX.Models.Common;
+
 namespace RestX.BLL.Helpers
 {
     public class AutoMapperProfile : Profile
@@ -103,6 +106,11 @@ namespace RestX.BLL.Helpers
             CreateMap<Models.Inventory.IngredientCategory, DataTranferObjects.Inventory.IngredientCategory>().ReverseMap();
 
             CreateMap<LoyaltyPointBandEntity, DataTranferObjects.Loyalty.LoyaltyPointBand>().ReverseMap();
+            CreateMap<StatusValue, StatusValues>();
+            CreateMap<StatusValues, StatusValue>()
+                .ForMember(dest => dest.Id, opt => opt.Ignore())
+                .ForMember(dest => dest.StatusTypeId, opt => opt.Ignore())
+                .ForMember(dest => dest.StatusType, opt => opt.Ignore());
         }
     }
 }

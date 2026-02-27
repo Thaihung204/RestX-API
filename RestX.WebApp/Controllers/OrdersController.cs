@@ -32,12 +32,11 @@ namespace RestX.WebApp.Controllers
         [HttpGet]
         //[Authorize(Roles = "Admin,Kitchen Staff,Waiter")]
         [AllowAnonymous]
-
-        public async Task<ActionResult<IEnumerable<Order>>> GetAllOrders()
+        public async Task<ActionResult<OrderSearchResult>> GetAllOrders([FromQuery] OrderSearch model)
         {
             try
             {
-                return Ok(await orderService.GetAllOrders());
+                return Ok(await orderService.GetAllOrders(model));
             }
             catch (Exception ex)
             {

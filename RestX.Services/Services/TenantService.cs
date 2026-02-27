@@ -302,17 +302,59 @@ namespace RestX.BLL.Services
 
         private async Task<string?> HandleUploadTenantImage(IFormFile? file, string folder, string publicId)
         {
-            if (file == null) return null;
-            await using var stream = file.OpenReadStream();
+            logger.LogInformation("---- HandleUploadTenantImage START ----");
 
-            var upload = await cloudinaryService.UploadAsync(
-                stream,
-                file.FileName,
-                folder,
-                publicId: publicId,
-                overwrite: true);
+            if (file == null)
+            {
+                logger.LogWarning("Upload skipped: file is NULL | Folder: {Folder} | PublicId: {PublicId}",
+                    folder, publicId);
+                return null;
+            }
 
-            return upload?.Url;
+            try
+            {
+                logger.LogInformation(
+                    "Upload Info | FileName: {FileName} | Size: {Size} | ContentType: {ContentType} | Folder: {Folder} | PublicId: {PublicId}",
+                    file.FileName,
+                    file.Length,
+                    file.ContentType,
+                    folder,
+                    publicId);
+
+                await using var stream = file.OpenReadStream();
+
+                logger.LogInformation("Stream opened successfully.");
+
+                var upload = await cloudinaryService.UploadAsync(
+                    stream,
+                    file.FileName,
+                    folder,
+                    publicId: publicId,
+                    overwrite: true);
+
+                if (upload == null)
+                {
+                    logger.LogError("Cloudinary Upload returned NULL | Folder: {Folder} | PublicId: {PublicId}",
+                        folder, publicId);
+                    return null;
+                }
+
+                logger.LogInformation("Cloudinary Upload SUCCESS | Url: {Url}", upload.Url);
+
+                logger.LogInformation("---- HandleUploadTenantImage END SUCCESS ----");
+
+                return upload.Url;
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex,
+                    "Cloudinary Upload FAILED | FileName: {FileName} | Folder: {Folder} | PublicId: {PublicId}",
+                    file?.FileName,
+                    folder,
+                    publicId);
+
+                throw;
+            }
         }
 
         private async Task SeedTenantDataAsync(Tenant tenant)

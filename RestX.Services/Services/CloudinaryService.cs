@@ -1,6 +1,7 @@
 ﻿using CloudinaryDotNet;
 using CloudinaryDotNet.Actions;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Services;
 using RestX.Models.Tenants;
@@ -9,8 +10,10 @@ using System.Net;
 public class CloudinaryService : BaseService, ICloudinaryService
 {
     private readonly Cloudinary cloudinary;
+    private readonly ILogger<TenantService> logger;
 
     public CloudinaryService(
+        ILogger<TenantService> logger,
         IConfiguration configuration,
         IRepository repo,
         IRedisService redisService,
@@ -22,7 +25,7 @@ public class CloudinaryService : BaseService, ICloudinaryService
             configuration["Cloudinary:ApiKey"],
             configuration["Cloudinary:ApiSecret"]
         );
-
+        this.logger = logger;
         cloudinary = new Cloudinary(account);
     }
 

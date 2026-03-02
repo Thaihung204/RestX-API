@@ -251,6 +251,33 @@ namespace RestX.BLL.Services
             await Repo.SaveAsync();
         }
 
+        public async Task CheckIn(Guid id)
+        {
+            var reservation = await Repo.GetOneAsync<Reservation>(
+                filter: r => r.Id == id,
+                includeProperties: "ReservationTables.Table,ReservationStatus");
+            if (reservation == null)
+                throw new KeyNotFoundException("Reservation not found");
+
+            var statusCode = reservation.ReservationStatus?.Code;
+            if (statusCode == CancelledCode || statusCode == CompletedCode)
+                throw new InvalidOperationException("Cannot check in a reservation that is cancelled or completed");
+
+            if (reservation.CheckedInAt.HasValue)
+                throw new InvalidOperationException("Reservation has already been checked in");
+
+            reservation.CheckedInAt = DateTime.UtcNow;
+            Repo.Update(reservation);
+
+            foreach (var rt in reservation.ReservationTables)
+            {
+                rt.Table.TableStatusId = TableStatus.Occupied;
+                Repo.Update(rt.Table);
+            }
+
+            await Repo.SaveAsync();
+        }
+
         public async Task CancelReservation(Guid id)
         {
             var reservation = await Repo.GetOneAsync<Reservation>(

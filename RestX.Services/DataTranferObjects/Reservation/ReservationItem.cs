@@ -71,7 +71,6 @@ namespace RestX.BLL.DataTranferObjects.Reservation
         public string Name { get; set; } = string.Empty;
         public string? Phone { get; set; }
         public string? Email { get; set; }
-        public bool IsGuest { get; set; }
         public Guid? CustomerId { get; set; }
         public string? MembershipLevel { get; set; }
         public int? LoyaltyPoints { get; set; }
@@ -94,7 +93,6 @@ namespace RestX.BLL.DataTranferObjects.Reservation
         public int NumberOfGuests { get; set; }
         public string ContactName { get; set; } = string.Empty;
         public string? ContactPhone { get; set; }
-        public bool IsGuest { get; set; }
         public ReservationStatusInfo Status { get; set; } = new();
         public decimal DepositAmount { get; set; }
         public bool DepositPaid { get; set; }

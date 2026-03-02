@@ -159,7 +159,6 @@ namespace RestX.BLL.Helpers
                     src.Customer != null ? src.Customer.ApplicationUser.PhoneNumber : null))
                 .ForMember(dest => dest.Email, opt => opt.MapFrom(src =>
                     src.Customer != null ? src.Customer.ApplicationUser.Email : null))
-                .ForMember(dest => dest.IsGuest, opt => opt.MapFrom(src => false))
                 .ForMember(dest => dest.MembershipLevel, opt => opt.MapFrom(src =>
                     src.Customer != null ? src.Customer.MembershipLevel : null))
                 .ForMember(dest => dest.LoyaltyPoints, opt => opt.MapFrom(src =>
@@ -172,7 +171,6 @@ namespace RestX.BLL.Helpers
                     src.Customer != null ? src.Customer.ApplicationUser.UserName ?? string.Empty : string.Empty))
                 .ForMember(dest => dest.ContactPhone, opt => opt.MapFrom(src =>
                     src.Customer != null ? src.Customer.ApplicationUser.PhoneNumber : null))
-                .ForMember(dest => dest.IsGuest, opt => opt.MapFrom(src => false))
                 .ForMember(dest => dest.Status, opt => opt.MapFrom(src => src.ReservationStatus))
                 .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(src => src.CreatedDate));
 

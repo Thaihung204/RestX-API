@@ -114,13 +114,13 @@ namespace RestX.WebApp.Controllers
             }
         }
 
-        [HttpGet("{confirmationCode}")]
-        [Authorize(Roles = "Admin,System Admin,Waiter")]
-        public async Task<IActionResult> GetReservationByCode(string confirmationCode)
+        [HttpGet("{code}")]
+        [AllowAnonymous]
+        public async Task<IActionResult> GetReservationByCode(string code)
         {
             try
             {
-                var result = await reservationService.GetReservationByCode(confirmationCode);
+                var result = await reservationService.GetReservationByCode(code);
                 if (result == null)
                     return NotFound(new { success = false, message = "Reservation not found" });
 
@@ -202,6 +202,30 @@ namespace RestX.WebApp.Controllers
             catch (InvalidOperationException ex)
             {
                 return BadRequest(new { success = false, message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest(new { success = false, message = "An internal error occurred" });
+            }
+        }
+
+        [HttpPost("{id:guid}/checkin")]
+        [Authorize(Roles = "Admin,System Admin,Waiter")]
+        public async Task<IActionResult> CheckIn(Guid id)
+        {
+            try
+            {
+                await reservationService.CheckIn(id);
+                return Ok(new { success = true, message = "Checked in successfully" });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { success = false, message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { success = false, message = ex.Message });
             }
             catch (Exception ex)
             {

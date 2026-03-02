@@ -53,7 +53,7 @@ namespace RestX.BLL.Services
             if (request.TableIds.Distinct().Count() != request.TableIds.Count)
                 throw new ArgumentException("Duplicate table IDs are not allowed");
 
-            var customerId = await ResolveOrCreateCustomer(request.Phone, request.Name, request.Email);
+            var customerId = await GetOrCreateCustomer(request.Phone, request.Name, request.Email);
 
             var tables = await GetAndValidateTables(request.TableIds);
             ValidateCapacity(request.NumberOfGuests, tables);
@@ -123,7 +123,7 @@ namespace RestX.BLL.Services
 
         public async Task<PaginatedResult<ReservationListItem>> GetMyReservations(Guid applicationUserId, PaginationParams pagination)
         {
-            var customerId = await ResolveCustomerId(applicationUserId);
+            var customerId = await GetCustomerId(applicationUserId);
             var totalCount = await Repo.GetCountAsync<Reservation>(r => r.CustomerId == customerId);
             var items = (await Repo.GetAsync<Reservation>(
                 filter: r => r.CustomerId == customerId,
@@ -338,7 +338,7 @@ namespace RestX.BLL.Services
                      r.Customer.ApplicationUser.UserName.ToLower().Contains(search)));
         }
 
-        private async Task<Guid?> ResolveCustomerId(Guid? applicationUserId)
+        private async Task<Guid?> GetCustomerId(Guid? applicationUserId)
         {
             if (!applicationUserId.HasValue)
                 return null;
@@ -347,7 +347,7 @@ namespace RestX.BLL.Services
             return customer?.Id;
         }
 
-        private async Task<Guid> ResolveOrCreateCustomer(string phone, string name, string email)
+        private async Task<Guid> GetOrCreateCustomer(string phone, string name, string email)
         {
             var existing = await Repo.GetOneAsync<Customer>(
                 filter: c => c.ApplicationUser.PhoneNumber == phone,

@@ -13,13 +13,16 @@ namespace RestX.BLL.DataTranferObjects.Reservation
         [Required]
         [Range(1, 100, ErrorMessage = "Number of guests must be between 1 and 100")]
         public int NumberOfGuests { get; set; }
+        [Required]
         [MaxLength(100)]
-        public string? GuestName { get; set; }
+        public string Name { get; set; } = string.Empty;
+        [Required]
         [MaxLength(15)]
-        public string? GuestPhone { get; set; }
+        public string Phone { get; set; } = string.Empty;
+        [Required]
         [MaxLength(255)]
         [EmailAddress]
-        public string? GuestEmail { get; set; }
+        public string Email { get; set; } = string.Empty;
         [MaxLength(1000)]
         public string? SpecialRequests { get; set; }
     }
@@ -36,13 +39,6 @@ namespace RestX.BLL.DataTranferObjects.Reservation
         public DateTime? ReservationDateTime { get; set; }
         [Range(1, 100, ErrorMessage = "Number of guests must be between 1 and 100")]
         public int? NumberOfGuests { get; set; }
-        [MaxLength(100)]
-        public string? GuestName { get; set; }
-        [MaxLength(15)]
-        public string? GuestPhone { get; set; }
-        [MaxLength(255)]
-        [EmailAddress]
-        public string? GuestEmail { get; set; }
         [MaxLength(1000)]
         public string? SpecialRequests { get; set; }
     }

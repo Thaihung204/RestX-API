@@ -4,6 +4,7 @@ using RestX.BLL.DataTranferObjects.Common;
 using RestX.BLL.DataTranferObjects.Reservation;
 using RestX.BLL.DataTranferObjects.Status;
 using RestX.BLL.Interfaces;
+using RestX.BLL.Interfaces.Auth;
 using RestX.BLL.Interfaces.Reservations;
 using RestX.BLL.Interfaces.Status;
 using RestX.Models.Customers;
@@ -20,12 +21,18 @@ namespace RestX.BLL.Services
         private const string CancelledCode = "CANCELLED";
         private const string CompletedCode = "COMPLETED";
 
+        private const string CustomerRole = "Customer";
+
         private readonly IMapper mapper;
         private readonly IStatusValueService statusValueService;
+        private readonly IUserAccountService userAccountService;
+        private readonly IEmailService emailService;
 
         public ReservationService(
             IMapper mapper,
             IStatusValueService statusValueService,
+            IUserAccountService userAccountService,
+            IEmailService emailService,
             IRepository repo,
             IRedisService redisService,
             IEnumerable<ActiveTenant> tenant = null
@@ -33,9 +40,11 @@ namespace RestX.BLL.Services
         {
             this.mapper = mapper;
             this.statusValueService = statusValueService;
+            this.userAccountService = userAccountService;
+            this.emailService = emailService;
         }
 
-        public async Task<ReservationDetail> CreateReservation(CreateReservationRequest request, Guid? applicationUserId)
+        public async Task<ReservationDetail> CreateReservation(CreateReservationRequest request)
         {
             if (request.ReservationDateTime <= DateTime.UtcNow)
                 throw new ArgumentException("Reservation date and time must be in the future");
@@ -43,9 +52,9 @@ namespace RestX.BLL.Services
                 throw new ArgumentException("At least one table is required");
             if (request.TableIds.Distinct().Count() != request.TableIds.Count)
                 throw new ArgumentException("Duplicate table IDs are not allowed");
-            var customerId = await ResolveCustomerId(applicationUserId);
-            if (customerId == null)
-                ValidateGuestFields(request);
+
+            var customerId = await ResolveOrCreateCustomer(request.Phone, request.Name, request.Email);
+
             var tables = await GetAndValidateTables(request.TableIds);
             ValidateCapacity(request.NumberOfGuests, tables);
             var availability = await CheckAvailabilityReservation(new CheckAvailabilityParams
@@ -55,15 +64,14 @@ namespace RestX.BLL.Services
             });
             if (!availability.Available)
                 throw new InvalidOperationException("One or more tables are already reserved at this time");
+
             var statuses = await statusValueService.GetStatuses(ReservationStatusTypeCode);
             var pendingStatus = statuses.FirstOrDefault(s => s.IsDefault)
                 ?? throw new InvalidOperationException("Default reservation status not configured");
+
             var reservation = new Reservation
             {
                 CustomerId = customerId,
-                GuestName = customerId.HasValue ? null : request.GuestName,
-                GuestPhone = customerId.HasValue ? null : request.GuestPhone,
-                GuestEmail = customerId.HasValue ? null : request.GuestEmail,
                 NumberOfGuests = request.NumberOfGuests,
                 Time = request.ReservationDateTime,
                 SpecialRequests = request.SpecialRequests,
@@ -84,8 +92,11 @@ namespace RestX.BLL.Services
                 Repo.Update(table);
             }
             await Repo.SaveAsync();
+
             var created = await GetReservationWithInfo(reservation.Id);
-            return mapper.Map<ReservationDetail>(created!);
+            var result = mapper.Map<ReservationDetail>(created!);
+            await TrySendReservationConfirmationAsync(request.Email, request.Name, result, tables);
+            return result;
         }
 
         public async Task<PaginatedResult<ReservationListItem>> GetReservations(ReservationFilterParams filter)
@@ -134,13 +145,10 @@ namespace RestX.BLL.Services
             return reservation == null ? null : mapper.Map<ReservationDetail>(reservation);
         }
 
-        public async Task<ReservationDetail?> LookupReservation(string confirmationCode, string phone)
+        public async Task<ReservationDetail?> GetReservationByCode(string confirmationCode)
         {
             var reservation = await Repo.GetOneAsync<Reservation>(
-                filter: r =>
-                    r.ConfirmationCode == confirmationCode &&
-                    (r.GuestPhone == phone ||
-                     (r.Customer != null && r.Customer.ApplicationUser.PhoneNumber == phone)),
+                filter: r => r.ConfirmationCode == confirmationCode,
                 includeProperties: "ReservationTables.Table.Floor,Customer.ApplicationUser,ReservationStatus");
             return reservation == null ? null : mapper.Map<ReservationDetail>(reservation);
         }
@@ -220,12 +228,6 @@ namespace RestX.BLL.Services
             reservation.Time = newDateTime;
             reservation.NumberOfGuests = numberOfGuests;
             reservation.SpecialRequests = request.SpecialRequests ?? reservation.SpecialRequests;
-            if (!reservation.CustomerId.HasValue)
-            {
-                reservation.GuestName = request.GuestName ?? reservation.GuestName;
-                reservation.GuestPhone = request.GuestPhone ?? reservation.GuestPhone;
-                reservation.GuestEmail = request.GuestEmail ?? reservation.GuestEmail;
-            }
 
             Repo.Update(reservation);
             await Repo.SaveAsync();
@@ -305,8 +307,6 @@ namespace RestX.BLL.Services
                 (!filter.TableId.HasValue || r.ReservationTables.Any(rt => rt.TableId == filter.TableId.Value)) &&
                 (string.IsNullOrEmpty(search) ||
                     (r.ConfirmationCode != null && r.ConfirmationCode.ToLower().Contains(search)) ||
-                    (r.GuestName != null && r.GuestName.ToLower().Contains(search)) ||
-                    (r.GuestPhone != null && r.GuestPhone.Contains(search)) ||
                     (r.Customer != null && r.Customer.ApplicationUser.UserName != null &&
                      r.Customer.ApplicationUser.UserName.ToLower().Contains(search)));
         }
@@ -320,12 +320,52 @@ namespace RestX.BLL.Services
             return customer?.Id;
         }
 
-        private static void ValidateGuestFields(CreateReservationRequest request)
+        private async Task<Guid> ResolveOrCreateCustomer(string phone, string name, string email)
         {
-            if (string.IsNullOrWhiteSpace(request.GuestName))
-                throw new ArgumentException("Guest name is required for unauthenticated reservations");
-            if (string.IsNullOrWhiteSpace(request.GuestPhone))
-                throw new ArgumentException("Guest phone is required for unauthenticated reservations");
+            var existing = await Repo.GetOneAsync<Customer>(
+                filter: c => c.ApplicationUser.PhoneNumber == phone,
+                includeProperties: "ApplicationUser");
+            if (existing != null)
+                return existing.Id;
+
+            var user = await userAccountService.CreateUserAsync(new CreateUserRequest
+            {
+                FullName = name,
+                Email = email,
+                PhoneNumber = phone,
+                Role = CustomerRole,
+                GenerateRandomPassword = true
+            });
+            var customer = new Customer
+            {
+                ApplicationUserId = user.Id,
+                MembershipLevel = "BRONZE",
+                LoyaltyPoints = 0,
+                IsActive = true
+            };
+            await Repo.CreateAsync(customer);
+            await Repo.SaveAsync();
+            return customer.Id;
+        }
+
+        private async Task TrySendReservationConfirmationAsync(
+            string email, string name, ReservationDetail detail, List<Table> tables)
+        {
+            try
+            {
+                var tableList = string.Join(", ", tables.Select(t => t.Code));
+                var body = EmailTemplates.ReservationConfirmation(
+                    name,
+                    detail.ConfirmationCode,
+                    detail.ReservationDateTime,
+                    detail.NumberOfGuests,
+                    tableList,
+                    detail.SpecialRequests);
+                await emailService.SendEmailAsync(email, "Reservation Confirmation – " + detail.ConfirmationCode, body);
+            }
+            catch
+            {
+            }
         }
 
         private async Task<List<Table>> GetAndValidateTables(List<Guid> tableIds)

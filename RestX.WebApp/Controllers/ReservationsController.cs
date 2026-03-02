@@ -38,15 +38,8 @@ namespace RestX.WebApp.Controllers
                 if (!ModelState.IsValid)
                     return BadRequest(new { success = false, message = "Validation failed", errors = ModelState });
 
-                Guid? applicationUserId = null;
-                if (User.Identity?.IsAuthenticated == true)
-                {
-                    var user = await GetCurrentUserAsync();
-                    applicationUserId = user?.Id;
-                }
-
-                var result = await reservationService.CreateReservation(request, applicationUserId);
-                return Ok(new { success = true, message = "Reservation created successfully", data = result });
+                var result = await reservationService.CreateReservation(request);
+                return Ok(new { success = true, message = "Reservation created successfully", data = new { result.Id } });
             }
             catch (KeyNotFoundException ex)
             {
@@ -102,30 +95,6 @@ namespace RestX.WebApp.Controllers
             }
         }
 
-        [HttpGet("lookup")]
-        [AllowAnonymous]
-        public async Task<IActionResult> LookupReservation(
-            [FromQuery] string confirmationCode,
-            [FromQuery] string phone)
-        {
-            try
-            {
-                if (string.IsNullOrWhiteSpace(confirmationCode) || string.IsNullOrWhiteSpace(phone))
-                    return BadRequest(new { success = false, message = "Confirmation code and phone are required" });
-
-                var result = await reservationService.LookupReservation(confirmationCode, phone);
-                if (result == null)
-                    return NotFound(new { success = false, message = "Reservation not found" });
-
-                return Ok(new { success = true, data = result });
-            }
-            catch (Exception ex)
-            {
-                ExceptionHandler.RaiseException(ex);
-                return BadRequest(new { success = false, message = "An internal error occurred" });
-            }
-        }
-
         [HttpGet("check-availability")]
         [AllowAnonymous]
         public async Task<IActionResult> CheckAvailability([FromQuery] CheckAvailabilityParams request)
@@ -136,6 +105,25 @@ namespace RestX.WebApp.Controllers
                     return BadRequest(new { success = false, message = "At least one table ID is required" });
 
                 var result = await reservationService.CheckAvailabilityReservation(request);
+                return Ok(new { success = true, data = result });
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest(new { success = false, message = "An internal error occurred" });
+            }
+        }
+
+        [HttpGet("{confirmationCode}")]
+        [Authorize(Roles = "Admin,System Admin,Waiter")]
+        public async Task<IActionResult> GetReservationByCode(string confirmationCode)
+        {
+            try
+            {
+                var result = await reservationService.GetReservationByCode(confirmationCode);
+                if (result == null)
+                    return NotFound(new { success = false, message = "Reservation not found" });
+
                 return Ok(new { success = true, data = result });
             }
             catch (Exception ex)

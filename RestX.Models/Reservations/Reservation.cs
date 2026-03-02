@@ -19,15 +19,6 @@ namespace RestX.Models.Reservations
         [MaxLength(20)]
         public string? ConfirmationCode { get; set; }
 
-        [MaxLength(100)]
-        public string? GuestName { get; set; }
-
-        [MaxLength(15)]
-        public string? GuestPhone { get; set; }
-
-        [MaxLength(255)]
-        public string? GuestEmail { get; set; }
-
         [Range(1, 100)]
         public int NumberOfGuests { get; set; }
 

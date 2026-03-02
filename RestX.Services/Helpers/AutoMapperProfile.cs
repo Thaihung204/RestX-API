@@ -154,18 +154,12 @@ namespace RestX.BLL.Helpers
 
             CreateMap<Reservation, ReservationContactInfo>()
                 .ForMember(dest => dest.Name, opt => opt.MapFrom(src =>
-                    src.CustomerId.HasValue
-                        ? src.Customer != null ? src.Customer.ApplicationUser.UserName ?? string.Empty : string.Empty
-                        : src.GuestName ?? string.Empty))
+                    src.Customer != null ? src.Customer.ApplicationUser.UserName ?? string.Empty : string.Empty))
                 .ForMember(dest => dest.Phone, opt => opt.MapFrom(src =>
-                    src.CustomerId.HasValue
-                        ? src.Customer != null ? src.Customer.ApplicationUser.PhoneNumber : null
-                        : src.GuestPhone))
+                    src.Customer != null ? src.Customer.ApplicationUser.PhoneNumber : null))
                 .ForMember(dest => dest.Email, opt => opt.MapFrom(src =>
-                    src.CustomerId.HasValue
-                        ? src.Customer != null ? src.Customer.ApplicationUser.Email : null
-                        : src.GuestEmail))
-                .ForMember(dest => dest.IsGuest, opt => opt.MapFrom(src => !src.CustomerId.HasValue))
+                    src.Customer != null ? src.Customer.ApplicationUser.Email : null))
+                .ForMember(dest => dest.IsGuest, opt => opt.MapFrom(src => false))
                 .ForMember(dest => dest.MembershipLevel, opt => opt.MapFrom(src =>
                     src.Customer != null ? src.Customer.MembershipLevel : null))
                 .ForMember(dest => dest.LoyaltyPoints, opt => opt.MapFrom(src =>
@@ -175,14 +169,10 @@ namespace RestX.BLL.Helpers
                 .ForMember(dest => dest.Tables, opt => opt.MapFrom(src => src.ReservationTables))
                 .ForMember(dest => dest.ReservationDateTime, opt => opt.MapFrom(src => src.Time))
                 .ForMember(dest => dest.ContactName, opt => opt.MapFrom(src =>
-                    src.CustomerId.HasValue
-                        ? src.Customer != null ? src.Customer.ApplicationUser.UserName ?? string.Empty : string.Empty
-                        : src.GuestName ?? string.Empty))
+                    src.Customer != null ? src.Customer.ApplicationUser.UserName ?? string.Empty : string.Empty))
                 .ForMember(dest => dest.ContactPhone, opt => opt.MapFrom(src =>
-                    src.CustomerId.HasValue
-                        ? src.Customer != null ? src.Customer.ApplicationUser.PhoneNumber : null
-                        : src.GuestPhone))
-                .ForMember(dest => dest.IsGuest, opt => opt.MapFrom(src => !src.CustomerId.HasValue))
+                    src.Customer != null ? src.Customer.ApplicationUser.PhoneNumber : null))
+                .ForMember(dest => dest.IsGuest, opt => opt.MapFrom(src => false))
                 .ForMember(dest => dest.Status, opt => opt.MapFrom(src => src.ReservationStatus))
                 .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(src => src.CreatedDate));
 

@@ -1,8 +1,8 @@
 using System.Linq.Expressions;
 using AutoMapper;
+using RestX.BLL.DataTranferObjects.Authentication;
 using RestX.BLL.DataTranferObjects.Common;
 using RestX.BLL.DataTranferObjects.Reservation;
-using RestX.BLL.DataTranferObjects.Status;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Auth;
 using RestX.BLL.Interfaces.Reservations;
@@ -23,17 +23,19 @@ namespace RestX.BLL.Services
         private const string CompletedCode = "COMPLETED";
         private const int ReservationBufferMinutes = 120;
 
-        private const string CustomerRole = "Customer";
+        private const string ReservationIncludes = "ReservationTables.Table.Floor,Customer.ApplicationUser,ReservationStatus";
+        private const string TablesIncludes = "ReservationTables.Table";
+        private const string TablesAndStatusIncludes = "ReservationTables.Table,ReservationStatus";
 
         private readonly IMapper mapper;
         private readonly IStatusValueService statusValueService;
-        private readonly IUserAccountService userAccountService;
+        private readonly IAuthService authService;
         private readonly IEmailService emailService;
 
         public ReservationService(
             IMapper mapper,
             IStatusValueService statusValueService,
-            IUserAccountService userAccountService,
+            IAuthService authService,
             IEmailService emailService,
             IRepository repo,
             IRedisService redisService,
@@ -42,22 +44,20 @@ namespace RestX.BLL.Services
         {
             this.mapper = mapper;
             this.statusValueService = statusValueService;
-            this.userAccountService = userAccountService;
+            this.authService = authService;
             this.emailService = emailService;
         }
 
         public async Task<ReservationDetail> CreateReservation(CreateReservationRequest request)
         {
-            if (request.ReservationDateTime <= DateTime.UtcNow)
-                throw new ArgumentException("Reservation date and time must be in the future");
+            ValidateFutureDate(request.ReservationDateTime);
             if (request.TableIds == null || request.TableIds.Count == 0)
                 throw new ArgumentException("At least one table is required");
-            if (request.TableIds.Distinct().Count() != request.TableIds.Count)
-                throw new ArgumentException("Duplicate table IDs are not allowed");
+            ValidateDistinctTableIds(request.TableIds);
 
-            var customerId = await GetOrCreateCustomer(request.Phone, request.Name, request.Email);
+            var customerId = await ResolveCustomer(request.Phone, request.Name);
 
-            var tables = await GetAndValidateTables(request.TableIds);
+            var tables = await ValidateReservationTables(request.TableIds);
             ValidateCapacity(request.NumberOfGuests, tables);
             var availability = await CheckAvailabilityReservation(new CheckAvailabilityParams
             {
@@ -96,10 +96,10 @@ namespace RestX.BLL.Services
             }
             await Repo.SaveAsync();
 
-            var created = await GetReservationWithInfo(reservation.Id);
-            var result = mapper.Map<ReservationDetail>(created!);
-            await TrySendReservationConfirmationAsync(request.Email, request.Name, result, tables);
-            return result;
+            var saved = await LoadReservation(reservation.Id);
+            var detail = mapper.Map<ReservationDetail>(saved!);
+            await SendConfirmationEmail(request.Email, request.Name, detail, tables);
+            return detail;
         }
 
         public async Task<PaginatedResult<ReservationListItem>> GetReservations(ReservationFilterParams filter)
@@ -112,7 +112,7 @@ namespace RestX.BLL.Services
                 orderBy: filter.SortDescending
                     ? q => q.OrderByDescending(r => r.Time)
                     : q => q.OrderBy(r => r.Time),
-                includeProperties: "ReservationTables.Table.Floor,Customer.ApplicationUser,ReservationStatus",
+                includeProperties: ReservationIncludes,
                 skip: (filter.PageNumber - 1) * filter.PageSize,
                 take: filter.PageSize
             )).ToList();
@@ -131,7 +131,7 @@ namespace RestX.BLL.Services
             var items = (await Repo.GetAsync<Reservation>(
                 filter: r => r.CustomerId == customerId,
                 orderBy: q => q.OrderByDescending(r => r.Time),
-                includeProperties: "ReservationTables.Table.Floor,Customer.ApplicationUser,ReservationStatus",
+                includeProperties: ReservationIncludes,
                 skip: (pagination.PageNumber - 1) * pagination.PageSize,
                 take: pagination.PageSize
             )).ToList();
@@ -144,7 +144,7 @@ namespace RestX.BLL.Services
 
         public async Task<ReservationDetail?> GetReservationById(Guid id)
         {
-            var reservation = await GetReservationWithInfo(id);
+            var reservation = await LoadReservation(id);
             return reservation == null ? null : mapper.Map<ReservationDetail>(reservation);
         }
 
@@ -152,41 +152,33 @@ namespace RestX.BLL.Services
         {
             var reservation = await Repo.GetOneAsync<Reservation>(
                 filter: r => r.ConfirmationCode == confirmationCode,
-                includeProperties: "ReservationTables.Table.Floor,Customer.ApplicationUser,ReservationStatus");
+                includeProperties: ReservationIncludes);
             return reservation == null ? null : mapper.Map<ReservationDetail>(reservation);
         }
 
         public async Task<ReservationDetail> UpdateReservation(Guid id, UpdateReservationRequest request)
         {
-            var reservation = await Repo.GetOneAsync<Reservation>(
-                filter: r => r.Id == id,
-                includeProperties: "ReservationTables.Table,ReservationStatus");
-            if (reservation == null)
-                throw new KeyNotFoundException("Reservation not found");
+            var reservation = await RequireReservation(id, TablesAndStatusIncludes);
 
             var currentStatusCode = reservation.ReservationStatus?.Code;
             if (currentStatusCode == CancelledCode || currentStatusCode == CompletedCode)
                 throw new InvalidOperationException("Cannot update a reservation that is already cancelled or completed");
 
-            if (request.ReservationDateTime.HasValue && request.ReservationDateTime.Value <= DateTime.UtcNow)
-                throw new ArgumentException("Reservation date and time must be in the future");
+            if (request.ReservationDateTime.HasValue)
+                ValidateFutureDate(request.ReservationDateTime.Value);
 
-            if (request.TableIds != null && request.TableIds.Count > 0 &&
-                request.TableIds.Distinct().Count() != request.TableIds.Count)
-                throw new ArgumentException("Duplicate table IDs are not allowed");
+            if (request.TableIds is { Count: > 0 })
+                ValidateDistinctTableIds(request.TableIds);
 
             var newDateTime = request.ReservationDateTime ?? reservation.Time;
             var currentTableIds = reservation.ReservationTables.Select(rt => rt.TableId).ToList();
-            var newTableIds = request.TableIds != null && request.TableIds.Count > 0
-                ? request.TableIds
-                : currentTableIds;
-
-            var tablesChanged = request.TableIds != null && request.TableIds.Count > 0;
+            var tablesChanged = request.TableIds is { Count: > 0 };
             var dateChanged = request.ReservationDateTime.HasValue;
+            var newTableIds = tablesChanged ? request.TableIds! : currentTableIds;
 
             List<Table> newTables = reservation.ReservationTables.Select(rt => rt.Table).ToList();
             if (tablesChanged)
-                newTables = await GetAndValidateTables(newTableIds);
+                newTables = await ValidateReservationTables(newTableIds);
 
             if (tablesChanged || dateChanged)
             {
@@ -233,33 +225,13 @@ namespace RestX.BLL.Services
 
             Repo.Update(reservation);
             await Repo.SaveAsync();
-            var updated = await GetReservationWithInfo(id);
-            return mapper.Map<ReservationDetail>(updated!);
-        }
-
-        public async Task UpdateReservationStatus(Guid id, int statusId)
-        {
-            var reservation = await Repo.GetOneAsync<Reservation>(
-                filter: r => r.Id == id,
-                includeProperties: "ReservationTables.Table");
-            if (reservation == null)
-                throw new KeyNotFoundException("Reservation not found");
-            var statuses = await statusValueService.GetStatuses(ReservationStatusTypeCode);
-            var status = statuses.FirstOrDefault(s => s.Id == statusId)
-                ?? throw new InvalidOperationException("Invalid reservation status");
-            reservation.ReservationStatusId = statusId;
-            Repo.Update(reservation);
-            await ApplyTableStatusSideEffect(reservation, status.Code);
-            await Repo.SaveAsync();
+            var saved = await LoadReservation(id);
+            return mapper.Map<ReservationDetail>(saved!);
         }
 
         public async Task CheckIn(Guid id)
         {
-            var reservation = await Repo.GetOneAsync<Reservation>(
-                filter: r => r.Id == id,
-                includeProperties: "ReservationTables.Table,ReservationStatus");
-            if (reservation == null)
-                throw new KeyNotFoundException("Reservation not found");
+            var reservation = await RequireReservation(id, TablesAndStatusIncludes);
 
             var statusCode = reservation.ReservationStatus?.Code;
             if (statusCode == CancelledCode || statusCode == CompletedCode)
@@ -287,17 +259,13 @@ namespace RestX.BLL.Services
 
         public async Task CancelReservation(Guid id)
         {
-            var reservation = await Repo.GetOneAsync<Reservation>(
-                filter: r => r.Id == id,
-                includeProperties: "ReservationTables.Table");
-            if (reservation == null)
-                throw new KeyNotFoundException("Reservation not found");
+            var reservation = await RequireReservation(id, TablesIncludes);
             var statuses = await statusValueService.GetStatuses(ReservationStatusTypeCode);
             var cancelledStatus = statuses.FirstOrDefault(s => s.Code == CancelledCode)
                 ?? throw new InvalidOperationException("Cancelled status not configured");
             reservation.ReservationStatusId = cancelledStatus.Id;
             Repo.Update(reservation);
-            await ApplyTableStatusSideEffect(reservation, CancelledCode);
+            await FreeTablesAndSessions(reservation, CancelledCode);
             await Repo.SaveAsync();
         }
 
@@ -337,7 +305,7 @@ namespace RestX.BLL.Services
                 (!filter.TableId.HasValue || r.ReservationTables.Any(rt => rt.TableId == filter.TableId.Value)) &&
                 (string.IsNullOrEmpty(search) ||
                     (r.ConfirmationCode != null && r.ConfirmationCode.ToLower().Contains(search)) ||
-                    (r.Customer != null && r.Customer.ApplicationUser.UserName != null &&
+                    (r.Customer.ApplicationUser.UserName != null &&
                      r.Customer.ApplicationUser.UserName.ToLower().Contains(search)));
         }
 
@@ -350,34 +318,7 @@ namespace RestX.BLL.Services
             return customer?.Id;
         }
 
-        private async Task<Guid> GetOrCreateCustomer(string phone, string name, string email)
-        {
-            var existing = await Repo.GetOneAsync<Customer>(
-                filter: c => c.ApplicationUser.PhoneNumber == phone,
-                includeProperties: "ApplicationUser");
-            if (existing != null)
-                return existing.Id;
-
-            var user = await userAccountService.CreateUserAsync(new CreateUserRequest
-            {
-                FullName = name,
-                Email = email,
-                PhoneNumber = phone,
-                Role = CustomerRole,
-                GenerateRandomPassword = true
-            });
-            var customer = new Customer
-            {
-                ApplicationUserId = user.Id,
-                MembershipLevel = "BRONZE",
-                LoyaltyPoints = 0,
-                IsActive = true
-            };
-            await Repo.CreateAsync(customer);
-            return customer.Id;
-        }
-
-        private async Task TrySendReservationConfirmationAsync(
+        private async Task SendConfirmationEmail(
             string email, string name, ReservationDetail detail, List<Table> tables)
         {
             try
@@ -397,7 +338,7 @@ namespace RestX.BLL.Services
             }
         }
 
-        private async Task<List<Table>> GetAndValidateTables(List<Guid> tableIds)
+        private async Task<List<Table>> ValidateReservationTables(List<Guid> tableIds)
         {
             var tables = (await Repo.GetAsync<Table>(
                 filter: t => tableIds.Contains(t.Id) && t.IsActive,
@@ -411,6 +352,18 @@ namespace RestX.BLL.Services
             return tables;
         }
 
+        private static void ValidateFutureDate(DateTime dateTime)
+        {
+            if (dateTime <= DateTime.UtcNow)
+                throw new ArgumentException("Reservation date and time must be in the future");
+        }
+
+        private static void ValidateDistinctTableIds(List<Guid> tableIds)
+        {
+            if (tableIds.Distinct().Count() != tableIds.Count)
+                throw new ArgumentException("Duplicate table IDs are not allowed");
+        }
+
         private static void ValidateCapacity(int numberOfGuests, List<Table> tables)
         {
             var totalCapacity = tables.Sum(t => t.SeatingCapacity);
@@ -419,41 +372,59 @@ namespace RestX.BLL.Services
                     $"Number of guests ({numberOfGuests}) exceeds total table capacity ({totalCapacity})");
         }
 
-        private async Task ApplyTableStatusSideEffect(Reservation reservation, string newStatusCode)
+        private async Task FreeTablesAndSessions(Reservation reservation, string newStatusCode)
         {
-            TableStatus? newTableStatus = newStatusCode switch
-            {
-                CompletedCode or CancelledCode => TableStatus.Available,
-                _ => null
-            };
+            if (newStatusCode != CompletedCode && newStatusCode != CancelledCode)
+                return;
 
-            if (newTableStatus.HasValue)
+            foreach (var rt in reservation.ReservationTables)
             {
-                foreach (var rt in reservation.ReservationTables)
-                {
-                    rt.Table.TableStatusId = newTableStatus.Value;
-                    Repo.Update(rt.Table);
-                }
+                rt.Table.TableStatusId = TableStatus.Available;
+                Repo.Update(rt.Table);
             }
-            if (newStatusCode == CompletedCode || newStatusCode == CancelledCode)
+
+            var activeSessions = (await Repo.GetAsync<TableSession>(
+                filter: ts => ts.ReservationId == reservation.Id && ts.IsActive)).ToList();
+            foreach (var session in activeSessions)
             {
-                var activeSessions = (await Repo.GetAsync<TableSession>(
-                    filter: ts => ts.ReservationId == reservation.Id && ts.IsActive)).ToList();
-                foreach (var session in activeSessions)
-                {
-                    session.IsActive = false;
-                    session.EndedAt = DateTime.UtcNow;
-                    Repo.Update(session);
-                }
+                session.IsActive = false;
+                session.EndedAt = DateTime.UtcNow;
+                Repo.Update(session);
             }
         }
 
-        private async Task<Reservation?> GetReservationWithInfo(Guid id)
+        private async Task<Reservation> RequireReservation(Guid id, string includes)
         {
             return await Repo.GetOneAsync<Reservation>(
                 filter: r => r.Id == id,
-                includeProperties: "ReservationTables.Table.Floor,Customer.ApplicationUser,ReservationStatus");
+                includeProperties: includes)
+                ?? throw new KeyNotFoundException("Reservation not found");
         }
+
+        private async Task<Reservation?> LoadReservation(Guid id)
+        {
+            return await Repo.GetOneAsync<Reservation>(
+                filter: r => r.Id == id,
+                includeProperties: ReservationIncludes);
+        }
+        private async Task<Guid> ResolveCustomer(string phone, string name)
+        {
+            var existing = await authService.CheckPhoneNumberAsync(phone);
+            if (existing.Exists && existing.CustomerId.HasValue)
+                return existing.CustomerId.Value;
+
+            var register = await authService.CustomerPhoneRegisterAsync(new CustomerPhoneRegisterRequest
+            {
+                PhoneNumber = phone,
+                FullName = name
+            });
+            if (!register.Success)
+                throw new InvalidOperationException($"Failed to register customer: {register.Message}");
+
+            var lookup = await authService.CheckPhoneNumberAsync(phone);
+            return lookup.CustomerId!.Value;
+        }
+
         private static string GenerateConfirmationCode(Guid id)
             => "RX-" + id.ToString("N")[..6].ToUpper();
 

@@ -95,25 +95,6 @@ namespace RestX.WebApp.Controllers
             }
         }
 
-        [HttpGet("check-availability")]
-        [AllowAnonymous]
-        public async Task<IActionResult> CheckAvailability([FromQuery] CheckAvailabilityParams request)
-        {
-            try
-            {
-                if (request.TableIds == null || !request.TableIds.Any())
-                    return BadRequest(new { success = false, message = "At least one table ID is required" });
-
-                var result = await reservationService.CheckAvailabilityReservation(request);
-                return Ok(new { success = true, data = result });
-            }
-            catch (Exception ex)
-            {
-                ExceptionHandler.RaiseException(ex);
-                return BadRequest(new { success = false, message = "An internal error occurred" });
-            }
-        }
-
         [HttpGet("{code}")]
         [Authorize(Roles = "Admin,System Admin,Waiter")]
         public async Task<IActionResult> GetReservationByCode(string code)
@@ -175,33 +156,6 @@ namespace RestX.WebApp.Controllers
             catch (InvalidOperationException ex)
             {
                 return Conflict(new { success = false, message = ex.Message });
-            }
-            catch (Exception ex)
-            {
-                ExceptionHandler.RaiseException(ex);
-                return BadRequest(new { success = false, message = "An internal error occurred" });
-            }
-        }
-
-        [HttpPut("{id:guid}/status")]
-        [Authorize(Roles = "Admin,System Admin,Waiter")]
-        public async Task<IActionResult> UpdateStatus(Guid id, [FromBody] UpdateReservationStatusRequest request)
-        {
-            try
-            {
-                if (!ModelState.IsValid)
-                    return BadRequest(new { success = false, message = "Validation failed", errors = ModelState });
-
-                await reservationService.UpdateReservationStatus(id, request.StatusId);
-                return Ok(new { success = true, message = "Reservation status updated successfully" });
-            }
-            catch (KeyNotFoundException ex)
-            {
-                return NotFound(new { success = false, message = ex.Message });
-            }
-            catch (InvalidOperationException ex)
-            {
-                return BadRequest(new { success = false, message = ex.Message });
             }
             catch (Exception ex)
             {

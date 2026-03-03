@@ -14,7 +14,7 @@ namespace RestX.Models.Reservations
 {
     public partial class Reservation : Entity<Guid>
     {
-        public Guid? CustomerId { get; set; }
+        public Guid CustomerId { get; set; }
 
         [MaxLength(20)]
         public string? ConfirmationCode { get; set; }
@@ -37,7 +37,7 @@ namespace RestX.Models.Reservations
 
         public DateTime? CheckedInAt { get; set; }
 
-        public virtual Customer? Customer { get; set; }
+        public virtual Customer Customer { get; set; } = null!;
         public virtual StatusValue ReservationStatus { get; set; } = null!;
         public virtual ICollection<ReservationTable> ReservationTables { get; set; } = new HashSet<ReservationTable>();
         public virtual ICollection<TableSession> TableSessions { get; set; } = new HashSet<TableSession>();

@@ -115,7 +115,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpGet("{code}")]
-        [AllowAnonymous]
+        [Authorize(Roles = "Admin,System Admin,Waiter")]
         public async Task<IActionResult> GetReservationByCode(string code)
         {
             try
@@ -184,7 +184,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpPut("{id:guid}/status")]
-        [AllowAnonymous]
+        [Authorize(Roles = "Admin,System Admin,Waiter")]
         public async Task<IActionResult> UpdateStatus(Guid id, [FromBody] UpdateReservationStatusRequest request)
         {
             try

@@ -18,8 +18,10 @@ namespace RestX.BLL.Services
     public class ReservationService : BaseService, IReservationService
     {
         private const string ReservationStatusTypeCode = "RESERVATION";
+        private const string ConfirmedCode = "CONFIRMED";
         private const string CancelledCode = "CANCELLED";
         private const string CompletedCode = "COMPLETED";
+        private const int ReservationBufferMinutes = 120;
 
         private const string CustomerRole = "Customer";
 
@@ -60,7 +62,8 @@ namespace RestX.BLL.Services
             var availability = await CheckAvailabilityReservation(new CheckAvailabilityParams
             {
                 TableIds = request.TableIds,
-                ReservationDateTime = request.ReservationDateTime
+                ReservationDateTime = request.ReservationDateTime,
+                BufferMinutes = ReservationBufferMinutes
             });
             if (!availability.Available)
                 throw new InvalidOperationException("One or more tables are already reserved at this time");
@@ -161,9 +164,8 @@ namespace RestX.BLL.Services
             if (reservation == null)
                 throw new KeyNotFoundException("Reservation not found");
 
-            var statuses = await statusValueService.GetStatuses(ReservationStatusTypeCode);
-            var currentStatus = statuses.FirstOrDefault(s => s.Id == reservation.ReservationStatusId);
-            if (currentStatus?.Code == CancelledCode || currentStatus?.Code == CompletedCode)
+            var currentStatusCode = reservation.ReservationStatus?.Code;
+            if (currentStatusCode == CancelledCode || currentStatusCode == CompletedCode)
                 throw new InvalidOperationException("Cannot update a reservation that is already cancelled or completed");
 
             if (request.ReservationDateTime.HasValue && request.ReservationDateTime.Value <= DateTime.UtcNow)
@@ -192,8 +194,8 @@ namespace RestX.BLL.Services
                     filter: rt =>
                         newTableIds.Contains(rt.TableId) &&
                         rt.ReservationId != id &&
-                        rt.Reservation.Time >= newDateTime.AddMinutes(-120) &&
-                        rt.Reservation.Time <= newDateTime.AddMinutes(120) &&
+                        rt.Reservation.Time >= newDateTime.AddMinutes(-ReservationBufferMinutes) &&
+                        rt.Reservation.Time <= newDateTime.AddMinutes(ReservationBufferMinutes) &&
                         rt.Reservation.ReservationStatus.Code != CancelledCode &&
                         rt.Reservation.ReservationStatus.Code != CompletedCode,
                     includeProperties: "Reservation.ReservationStatus"
@@ -266,7 +268,12 @@ namespace RestX.BLL.Services
             if (reservation.CheckedInAt.HasValue)
                 throw new InvalidOperationException("Reservation has already been checked in");
 
+            var statuses = await statusValueService.GetStatuses(ReservationStatusTypeCode);
+            var confirmedStatus = statuses.FirstOrDefault(s => s.Code == ConfirmedCode)
+                ?? throw new InvalidOperationException("Confirmed status not configured");
+
             reservation.CheckedInAt = DateTime.UtcNow;
+            reservation.ReservationStatusId = confirmedStatus.Id;
             Repo.Update(reservation);
 
             foreach (var rt in reservation.ReservationTables)
@@ -290,11 +297,7 @@ namespace RestX.BLL.Services
                 ?? throw new InvalidOperationException("Cancelled status not configured");
             reservation.ReservationStatusId = cancelledStatus.Id;
             Repo.Update(reservation);
-            foreach (var rt in reservation.ReservationTables)
-            {
-                rt.Table.TableStatusId = TableStatus.Available;
-                Repo.Update(rt.Table);
-            }
+            await ApplyTableStatusSideEffect(reservation, CancelledCode);
             await Repo.SaveAsync();
         }
 
@@ -371,7 +374,6 @@ namespace RestX.BLL.Services
                 IsActive = true
             };
             await Repo.CreateAsync(customer);
-            await Repo.SaveAsync();
             return customer.Id;
         }
 
@@ -397,16 +399,15 @@ namespace RestX.BLL.Services
 
         private async Task<List<Table>> GetAndValidateTables(List<Guid> tableIds)
         {
-            var tables = new List<Table>();
-            foreach (var tableId in tableIds)
-            {
-                var table = await Repo.GetOneAsync<Table>(
-                    filter: t => t.Id == tableId && t.IsActive,
-                    includeProperties: "Floor");
-                if (table == null)
-                    throw new KeyNotFoundException($"Table not found: {tableId}");
-                tables.Add(table);
-            }
+            var tables = (await Repo.GetAsync<Table>(
+                filter: t => tableIds.Contains(t.Id) && t.IsActive,
+                includeProperties: "Floor")).ToList();
+
+            var foundIds = tables.Select(t => t.Id).ToHashSet();
+            var missingId = tableIds.FirstOrDefault(id => !foundIds.Contains(id));
+            if (missingId != default)
+                throw new KeyNotFoundException($"Table not found: {missingId}");
+
             return tables;
         }
 
@@ -434,7 +435,7 @@ namespace RestX.BLL.Services
                     Repo.Update(rt.Table);
                 }
             }
-            if (newStatusCode == CompletedCode)
+            if (newStatusCode == CompletedCode || newStatusCode == CancelledCode)
             {
                 var activeSessions = (await Repo.GetAsync<TableSession>(
                     filter: ts => ts.ReservationId == reservation.Id && ts.IsActive)).ToList();

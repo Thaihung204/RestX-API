@@ -38,7 +38,7 @@ namespace RestX.Models.Reservations
         public DateTime? CheckedInAt { get; set; }
 
         public virtual Customer Customer { get; set; } = null!;
-        public virtual StatusValue ReservationStatus { get; set; } = null!;
+        public virtual StatusValue ReservationStatus { get; set; }
         public virtual ICollection<ReservationTable> ReservationTables { get; set; } = new HashSet<ReservationTable>();
         public virtual ICollection<TableSession> TableSessions { get; set; } = new HashSet<TableSession>();
         public virtual ICollection<Order> Orders { get; set; } = new HashSet<Order>();

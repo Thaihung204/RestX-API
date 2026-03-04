@@ -571,9 +571,12 @@ namespace RestX.DAL.Context
                 entity.HasKey(e => e.Id);
                 entity.HasIndex(e => e.OrderId);
                 entity.HasIndex(e => e.TransactionId);
+                entity.HasIndex(e => e.PayOSOrderCode).IsUnique().HasFilter("[PayOSOrderCode] IS NOT NULL");
 
                 entity.Property(e => e.PaymentMethodId).HasMaxLength(20).IsRequired();
                 entity.Property(e => e.TransactionId).HasMaxLength(100);
+                entity.Property(e => e.PayOSOrderCode);
+                entity.Property(e => e.CheckoutUrl).HasMaxLength(500);
                 entity.Property(e => e.Amount).HasColumnType("decimal(18,2)");
                 entity.Property(e => e.CashReceive).HasColumnType("decimal(18,2)");
                 entity.Property(e => e.Cashback).HasColumnType("decimal(18,2)");

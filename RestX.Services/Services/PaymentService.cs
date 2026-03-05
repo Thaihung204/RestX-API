@@ -94,14 +94,13 @@ namespace RestX.BLL.Services
                 CashReceive = request.CashReceive,
                 Cashback = cashback,
                 PaymentStatusId = paidStatusId,
-                PaymentDate = DateTime.UtcNow,
-                CreatedBy = createdBy
+                PaymentDate = DateTime.UtcNow
             };
 
-            await Repo.CreateAsync(payment);
+            await Repo.CreateAsync(payment, createdBy);
 
             order.PaymentStatusId = PaymentStatus.Paid;
-            Repo.Update(order);
+            Repo.Update(order, createdBy);
 
             await Repo.SaveAsync();
 
@@ -162,11 +161,10 @@ namespace RestX.BLL.Services
                 PayOSOrderCode = orderCode,
                 CheckoutUrl = link.CheckoutUrl,
                 PaymentStatusId = pendingStatus,
-                PaymentDate = DateTime.UtcNow,
-                CreatedBy = createdBy
+                PaymentDate = DateTime.UtcNow
             };
 
-            await Repo.CreateAsync(payment);
+            await Repo.CreateAsync(payment, createdBy);
             await Repo.SaveAsync();
 
             return new CreatePaymentLinkResponse
@@ -177,7 +175,7 @@ namespace RestX.BLL.Services
             };
         }
 
-        public async Task CancelPaymentLink(Guid paymentId, string? reason)
+        public async Task CancelPaymentLink(Guid paymentId, string? reason, string? modifiedBy = null)
         {
             var payment = await Repo.GetOneAsync<Payment>(filter: p => p.Id == paymentId)
                 ?? throw new KeyNotFoundException("Payment not found");
@@ -198,7 +196,7 @@ namespace RestX.BLL.Services
             await gatewayClient.PaymentRequests.CancelAsync(payment.PayOSOrderCode.Value, reason);
 
             payment.PaymentStatusId = cancelledStatusId;
-            Repo.Update(payment);
+            Repo.Update(payment, modifiedBy);
             await Repo.SaveAsync();
         }
 

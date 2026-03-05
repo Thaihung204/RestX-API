@@ -142,7 +142,8 @@ namespace RestX.WebApp.Controllers
         {
             try
             {
-                await paymentService.CancelPaymentLink(id, reason);
+                var user = await GetCurrentUserAsync();
+                await paymentService.CancelPaymentLink(id, reason, user?.Id.ToString());
                 return Ok(new { success = true });
             }
             catch (KeyNotFoundException ex)

@@ -1,9 +1,9 @@
 using AutoMapper;
-using Microsoft.Extensions.Options;
 using PayOS;
 using PayOS.Models.Webhooks;
 using RestX.BLL.DataTranferObjects.Common;
 using RestX.BLL.DataTranferObjects.Payments;
+using RestX.BLL.Helpers;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Status;
 using RestX.Models.Enum;
@@ -14,24 +14,20 @@ namespace RestX.BLL.Services
 {
     public class PaymentService : BaseService, IPaymentService
     {
-        private readonly PayOSClient payOS;
-        private readonly PayOSSettings settings;
+        private readonly IPaymentSettingService paymentSettingService;
         private readonly IStatusValueService statusValueService;
         private readonly IMapper mapper;
-
-        private const string PaymentStatusType = "PAYMENT";
 
         public PaymentService(
             IRepository repo,
             IRedisService redisService,
-            IOptions<PayOSSettings> payOSOptions,
+            IPaymentSettingService paymentSettingService,
             IStatusValueService statusValueService,
             IMapper mapper,
             IEnumerable<ActiveTenant> tenant = null
         ) : base(repo, redisService, tenant)
         {
-            settings = payOSOptions.Value;
-            payOS = new PayOSClient(settings.ClientId, settings.ApiKey, settings.ChecksumKey, null);
+            this.paymentSettingService = paymentSettingService;
             this.statusValueService = statusValueService;
             this.mapper = mapper;
         }
@@ -41,15 +37,15 @@ namespace RestX.BLL.Services
             int? statusId = null;
             if (!string.IsNullOrEmpty(statusCode))
             {
-                var statuses = await statusValueService.GetStatuses(PaymentStatusType);
-                statusId = statuses.FirstOrDefault(s => s.Code == statusCode)?.Id;
+                var statuses = await statusValueService.GetStatuses(PaymentConstants.StatusType.Payment);
+                statusId = statuses.FirstOrDefault(s => string.Equals(s.Code, statusCode, StringComparison.OrdinalIgnoreCase))?.Id;
             }
 
             var payments = await Repo.GetAsync<Payment>(
                 filter: p =>
                     (from == null || p.PaymentDate >= from) &&
                     (to == null || p.PaymentDate <= to) &&
-                    (method == null || p.PaymentMethodId == method) &&
+                    (method == null || p.PaymentMethodId.ToLower() == method.ToLower()) &&
                     (statusId == null || p.PaymentStatusId == statusId),
                 includeProperties: "PaymentStatus",
                 orderBy: q => q.OrderByDescending(p => p.PaymentDate));
@@ -76,7 +72,7 @@ namespace RestX.BLL.Services
             return payment == null ? null : mapper.Map<PaymentDetail>(payment);
         }
 
-        public async Task<CashPaymentResponse> PayByCash(Guid orderId, CashPaymentRequest request)
+        public async Task<CashPaymentResponse> PayByCash(Guid orderId, CashPaymentRequest request, string? createdBy = null)
         {
             var order = await Repo.GetOneAsync<Order>(filter: o => o.Id == orderId)
                 ?? throw new KeyNotFoundException("Order not found");
@@ -88,17 +84,18 @@ namespace RestX.BLL.Services
                 throw new InvalidOperationException($"Cash received ({request.CashReceive}) is less than order total ({order.TotalAmount})");
 
             var cashback = request.CashReceive - order.TotalAmount;
-            var paidStatusId = await FindStatus("PAID");
+            var paidStatusId = await GetPaymentStatus(PaymentConstants.StatusCode.Paid);
 
             var payment = new Payment
             {
                 OrderId = orderId,
-                PaymentMethodId = "CASH",
+                PaymentMethodId = PaymentConstants.Method.Cash,
                 Amount = order.TotalAmount,
                 CashReceive = request.CashReceive,
                 Cashback = cashback,
                 PaymentStatusId = paidStatusId,
-                PaymentDate = DateTime.UtcNow
+                PaymentDate = DateTime.UtcNow,
+                CreatedBy = createdBy
             };
 
             await Repo.CreateAsync(payment);
@@ -117,7 +114,7 @@ namespace RestX.BLL.Services
             };
         }
 
-        public async Task<CreatePaymentLinkResponse> CreatePayOSLink(Guid orderId)
+        public async Task<CreatePaymentLinkResponse> CreatePaymentLink(Guid orderId, string? createdBy = null)
         {
             var order = await Repo.GetOneAsync<Order>(
                 filter: o => o.Id == orderId,
@@ -131,6 +128,8 @@ namespace RestX.BLL.Services
             if (amount <= 0)
                 throw new InvalidOperationException("Order total must be greater than zero");
 
+            var (gatewayClient, gatewaySettings) = await GetTenantGateway();
+
             var orderCode = GenerateOrderCode();
 
             var description = $"TT {order.Reference}";
@@ -141,29 +140,30 @@ namespace RestX.BLL.Services
                 new PayOS.Models.V2.PaymentRequests.PaymentLinkItem { Name = d.Dish?.Name ?? "Item", Quantity = d.Quantity, Price = (long)(d.Dish?.Price ?? 0) }
             ).ToList();
 
-            var request = new PayOS.Models.V2.PaymentRequests.CreatePaymentLinkRequest
+            var linkRequest = new PayOS.Models.V2.PaymentRequests.CreatePaymentLinkRequest
             {
                 OrderCode = orderCode,
                 Amount = amount,
                 Description = description,
                 Items = items,
-                ReturnUrl = settings.ReturnUrl,
-                CancelUrl = settings.CancelUrl
+                ReturnUrl = gatewaySettings.ReturnUrl,
+                CancelUrl = gatewaySettings.CancelUrl
             };
 
-            var link = await payOS.PaymentRequests.CreateAsync(request);
+            var link = await gatewayClient.PaymentRequests.CreateAsync(linkRequest);
 
-            var pendingStatus = await FindStatus("UNPAID");
+            var pendingStatus = await GetPaymentStatus(PaymentConstants.StatusCode.Unpaid);
 
             var payment = new Payment
             {
                 OrderId = orderId,
-                PaymentMethodId = "Bank",
+                PaymentMethodId = PaymentConstants.Method.Bank,
                 Amount = order.TotalAmount,
                 PayOSOrderCode = orderCode,
                 CheckoutUrl = link.CheckoutUrl,
                 PaymentStatusId = pendingStatus,
-                PaymentDate = DateTime.UtcNow
+                PaymentDate = DateTime.UtcNow,
+                CreatedBy = createdBy
             };
 
             await Repo.CreateAsync(payment);
@@ -177,24 +177,25 @@ namespace RestX.BLL.Services
             };
         }
 
-        public async Task CancelPayOSLink(Guid paymentId, string? reason)
+        public async Task CancelPaymentLink(Guid paymentId, string? reason)
         {
             var payment = await Repo.GetOneAsync<Payment>(filter: p => p.Id == paymentId)
                 ?? throw new KeyNotFoundException("Payment not found");
 
-            if (payment.PaymentMethodId != "Bank")
+            if (!string.Equals(payment.PaymentMethodId, PaymentConstants.Method.Bank, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException("Only Bank payments can be cancelled");
 
             if (!payment.PayOSOrderCode.HasValue)
-                throw new InvalidOperationException("Payment has no PayOS order code");
+                throw new InvalidOperationException("Payment has no order code");
 
-            var cancelledStatusId = await FindStatus("CANCELLED");
-            var currentStatus = await FindStatus("UNPAID");
+            var cancelledStatusId = await GetPaymentStatus(PaymentConstants.StatusCode.Cancelled);
+            var unpaidStatusId = await GetPaymentStatus(PaymentConstants.StatusCode.Unpaid);
 
-            if (payment.PaymentStatusId != currentStatus)
+            if (payment.PaymentStatusId != unpaidStatusId)
                 throw new InvalidOperationException("Only UNPAID payments can be cancelled");
 
-            await payOS.PaymentRequests.CancelAsync(payment.PayOSOrderCode.Value, reason);
+            var (gatewayClient, _) = await GetTenantGateway();
+            await gatewayClient.PaymentRequests.CancelAsync(payment.PayOSOrderCode.Value, reason);
 
             payment.PaymentStatusId = cancelledStatusId;
             Repo.Update(payment);
@@ -203,7 +204,8 @@ namespace RestX.BLL.Services
 
         public async Task HandleWebhook(Webhook webhookBody)
         {
-            var data = await payOS.Webhooks.VerifyAsync(webhookBody);
+            var (gatewayClient, _) = await GetTenantGateway();
+            var data = await gatewayClient.Webhooks.VerifyAsync(webhookBody);
 
             if (webhookBody.Code != "00")
                 return;
@@ -212,7 +214,7 @@ namespace RestX.BLL.Services
                 filter: p => p.PayOSOrderCode == data.OrderCode)
                 ?? throw new KeyNotFoundException($"Payment not found for orderCode {data.OrderCode}");
 
-            payment.PaymentStatusId = await FindStatus("PAID");
+            payment.PaymentStatusId = await GetPaymentStatus(PaymentConstants.StatusCode.Paid);
             payment.TransactionId = data.Reference;
             Repo.Update(payment);
 
@@ -229,11 +231,18 @@ namespace RestX.BLL.Services
             await Repo.SaveAsync();
         }
 
-        private async Task<int> FindStatus(string code)
+        private async Task<(PayOSClient client, PaymentGatewaySettings settings)> GetTenantGateway()
         {
-            var statuses = await statusValueService.GetStatuses(PaymentStatusType);
-            var status = statuses.FirstOrDefault(s => s.Code == code)
-                ?? throw new InvalidOperationException($"{PaymentStatusType}/{code} not found");
+            var settings = await paymentSettingService.GetPaymentSettingByTenantId(CurrentTenant.Id)
+                ?? throw new InvalidOperationException("Payment gateway is not configured for this tenant");
+            return (new PayOSClient(settings.ClientId, settings.ApiKey, settings.ChecksumKey, null), settings);
+        }
+
+        private async Task<int> GetPaymentStatus(string code)
+        {
+            var statuses = await statusValueService.GetStatuses(PaymentConstants.StatusType.Payment);
+            var status = statuses.FirstOrDefault(s => string.Equals(s.Code, code, StringComparison.OrdinalIgnoreCase))
+                ?? throw new InvalidOperationException($"{PaymentConstants.StatusType.Payment}/{code} not found");
             return status.Id;
         }
 

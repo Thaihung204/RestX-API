@@ -156,7 +156,6 @@ namespace RestX.WebApp
             services.Configure<ConnectionStrings>(Configuration.GetSection("ConnectionStrings"));
             services.Configure<EmailSettings>(Configuration.GetSection("EmailSettings"));
             services.Configure<JwtSettings>(Configuration.GetSection("JwtSettings"));
-            services.Configure<PayOSSettings>(Configuration.GetSection("PayOS"));
             services.AddResponseCompression();
 
             SocketsHttpHandler socketsHttpHandler = new SocketsHttpHandler

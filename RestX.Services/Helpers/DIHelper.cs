@@ -40,7 +40,9 @@ namespace RestX.BLL.Helpers
             services.AddScoped<ILoyaltyPointBandService, LoyaltyPointBandService>();
             services.AddScoped<IStatusValueService, StatusValueService>();
             services.AddScoped<IOrderService, OrderService>();
+            services.AddScoped<IPaymentSettingService, PaymentSettingService>();
             services.AddScoped<IPaymentService, PaymentService>();
+            services.AddScoped<IReceiptService, ReceiptService>();
         }
     }
 }

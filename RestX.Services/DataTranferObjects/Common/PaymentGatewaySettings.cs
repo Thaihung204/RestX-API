@@ -1,6 +1,6 @@
 namespace RestX.BLL.DataTranferObjects.Common
 {
-    public class PayOSSettings
+    public class PaymentGatewaySettings
     {
         public string ClientId { get; set; } = string.Empty;
         public string ApiKey { get; set; } = string.Empty;

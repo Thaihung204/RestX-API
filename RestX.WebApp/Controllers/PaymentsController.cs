@@ -17,9 +17,11 @@ namespace RestX.WebApp.Controllers
     public class PaymentsController : BaseController
     {
         private readonly IPaymentService paymentService;
+        private readonly IReceiptService receiptService;
 
         public PaymentsController(
             IPaymentService paymentService,
+            IReceiptService receiptService,
             IMapper mapper,
             UserManager<ApplicationUser> userManager,
             IExceptionHandler exceptionHandler,
@@ -27,6 +29,7 @@ namespace RestX.WebApp.Controllers
         ) : base(mapper, userManager, exceptionHandler, tenant)
         {
             this.paymentService = paymentService;
+            this.receiptService = receiptService;
         }
 
         [HttpGet]
@@ -50,7 +53,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpGet("orders/{orderId:guid}")]
-        [Authorize(Roles = "Admin,Tenant Admin,Waiter")]
+        [Authorize(Roles = "Admin,Tenant Admin,Waiter,Customer")]
         public async Task<IActionResult> GetPaymentsByOrder([FromRoute] Guid orderId)
         {
             try
@@ -66,7 +69,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpGet("{id:guid}")]
-        [Authorize(Roles = "Admin,Tenant Admin,Waiter")]
+        [Authorize(Roles = "Admin,Tenant Admin,Waiter,Customer")]
         public async Task<IActionResult> GetPaymentById([FromRoute] Guid id)
         {
             try
@@ -89,7 +92,8 @@ namespace RestX.WebApp.Controllers
         {
             try
             {
-                var result = await paymentService.PayByCash(orderId, request);
+                var user = await GetCurrentUserAsync();
+                var result = await paymentService.PayByCash(orderId, request, user?.Id.ToString());
                 return Ok(result);
             }
             catch (KeyNotFoundException ex)
@@ -108,12 +112,13 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpPost("orders/{orderId:guid}")]
-        [Authorize(Roles = "Admin,Waiter,Customer")]
-        public async Task<IActionResult> CreatePayOSLink([FromRoute] Guid orderId)
+        [Authorize(Roles = "Admin,Tenant Admin,Waiter")]
+        public async Task<IActionResult> CreatePaymentLink([FromRoute] Guid orderId)
         {
             try
             {
-                var result = await paymentService.CreatePayOSLink(orderId);
+                var user = await GetCurrentUserAsync();
+                var result = await paymentService.CreatePaymentLink(orderId, user?.Id.ToString());
                 return Ok(result);
             }
             catch (KeyNotFoundException ex)
@@ -132,12 +137,12 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpDelete("{id:guid}")]
-        [Authorize(Roles = "Admin,Tenant Admin,Waiter,Customer")]
-        public async Task<IActionResult> CancelPayOSLink([FromRoute] Guid id, [FromQuery] string? reason)
+        [Authorize(Roles = "Admin,Tenant Admin,Waiter")]
+        public async Task<IActionResult> CancelPaymentLink([FromRoute] Guid id, [FromQuery] string? reason)
         {
             try
             {
-                await paymentService.CancelPayOSLink(id, reason);
+                await paymentService.CancelPaymentLink(id, reason);
                 return Ok(new { success = true });
             }
             catch (KeyNotFoundException ex)
@@ -155,9 +160,29 @@ namespace RestX.WebApp.Controllers
             }
         }
 
+        [HttpGet("{id:guid}/receipt")]
+        [Authorize(Roles = "Admin,Tenant Admin,Waiter,Customer")]
+        public async Task<IActionResult> GetReceipt([FromRoute] Guid id)
+        {
+            try
+            {
+                var pdf = await receiptService.GenerateReceiptAsync(id);
+                return File(pdf, "application/pdf", $"receipt-{id}.pdf");
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { success = false, message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
         [HttpPost("webhook")]
         [AllowAnonymous]
-        public async Task<IActionResult> PayOSWebhook([FromBody] Webhook webhookBody)
+        public async Task<IActionResult> ProcessWebhook([FromBody] Webhook webhookBody)
         {
             try
             {

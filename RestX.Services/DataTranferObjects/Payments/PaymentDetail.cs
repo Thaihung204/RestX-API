@@ -9,6 +9,8 @@ namespace RestX.BLL.DataTranferObjects.Payments
         public long? PayOSOrderCode { get; set; }
         public string? CheckoutUrl { get; set; }
         public string? TransactionId { get; set; }
+        public decimal CashReceive { get; set; }
+        public decimal Cashback { get; set; }
         public DateTime PaymentDate { get; set; }
         public int PaymentStatusId { get; set; }
         public string? PaymentStatusName { get; set; }

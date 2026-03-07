@@ -454,13 +454,17 @@ namespace RestX.DAL.Context
             {
                 entity.ToTable("Reservations");
                 entity.HasKey(e => e.Id);
-                entity.HasIndex(e => new { e.CustomerId, e.Time });
+                entity.HasIndex(e => e.Time);
+                entity.HasIndex(e => e.ConfirmationCode).IsUnique();
+
+                entity.Property(e => e.ConfirmationCode).HasMaxLength(20);
                 entity.Property(e => e.SpecialRequests).HasMaxLength(1000);
                 entity.Property(e => e.DepositAmount).HasColumnType("decimal(18,2)");
 
                 entity.HasOne<Customer>(e => e.Customer)
                     .WithMany(c => c.Reservations)
                     .HasForeignKey(e => e.CustomerId)
+                    .IsRequired(false)
                     .OnDelete(DeleteBehavior.Restrict);
 
                 entity.HasOne<StatusValue>(e => e.ReservationStatus)

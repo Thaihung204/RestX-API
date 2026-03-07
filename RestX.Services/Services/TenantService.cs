@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using RestX.AdminDAL.Context;
 using RestX.BLL.DataTranferObjects.Tenants;
@@ -24,8 +25,11 @@ namespace RestX.BLL.Services
         private readonly IMapper mapper;
         private readonly IConfiguration configuration;
         private readonly ICloudinaryService cloudinaryService;
-        public TenantService(ICloudinaryService cloudinaryService, RestxAdminContext restxAdminContext, IRepository repo, IRedisService redisService, IMapper mapper, IConfiguration configuration, IEnumerable<ActiveTenant> tenant = null) : base(repo, redisService, tenant)
+        private readonly ILogger<TenantService> logger;
+
+        public TenantService(ILogger<TenantService> logger, ICloudinaryService cloudinaryService, RestxAdminContext restxAdminContext, IRepository repo, IRedisService redisService, IMapper mapper, IConfiguration configuration, IEnumerable<ActiveTenant> tenant = null) : base(repo, redisService, tenant)
         {
+            this.logger = logger;
             this.cloudinaryService = cloudinaryService;
             this.adminContext = restxAdminContext;
             this.adminRepo = repo;
@@ -81,30 +85,97 @@ namespace RestX.BLL.Services
 
         public async Task<Tenant> UpsertTenant(TenantItem model)
         {
+            logger.LogInformation("===== UpsertTenant START =====");
+            logger.LogInformation("Model Id: {Id}, Name: {Name}, Hostname: {Hostname}",
+                model.Id, model.Name, model.Hostname);
+
             Tenant tenant;
+
             if (model.Id != null)
             {
-                var oldHostnameCacheKey = $"Tenant:{model.Hostname.ToLower()}";
-                await RedisService.RemoveAsync(oldHostnameCacheKey);
+                logger.LogInformation("FLOW: UPDATE");
+
+                try
+                {
+                    var oldHostnameCacheKey = $"Tenant:{model.Hostname?.ToLower()}";
+                    logger.LogInformation("Removing Redis key: {Key}", oldHostnameCacheKey);
+
+                    await RedisService.RemoveAsync(oldHostnameCacheKey);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Redis remove failed");
+                    throw;
+                }
 
                 tenant = await adminRepo.GetByIdAsync<Tenant>(model.Id);
 
+                if (tenant == null)
+                {
+                    logger.LogError("Tenant NOT FOUND with Id: {Id}", model.Id);
+                    throw new Exception("Tenant not found");
+                }
+
+                logger.LogInformation("Tenant loaded successfully: {TenantName}", tenant.Name);
+
+                // ===== LOGO =====
                 if (model.LogoFile != null)
                 {
-                    await cloudinaryService.DeleteAsync($"{tenant.Name.Replace(" ", "")}/LogoUrl/logo");
-                    tenant.LogoUrl = await HandleUploadTenantImage(model.LogoFile, $"{tenant.Name.Replace(" ", "")}/LogoUrl", "logo") ?? tenant.LogoUrl;
+                    logger.LogInformation("Logo file detected. Size: {Size}", model.LogoFile.Length);
+
+                    var path = $"{tenant.Name.Replace(" ", "")}/LogoUrl/logo";
+                    logger.LogInformation("Deleting old logo: {Path}", path);
+
+                    await cloudinaryService.DeleteAsync(path);
+
+                    logger.LogInformation("Uploading new logo...");
+
+                    tenant.LogoUrl = await HandleUploadTenantImage(
+                        model.LogoFile,
+                        $"{tenant.Name.Replace(" ", "")}/LogoUrl",
+                        "logo") ?? tenant.LogoUrl;
+
+                    logger.LogInformation("Logo updated: {LogoUrl}", tenant.LogoUrl);
                 }
 
+                // ===== FAVICON =====
                 if (model.FaviconFile != null)
                 {
-                    await cloudinaryService.DeleteAsync($"{tenant.Name.Replace(" ", "")}/FaviconUrl/favicon");
-                    tenant.FaviconUrl = await HandleUploadTenantImage(model.FaviconFile, $"{tenant.Name.Replace(" ", "")}/FaviconUrl", "favicon") ?? tenant.FaviconUrl;
+                    logger.LogInformation("Favicon file detected. Size: {Size}", model.FaviconFile.Length);
+
+                    var path = $"{tenant.Name.Replace(" ", "")}/FaviconUrl/favicon";
+                    logger.LogInformation("Deleting old favicon: {Path}", path);
+
+                    await cloudinaryService.DeleteAsync(path);
+
+                    logger.LogInformation("Uploading new favicon...");
+
+                    tenant.FaviconUrl = await HandleUploadTenantImage(
+                        model.FaviconFile,
+                        $"{tenant.Name.Replace(" ", "")}/FaviconUrl",
+                        "favicon") ?? tenant.FaviconUrl;
+
+                    logger.LogInformation("Favicon updated: {FaviconUrl}", tenant.FaviconUrl);
                 }
 
+                // ===== BACKGROUND =====
                 if (model.BackgroundFile != null)
                 {
-                    await cloudinaryService.DeleteAsync($"{tenant.Name.Replace(" ", "")}/BackgroundUrl/background");
-                    tenant.BackgroundUrl = await HandleUploadTenantImage(model.BackgroundFile, $"{tenant.Name.Replace(" ", "")}/BackgroundUrl", "background") ?? tenant.BackgroundUrl;
+                    logger.LogInformation("Background file detected. Size: {Size}", model.BackgroundFile.Length);
+
+                    var path = $"{tenant.Name.Replace(" ", "")}/BackgroundUrl/background";
+                    logger.LogInformation("Deleting old background: {Path}", path);
+
+                    await cloudinaryService.DeleteAsync(path);
+
+                    logger.LogInformation("Uploading new background...");
+
+                    tenant.BackgroundUrl = await HandleUploadTenantImage(
+                        model.BackgroundFile,
+                        $"{tenant.Name.Replace(" ", "")}/BackgroundUrl",
+                        "background") ?? tenant.BackgroundUrl;
+
+                    logger.LogInformation("Background updated: {BackgroundUrl}", tenant.BackgroundUrl);
                 }
 
                 tenant.Prefix = model.Prefix
@@ -231,17 +302,59 @@ namespace RestX.BLL.Services
 
         private async Task<string?> HandleUploadTenantImage(IFormFile? file, string folder, string publicId)
         {
-            if (file == null) return null;
-            await using var stream = file.OpenReadStream();
+            logger.LogInformation("---- HandleUploadTenantImage START ----");
 
-            var upload = await cloudinaryService.UploadAsync(
-                stream,
-                file.FileName,
-                folder,
-                publicId: publicId,
-                overwrite: true);
+            if (file == null)
+            {
+                logger.LogWarning("Upload skipped: file is NULL | Folder: {Folder} | PublicId: {PublicId}",
+                    folder, publicId);
+                return null;
+            }
 
-            return upload?.Url;
+            try
+            {
+                logger.LogInformation(
+                    "Upload Info | FileName: {FileName} | Size: {Size} | ContentType: {ContentType} | Folder: {Folder} | PublicId: {PublicId}",
+                    file.FileName,
+                    file.Length,
+                    file.ContentType,
+                    folder,
+                    publicId);
+
+                await using var stream = file.OpenReadStream();
+
+                logger.LogInformation("Stream opened successfully.");
+
+                var upload = await cloudinaryService.UploadAsync(
+                    stream,
+                    file.FileName,
+                    folder,
+                    publicId: publicId,
+                    overwrite: true);
+
+                if (upload == null)
+                {
+                    logger.LogError("Cloudinary Upload returned NULL | Folder: {Folder} | PublicId: {PublicId}",
+                        folder, publicId);
+                    return null;
+                }
+
+                logger.LogInformation("Cloudinary Upload SUCCESS | Url: {Url}", upload.Url);
+
+                logger.LogInformation("---- HandleUploadTenantImage END SUCCESS ----");
+
+                return upload.Url;
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex,
+                    "Cloudinary Upload FAILED | FileName: {FileName} | Folder: {Folder} | PublicId: {PublicId}",
+                    file?.FileName,
+                    folder,
+                    publicId);
+
+                throw;
+            }
         }
 
         private async Task SeedTenantDataAsync(Tenant tenant)

@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using RestX.DAL.Context;
 
@@ -11,9 +12,11 @@ using RestX.DAL.Context;
 namespace RestX.DAL.Migrations
 {
     [DbContext(typeof(TenantDbContext))]
-    partial class TenantDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260307062908_DropPaymentStatusForeignKey")]
+    partial class DropPaymentStatusForeignKey
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1445,10 +1448,6 @@ namespace RestX.DAL.Migrations
                     b.Property<decimal>("Cashback")
                         .HasColumnType("decimal(18,2)");
 
-                    b.Property<string>("CheckoutUrl")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
                     b.Property<string>("CreatedBy")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
@@ -1465,9 +1464,6 @@ namespace RestX.DAL.Migrations
 
                     b.Property<Guid?>("OrderId")
                         .HasColumnType("uniqueidentifier");
-
-                    b.Property<long?>("PayOSOrderCode")
-                        .HasColumnType("bigint");
 
                     b.Property<DateTime>("PaymentDate")
                         .HasColumnType("datetime2");
@@ -1496,10 +1492,6 @@ namespace RestX.DAL.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("OrderId");
-
-                    b.HasIndex("PayOSOrderCode")
-                        .IsUnique()
-                        .HasFilter("[PayOSOrderCode] IS NOT NULL");
 
                     b.HasIndex("PaymentStatusId");
 

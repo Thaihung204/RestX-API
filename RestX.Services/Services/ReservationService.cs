@@ -1,0 +1,433 @@
+using System.Linq.Expressions;
+using AutoMapper;
+using RestX.BLL.DataTranferObjects.Authentication;
+using RestX.BLL.DataTranferObjects.Common;
+using RestX.BLL.DataTranferObjects.Reservation;
+using RestX.BLL.Interfaces;
+using RestX.BLL.Interfaces.Auth;
+using RestX.BLL.Interfaces.Reservations;
+using RestX.BLL.Interfaces.Status;
+using RestX.Models.Customers;
+using RestX.Models.Enum;
+using RestX.Models.Reservations;
+using RestX.Models.Tables;
+using RestX.Models.Tenants;
+
+namespace RestX.BLL.Services
+{
+    public class ReservationService : BaseService, IReservationService
+    {
+        private const string ReservationStatusTypeCode = "RESERVATION";
+        private const string ConfirmedCode = "CONFIRMED";
+        private const string CancelledCode = "CANCELLED";
+        private const string CompletedCode = "COMPLETED";
+        private const int ReservationBufferMinutes = 120;
+
+        private const string ReservationIncludes = "ReservationTables.Table.Floor,Customer.ApplicationUser,ReservationStatus";
+        private const string TablesIncludes = "ReservationTables.Table";
+        private const string TablesAndStatusIncludes = "ReservationTables.Table,ReservationStatus";
+
+        private readonly IMapper mapper;
+        private readonly IStatusValueService statusValueService;
+        private readonly IAuthService authService;
+        private readonly IEmailService emailService;
+
+        public ReservationService(
+            IMapper mapper,
+            IStatusValueService statusValueService,
+            IAuthService authService,
+            IEmailService emailService,
+            IRepository repo,
+            IRedisService redisService,
+            IEnumerable<ActiveTenant> tenant = null
+        ) : base(repo, redisService, tenant)
+        {
+            this.mapper = mapper;
+            this.statusValueService = statusValueService;
+            this.authService = authService;
+            this.emailService = emailService;
+        }
+
+        public async Task<ReservationDetail> CreateReservation(CreateReservationRequest request)
+        {
+            ValidateFutureDate(request.ReservationDateTime);
+            if (request.TableIds == null || request.TableIds.Count == 0)
+                throw new ArgumentException("At least one table is required");
+            ValidateDistinctTableIds(request.TableIds);
+
+            var customerId = await ResolveCustomer(request.Phone, request.Name);
+
+            var tables = await ValidateReservationTables(request.TableIds);
+            ValidateCapacity(request.NumberOfGuests, tables);
+            var availability = await CheckAvailabilityReservation(new CheckAvailabilityParams
+            {
+                TableIds = request.TableIds,
+                ReservationDateTime = request.ReservationDateTime,
+                BufferMinutes = ReservationBufferMinutes
+            });
+            if (!availability.Available)
+                throw new InvalidOperationException("One or more tables are already reserved at this time");
+
+            var statuses = await statusValueService.GetStatuses(ReservationStatusTypeCode);
+            var pendingStatus = statuses.FirstOrDefault(s => s.IsDefault)
+                ?? throw new InvalidOperationException("Default reservation status not configured");
+
+            var reservation = new Reservation
+            {
+                CustomerId = customerId,
+                NumberOfGuests = request.NumberOfGuests,
+                Time = request.ReservationDateTime,
+                SpecialRequests = request.SpecialRequests,
+                ReservationStatusId = pendingStatus.Id
+            };
+
+            await Repo.CreateAsync(reservation);
+            reservation.ConfirmationCode = GenerateConfirmationCode(reservation.Id);
+            Repo.Update(reservation);
+            foreach (var table in tables)
+            {
+                await Repo.CreateAsync(new ReservationTable
+                {
+                    ReservationId = reservation.Id,
+                    TableId = table.Id
+                });
+                table.TableStatusId = TableStatus.Reserved;
+                Repo.Update(table);
+            }
+            await Repo.SaveAsync();
+
+            var saved = await LoadReservation(reservation.Id);
+            var detail = mapper.Map<ReservationDetail>(saved!);
+            await SendConfirmationEmail(request.Email, request.Name, detail, tables);
+            return detail;
+        }
+
+        public async Task<PaginatedResult<ReservationListItem>> GetReservations(ReservationFilterParams filter)
+        {
+            var search = filter.Search?.ToLower();
+            var predicate = BuildReservationFilter(filter, search);
+            var totalCount = await Repo.GetCountAsync(predicate);
+            var items = (await Repo.GetAsync<Reservation>(
+                filter: predicate,
+                orderBy: filter.SortDescending
+                    ? q => q.OrderByDescending(r => r.Time)
+                    : q => q.OrderBy(r => r.Time),
+                includeProperties: ReservationIncludes,
+                skip: (filter.PageNumber - 1) * filter.PageSize,
+                take: filter.PageSize
+            )).ToList();
+
+            return new PaginatedResult<ReservationListItem>(
+                mapper.Map<IEnumerable<ReservationListItem>>(items),
+                totalCount,
+                filter.PageNumber,
+                filter.PageSize);
+        }
+
+        public async Task<PaginatedResult<ReservationListItem>> GetMyReservations(Guid applicationUserId, PaginationParams pagination)
+        {
+            var customerId = await GetCustomerId(applicationUserId);
+            var totalCount = await Repo.GetCountAsync<Reservation>(r => r.CustomerId == customerId);
+            var items = (await Repo.GetAsync<Reservation>(
+                filter: r => r.CustomerId == customerId,
+                orderBy: q => q.OrderByDescending(r => r.Time),
+                includeProperties: ReservationIncludes,
+                skip: (pagination.PageNumber - 1) * pagination.PageSize,
+                take: pagination.PageSize
+            )).ToList();
+            return new PaginatedResult<ReservationListItem>(
+                mapper.Map<IEnumerable<ReservationListItem>>(items),
+                totalCount,
+                pagination.PageNumber,
+                pagination.PageSize);
+        }
+
+        public async Task<ReservationDetail?> GetReservationById(Guid id)
+        {
+            var reservation = await LoadReservation(id);
+            return reservation == null ? null : mapper.Map<ReservationDetail>(reservation);
+        }
+
+        public async Task<ReservationDetail?> GetReservationByCode(string confirmationCode)
+        {
+            var reservation = await Repo.GetOneAsync<Reservation>(
+                filter: r => r.ConfirmationCode == confirmationCode,
+                includeProperties: ReservationIncludes);
+            return reservation == null ? null : mapper.Map<ReservationDetail>(reservation);
+        }
+
+        public async Task<ReservationDetail> UpdateReservation(Guid id, UpdateReservationRequest request)
+        {
+            var reservation = await RequireReservation(id, TablesAndStatusIncludes);
+
+            var currentStatusCode = reservation.ReservationStatus?.Code;
+            if (currentStatusCode == CancelledCode || currentStatusCode == CompletedCode)
+                throw new InvalidOperationException("Cannot update a reservation that is already cancelled or completed");
+
+            if (request.ReservationDateTime.HasValue)
+                ValidateFutureDate(request.ReservationDateTime.Value);
+
+            if (request.TableIds is { Count: > 0 })
+                ValidateDistinctTableIds(request.TableIds);
+
+            var newDateTime = request.ReservationDateTime ?? reservation.Time;
+            var currentTableIds = reservation.ReservationTables.Select(rt => rt.TableId).ToList();
+            var tablesChanged = request.TableIds is { Count: > 0 };
+            var dateChanged = request.ReservationDateTime.HasValue;
+            var newTableIds = tablesChanged ? request.TableIds! : currentTableIds;
+
+            List<Table> newTables = reservation.ReservationTables.Select(rt => rt.Table).ToList();
+            if (tablesChanged)
+                newTables = await ValidateReservationTables(newTableIds);
+
+            if (tablesChanged || dateChanged)
+            {
+                var conflicts = (await Repo.GetAsync<ReservationTable>(
+                    filter: rt =>
+                        newTableIds.Contains(rt.TableId) &&
+                        rt.ReservationId != id &&
+                        rt.Reservation.Time >= newDateTime.AddMinutes(-ReservationBufferMinutes) &&
+                        rt.Reservation.Time <= newDateTime.AddMinutes(ReservationBufferMinutes) &&
+                        rt.Reservation.ReservationStatus.Code != CancelledCode &&
+                        rt.Reservation.ReservationStatus.Code != CompletedCode,
+                    includeProperties: "Reservation.ReservationStatus"
+                )).ToList();
+
+                if (conflicts.Any())
+                    throw new InvalidOperationException("One or more tables are already reserved at this time");
+            }
+
+            var numberOfGuests = request.NumberOfGuests ?? reservation.NumberOfGuests;
+            ValidateCapacity(numberOfGuests, newTables);
+
+            if (tablesChanged)
+            {
+                var removedTableIds = currentTableIds.Except(newTableIds).ToList();
+                var addedTableIds = newTableIds.Except(currentTableIds).ToList();
+
+                foreach (var rt in reservation.ReservationTables.Where(rt => removedTableIds.Contains(rt.TableId)).ToList())
+                {
+                    rt.Table.TableStatusId = TableStatus.Available;
+                    Repo.Update(rt.Table);
+                    Repo.Delete<ReservationTable>(rt.Id);
+                }
+                foreach (var table in newTables.Where(t => addedTableIds.Contains(t.Id)))
+                {
+                    await Repo.CreateAsync(new ReservationTable { ReservationId = id, TableId = table.Id });
+                    table.TableStatusId = TableStatus.Reserved;
+                    Repo.Update(table);
+                }
+            }
+
+            reservation.Time = newDateTime;
+            reservation.NumberOfGuests = numberOfGuests;
+            reservation.SpecialRequests = request.SpecialRequests ?? reservation.SpecialRequests;
+
+            Repo.Update(reservation);
+            await Repo.SaveAsync();
+            var saved = await LoadReservation(id);
+            return mapper.Map<ReservationDetail>(saved!);
+        }
+
+        public async Task CheckIn(Guid id)
+        {
+            var reservation = await RequireReservation(id, TablesAndStatusIncludes);
+
+            var statusCode = reservation.ReservationStatus?.Code;
+            if (statusCode == CancelledCode || statusCode == CompletedCode)
+                throw new InvalidOperationException("Cannot check in a reservation that is cancelled or completed");
+
+            if (reservation.CheckedInAt.HasValue)
+                throw new InvalidOperationException("Reservation has already been checked in");
+
+            var statuses = await statusValueService.GetStatuses(ReservationStatusTypeCode);
+            var confirmedStatus = statuses.FirstOrDefault(s => s.Code == ConfirmedCode)
+                ?? throw new InvalidOperationException("Confirmed status not configured");
+
+            reservation.CheckedInAt = DateTime.UtcNow;
+            reservation.ReservationStatusId = confirmedStatus.Id;
+            Repo.Update(reservation);
+
+            foreach (var rt in reservation.ReservationTables)
+            {
+                rt.Table.TableStatusId = TableStatus.Occupied;
+                Repo.Update(rt.Table);
+            }
+
+            await Repo.SaveAsync();
+        }
+
+        public async Task CancelReservation(Guid id)
+        {
+            var reservation = await RequireReservation(id, TablesIncludes);
+            var statuses = await statusValueService.GetStatuses(ReservationStatusTypeCode);
+            var cancelledStatus = statuses.FirstOrDefault(s => s.Code == CancelledCode)
+                ?? throw new InvalidOperationException("Cancelled status not configured");
+            reservation.ReservationStatusId = cancelledStatus.Id;
+            Repo.Update(reservation);
+            await FreeTablesAndSessions(reservation, CancelledCode);
+            await Repo.SaveAsync();
+        }
+
+        public async Task<CheckAvailabilityResponse> CheckAvailabilityReservation(CheckAvailabilityParams request)
+        {
+            var bufferStart = request.ReservationDateTime.AddMinutes(-request.BufferMinutes);
+            var bufferEnd = request.ReservationDateTime.AddMinutes(request.BufferMinutes);
+            var conflicts = (await Repo.GetAsync<ReservationTable>(
+                filter: rt =>
+                    request.TableIds.Contains(rt.TableId) &&
+                    rt.Reservation.Time >= bufferStart &&
+                    rt.Reservation.Time <= bufferEnd &&
+                    rt.Reservation.ReservationStatus.Code != CancelledCode &&
+                    rt.Reservation.ReservationStatus.Code != CompletedCode,
+                includeProperties: "Table,Reservation.ReservationStatus"
+            )).ToList();
+            var conflictingSlots = conflicts.Select(rt => new ConflictingSlot
+            {
+                TableId = rt.TableId,
+                TableCode = rt.Table.Code,
+                ConflictTime = rt.Reservation.Time,
+                ConflictStatus = rt.Reservation.ReservationStatus.Name
+            }).ToList();
+            return new CheckAvailabilityResponse
+            {
+                Available = !conflictingSlots.Any(),
+                ConflictingSlots = conflictingSlots
+            };
+        }
+
+        #region Private Helpers
+        private static Expression<Func<Reservation, bool>> BuildReservationFilter(ReservationFilterParams filter, string? search)
+        {
+            return r =>
+                (!filter.StatusId.HasValue || r.ReservationStatusId == filter.StatusId.Value) &&
+                (!filter.Date.HasValue || r.Time.Date == filter.Date.Value.Date) &&
+                (!filter.TableId.HasValue || r.ReservationTables.Any(rt => rt.TableId == filter.TableId.Value)) &&
+                (string.IsNullOrEmpty(search) ||
+                    (r.ConfirmationCode != null && r.ConfirmationCode.ToLower().Contains(search)) ||
+                    (r.Customer.ApplicationUser.UserName != null &&
+                     r.Customer.ApplicationUser.UserName.ToLower().Contains(search)));
+        }
+
+        private async Task<Guid?> GetCustomerId(Guid? applicationUserId)
+        {
+            if (!applicationUserId.HasValue)
+                return null;
+            var customer = await Repo.GetOneAsync<Customer>(
+                filter: c => c.ApplicationUserId == applicationUserId.Value);
+            return customer?.Id;
+        }
+
+        private async Task SendConfirmationEmail(
+            string email, string name, ReservationDetail detail, List<Table> tables)
+        {
+            try
+            {
+                var tableList = string.Join(", ", tables.Select(t => t.Code));
+                var body = EmailTemplates.ReservationConfirmation(
+                    name,
+                    detail.ConfirmationCode,
+                    detail.ReservationDateTime,
+                    detail.NumberOfGuests,
+                    tableList,
+                    detail.SpecialRequests);
+                await emailService.SendEmailAsync(email, "Reservation Confirmation – " + detail.ConfirmationCode, body);
+            }
+            catch
+            {
+            }
+        }
+
+        private async Task<List<Table>> ValidateReservationTables(List<Guid> tableIds)
+        {
+            var tables = (await Repo.GetAsync<Table>(
+                filter: t => tableIds.Contains(t.Id) && t.IsActive,
+                includeProperties: "Floor")).ToList();
+
+            var foundIds = tables.Select(t => t.Id).ToHashSet();
+            var missingId = tableIds.FirstOrDefault(id => !foundIds.Contains(id));
+            if (missingId != default)
+                throw new KeyNotFoundException($"Table not found: {missingId}");
+
+            return tables;
+        }
+
+        private static void ValidateFutureDate(DateTime dateTime)
+        {
+            if (dateTime <= DateTime.UtcNow)
+                throw new ArgumentException("Reservation date and time must be in the future");
+        }
+
+        private static void ValidateDistinctTableIds(List<Guid> tableIds)
+        {
+            if (tableIds.Distinct().Count() != tableIds.Count)
+                throw new ArgumentException("Duplicate table IDs are not allowed");
+        }
+
+        private static void ValidateCapacity(int numberOfGuests, List<Table> tables)
+        {
+            var totalCapacity = tables.Sum(t => t.SeatingCapacity);
+            if (numberOfGuests > totalCapacity)
+                throw new InvalidOperationException(
+                    $"Number of guests ({numberOfGuests}) exceeds total table capacity ({totalCapacity})");
+        }
+
+        private async Task FreeTablesAndSessions(Reservation reservation, string newStatusCode)
+        {
+            if (newStatusCode != CompletedCode && newStatusCode != CancelledCode)
+                return;
+
+            foreach (var rt in reservation.ReservationTables)
+            {
+                rt.Table.TableStatusId = TableStatus.Available;
+                Repo.Update(rt.Table);
+            }
+
+            var activeSessions = (await Repo.GetAsync<TableSession>(
+                filter: ts => ts.ReservationId == reservation.Id && ts.IsActive)).ToList();
+            foreach (var session in activeSessions)
+            {
+                session.IsActive = false;
+                session.EndedAt = DateTime.UtcNow;
+                Repo.Update(session);
+            }
+        }
+
+        private async Task<Reservation> RequireReservation(Guid id, string includes)
+        {
+            return await Repo.GetOneAsync<Reservation>(
+                filter: r => r.Id == id,
+                includeProperties: includes)
+                ?? throw new KeyNotFoundException("Reservation not found");
+        }
+
+        private async Task<Reservation?> LoadReservation(Guid id)
+        {
+            return await Repo.GetOneAsync<Reservation>(
+                filter: r => r.Id == id,
+                includeProperties: ReservationIncludes);
+        }
+        private async Task<Guid> ResolveCustomer(string phone, string name)
+        {
+            var existing = await authService.CheckPhoneNumberAsync(phone);
+            if (existing.Exists && existing.CustomerId.HasValue)
+                return existing.CustomerId.Value;
+
+            var register = await authService.CustomerPhoneRegisterAsync(new CustomerPhoneRegisterRequest
+            {
+                PhoneNumber = phone,
+                FullName = name
+            });
+            if (!register.Success)
+                throw new InvalidOperationException($"Failed to register customer: {register.Message}");
+
+            var lookup = await authService.CheckPhoneNumberAsync(phone);
+            return lookup.CustomerId!.Value;
+        }
+
+        private static string GenerateConfirmationCode(Guid id)
+            => "RX-" + id.ToString("N")[..6].ToUpper();
+
+        #endregion
+    }
+}

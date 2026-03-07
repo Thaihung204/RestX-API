@@ -10,30 +10,28 @@ namespace RestX.DAL.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropForeignKey(
-                name: "FK_Orders_StatusValues_PaymentStatusId",
-                table: "Orders");
+            migrationBuilder.Sql(@"
+                IF EXISTS (
+                    SELECT 1 FROM sys.foreign_keys
+                    WHERE name = 'FK_Orders_StatusValues_PaymentStatusId'
+                )
+                BEGIN
+                    ALTER TABLE Orders DROP CONSTRAINT FK_Orders_StatusValues_PaymentStatusId;
+                END
 
-            migrationBuilder.DropIndex(
-                name: "IX_Orders_PaymentStatusId",
-                table: "Orders");
+                IF EXISTS (
+                    SELECT 1 FROM sys.indexes
+                    WHERE name = 'IX_Orders_PaymentStatusId' AND object_id = OBJECT_ID('Orders')
+                )
+                BEGIN
+                    DROP INDEX IX_Orders_PaymentStatusId ON Orders;
+                END
+            ");
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.CreateIndex(
-                name: "IX_Orders_PaymentStatusId",
-                table: "Orders",
-                column: "PaymentStatusId");
-
-            migrationBuilder.AddForeignKey(
-                name: "FK_Orders_StatusValues_PaymentStatusId",
-                table: "Orders",
-                column: "PaymentStatusId",
-                principalTable: "StatusValues",
-                principalColumn: "Id",
-                onDelete: ReferentialAction.Restrict);
         }
     }
 }

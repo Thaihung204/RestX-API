@@ -51,5 +51,39 @@ namespace RestX.BLL.DataTranferObjects.Common
             </body>
             </html>";
         }
+        public static string ReservationConfirmation(
+            string name,
+            string confirmationCode,
+            DateTime reservationDateTime,
+            int numberOfGuests,
+            string tableList,
+            string? specialRequests)
+        {
+            var specialRequestsSection = !string.IsNullOrWhiteSpace(specialRequests)
+                ? $"<p><strong>Special Requests:</strong> {specialRequests}</p>"
+                : string.Empty;
+
+            return $@"
+            <html>
+            <body style='font-family: Arial, sans-serif; background:#f9f9f9; padding:20px'>
+                <div style='max-width:600px;margin:auto;background:#fff;padding:20px;border-radius:6px'>
+                    <h2 style='color:#333'>Reservation Confirmed!</h2>
+                    <p>Hi <strong>{name}</strong>,</p>
+                    <p>Your reservation has been received. Here are the details:</p>
+                    <div style='background:#f0f4ff;padding:16px;border-radius:6px;margin:16px 0'>
+                        <p><strong>Confirmation Code:</strong> <span style='font-size:1.2em;color:#007bff;letter-spacing:2px'>{confirmationCode}</span></p>
+                        <p><strong>Date &amp; Time:</strong> {reservationDateTime:dddd, dd MMMM yyyy} at {reservationDateTime:HH:mm}</p>
+                        <p><strong>Number of Guests:</strong> {numberOfGuests}</p>
+                        <p><strong>Table(s):</strong> {tableList}</p>
+                        {specialRequestsSection}
+                    </div>
+                    <p>Please keep your confirmation code — you will need it to manage or look up your reservation.</p>
+                    <p>If you need to cancel or make changes, please contact us with your confirmation code and phone number.</p>
+                    <hr />
+                    <small>This is an automated email. Please do not reply.</small>
+                </div>
+            </body>
+            </html>";
+        }
     }
 }

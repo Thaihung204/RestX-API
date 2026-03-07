@@ -458,9 +458,6 @@ namespace RestX.DAL.Context
                 entity.HasIndex(e => e.ConfirmationCode).IsUnique();
 
                 entity.Property(e => e.ConfirmationCode).HasMaxLength(20);
-                entity.Property(e => e.GuestName).HasMaxLength(100);
-                entity.Property(e => e.GuestPhone).HasMaxLength(15);
-                entity.Property(e => e.GuestEmail).HasMaxLength(255);
                 entity.Property(e => e.SpecialRequests).HasMaxLength(1000);
                 entity.Property(e => e.DepositAmount).HasColumnType("decimal(18,2)");
 

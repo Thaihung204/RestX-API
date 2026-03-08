@@ -6,7 +6,9 @@ using RestX.BLL.DataTranferObjects.Payments;
 using RestX.BLL.Helpers;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Status;
+using RestX.Models.Customers;
 using RestX.Models.Enum;
+using RestX.Models.Loyalty;
 using RestX.Models.Orders;
 using RestX.Models.Tenants;
 
@@ -102,6 +104,7 @@ namespace RestX.BLL.Services
             order.PaymentStatusId = PaymentStatus.Paid;
             Repo.Update(order, createdBy);
 
+            await AwardLoyaltyPointsAsync(order);
             await Repo.SaveAsync();
 
             return new CashPaymentResponse
@@ -223,6 +226,7 @@ namespace RestX.BLL.Services
                 {
                     order.PaymentStatusId = PaymentStatus.Paid;
                     Repo.Update(order);
+                    await AwardLoyaltyPointsAsync(order);
                 }
             }
 
@@ -242,6 +246,38 @@ namespace RestX.BLL.Services
             var status = statuses.FirstOrDefault(s => string.Equals(s.Code, code, StringComparison.OrdinalIgnoreCase))
                 ?? throw new InvalidOperationException($"{PaymentConstants.StatusType.Payment}/{code} not found");
             return status.Id;
+        }
+
+        private async Task AwardLoyaltyPointsAsync(Order order)
+        {
+            if (!order.CustomerId.HasValue) return;
+
+            var customer = await Repo.GetByIdAsync<Customer>(order.CustomerId.Value);
+            if (customer == null) return;
+
+            var points = (int)(order.TotalAmount / 1000);
+            if (points <= 0) return;
+
+            customer.LoyaltyPoints += points;
+
+            var bands = await Repo.GetAsync<LoyaltyPointBand>(b => b.IsActive);
+            var newBand = bands.FirstOrDefault(b =>
+                b.Min <= customer.LoyaltyPoints &&
+                (b.Max == null || b.Max >= customer.LoyaltyPoints));
+            if (newBand != null && !string.Equals(customer.MembershipLevel, newBand.Name, StringComparison.OrdinalIgnoreCase))
+                customer.MembershipLevel = newBand.Name;
+
+            Repo.Update(customer);
+
+            await Repo.CreateAsync(new PointsTransaction
+            {
+                Id = Guid.NewGuid(),
+                CustomerId = customer.Id,
+                OrderId = order.Id,
+                Type = "EARN",
+                Points = points,
+                Description = $"Earned {points} points from order {order.Reference}"
+            });
         }
 
         private static long GenerateOrderCode()

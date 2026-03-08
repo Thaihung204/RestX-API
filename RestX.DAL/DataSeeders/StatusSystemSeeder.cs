@@ -62,6 +62,7 @@ namespace RestX.DAL.DataSeeders
             {
                 ("UNPAID", "Unpaid", "#FF9800", true),
                 ("PAID", "Paid", "#4CAF50", false),
+                ("CANCELLED", "Cancelled", "#F44336", false),
                 ("REFUNDED", "Refunded", "#9E9E9E", false)
             }));
             values.AddRange(CreateValuesForType(typeMap["RESERVATION"], new[]

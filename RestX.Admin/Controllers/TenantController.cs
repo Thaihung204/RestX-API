@@ -1,6 +1,7 @@
 ﻿using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
 using RestX.Admin.Controllers.BaseControllers;
+using RestX.BLL.DataTranferObjects.Common;
 using RestX.BLL.Interfaces;
 using RestX.Models.Tenants;
 using System.ComponentModel.DataAnnotations;
@@ -12,10 +13,12 @@ namespace RestX.Admin.Controllers
     public class TenantController : BaseController
     {
         private readonly ITenantService tenantService;
+        private readonly IPaymentSettingService paymentSettingService;
         public readonly IExceptionHandler exceptionHandler;
-        public TenantController(ITenantService tenantService, IExceptionHandler exceptionHandler) : base(exceptionHandler)
+        public TenantController(ITenantService tenantService, IPaymentSettingService paymentSettingService, IExceptionHandler exceptionHandler) : base(exceptionHandler)
         {
             this.tenantService = tenantService;
+            this.paymentSettingService = paymentSettingService;
         }
 
         [HttpGet]
@@ -170,6 +173,57 @@ namespace RestX.Admin.Controllers
             {
                 await tenantService.DeleteTenantRequest(id);
                 return Ok();
+            }
+            catch (Exception ex)
+            {
+                this.exceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
+        [HttpGet("{id:guid}/payment-settings")]
+        public async Task<IActionResult> GetPaymentSettings([Required] Guid id)
+        {
+            try
+            {
+                var result = await paymentSettingService.GetPaymentSettingByTenantId(id);
+                if (result == null)
+                    return NotFound(new { success = false, message = "Payment settings not configured" });
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                this.exceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
+        [HttpPost("{id:guid}/payment-settings")]
+        public async Task<IActionResult> AddPaymentSettings([Required] Guid id, [FromBody] PaymentGatewaySettings settings)
+        {
+            try
+            {
+                var existing = await paymentSettingService.GetPaymentSettingByTenantId(id);
+                if (existing != null)
+                    return Conflict(new { success = false, message = "Payment settings already exist. Use PUT to update." });
+
+                await paymentSettingService.UpsertPaymentSetting(id, settings);
+                return Ok(new { success = true });
+            }
+            catch (Exception ex)
+            {
+                this.exceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
+        [HttpPut("{id:guid}/payment-settings")]
+        public async Task<IActionResult> EditPaymentSettings([Required] Guid id, [FromBody] PaymentGatewaySettings settings)
+        {
+            try
+            {
+                await paymentSettingService.UpsertPaymentSetting(id, settings);
+                return Ok(new { success = true });
             }
             catch (Exception ex)
             {

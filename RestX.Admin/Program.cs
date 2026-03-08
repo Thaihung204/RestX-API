@@ -69,6 +69,7 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddScoped<IRepository, EntityFrameworkRepository<RestxAdminContext>>();
 builder.Services.AddScoped<ITenantService, TenantService>();
+builder.Services.AddScoped<IPaymentSettingService, PaymentSettingService>();
 builder.Services.AddScoped<IExceptionHandler, ExceptionHandler>();
 builder.Services.AddScoped<IRedisService, RedisService>();
 builder.Services.AddScoped<ICloudinaryService, CloudinaryService>();

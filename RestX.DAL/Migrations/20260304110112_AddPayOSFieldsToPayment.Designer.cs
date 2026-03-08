@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using RestX.DAL.Context;
 
@@ -11,9 +12,11 @@ using RestX.DAL.Context;
 namespace RestX.DAL.Migrations
 {
     [DbContext(typeof(TenantDbContext))]
-    partial class TenantDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260304110112_AddPayOSFieldsToPayment")]
+    partial class AddPayOSFieldsToPayment
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1671,10 +1674,6 @@ namespace RestX.DAL.Migrations
                     b.Property<DateTime?>("CheckedInAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("ConfirmationCode")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
                     b.Property<string>("CreatedBy")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
@@ -1713,15 +1712,9 @@ namespace RestX.DAL.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ConfirmationCode")
-                        .IsUnique()
-                        .HasFilter("[ConfirmationCode] IS NOT NULL");
-
-                    b.HasIndex("CustomerId");
-
                     b.HasIndex("ReservationStatusId");
 
-                    b.HasIndex("Time");
+                    b.HasIndex("CustomerId", "Time");
 
                     b.ToTable("Reservations", (string)null);
                 });
@@ -2432,7 +2425,8 @@ namespace RestX.DAL.Migrations
                     b.HasOne("RestX.Models.Customers.Customer", "Customer")
                         .WithMany("Reservations")
                         .HasForeignKey("CustomerId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
                     b.HasOne("RestX.Models.Common.StatusValue", "ReservationStatus")
                         .WithMany()

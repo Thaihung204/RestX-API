@@ -22,6 +22,7 @@ using FloorEntity = RestX.Models.Tables.Floor;
 using RestX.BLL.DataTranferObjects.Inventory;
 using RestX.Models.Inventory;
 using LoyaltyPointBandEntity = RestX.Models.Loyalty.LoyaltyPointBand;
+using RestX.BLL.DataTranferObjects.Payments;
 using RestX.BLL.DataTranferObjects.Status;
 using RestX.Models.Common;
 using RestX.BLL.DataTranferObjects.Reservation;
@@ -138,6 +139,10 @@ namespace RestX.BLL.Helpers
                 .ForMember(dest => dest.OrderDetails, opt => opt.Ignore()); CreateMap<Models.Inventory.IngredientCategory, DataTranferObjects.Inventory.IngredientCategory>().ReverseMap();
 
             CreateMap<LoyaltyPointBandEntity, DataTranferObjects.Loyalty.LoyaltyPointBand>().ReverseMap();
+            CreateMap<Models.Orders.Payment, PaymentDetail>()
+                .ForMember(dest => dest.PaymentStatusName, opt => opt.MapFrom(src => src.PaymentStatus != null ? src.PaymentStatus.Name : null))
+                .ForMember(dest => dest.PaymentStatusCode, opt => opt.MapFrom(src => src.PaymentStatus != null ? src.PaymentStatus.Code : null));
+
             CreateMap<StatusValue, StatusValues>();
             CreateMap<StatusValues, StatusValue>()
                 .ForMember(dest => dest.Id, opt => opt.Ignore())

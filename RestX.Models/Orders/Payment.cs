@@ -24,6 +24,11 @@ namespace RestX.Models.Orders
         [MaxLength(100)]
         public string? TransactionId { get; set; }
 
+        public long? PayOSOrderCode { get; set; }
+
+        [MaxLength(500)]
+        public string? CheckoutUrl { get; set; }
+
         [Column(TypeName = "decimal(18,2)")]
         [Range(0, 999999999.99)]
         public decimal Amount { get; set; } = 0;

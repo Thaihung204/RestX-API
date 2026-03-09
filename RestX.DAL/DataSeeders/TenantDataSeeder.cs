@@ -47,7 +47,15 @@ namespace RestX.DAL.DataSeeders
             var seeders = CreateSeeders(context);
             foreach (var seeder in seeders.OrderBy(s => s.Order))
             {
-                await seeder.SeedAsync();
+                try
+                {
+                    await seeder.SeedAsync();
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "[TenantDataSeeder] Seeder {Seeder} failed for tenant: {Hostname}", seeder.GetType().Name, tenantHostname);
+                    throw;
+                }
             }
         }
         private IEnumerable<IDataSeeder> CreateSeeders(TenantDbContext context)

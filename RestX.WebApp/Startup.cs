@@ -29,6 +29,7 @@ using RestX.DAL.Context;
 using RestX.Models.Identity;
 using RestX.Models.Tenants;
 using RestX.WebApp.Extensions;
+using RestX.WebApp.Helpers;
 using SaasKit.Multitenancy;
 using SaasKit.Multitenancy.Internal;
 using System.Security.Claims;
@@ -314,6 +315,7 @@ namespace RestX.WebApp
             {
                 endpoints.MapControllers();
                 endpoints.MapControllerRoute("api", "api/{controller}/{action}/{id?}");
+                endpoints.MapHub<SignalrServer>("/hubs/orders");
                 //endpoints.MapFallbackToController("Index", "Public");
             });
 

@@ -1,4 +1,5 @@
 ﻿using AutoMapper;
+using Microsoft.Data.SqlClient;
 using RestX.BLL.DataTranferObjects.Orders;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Status;
@@ -7,6 +8,8 @@ using RestX.Models.Enum;
 using RestX.Models.Menu;
 using RestX.Models.Orders;
 using RestX.Models.Tenants;
+using System.Data;
+using System.Text;
 
 namespace RestX.BLL.Services
 {
@@ -27,15 +30,217 @@ namespace RestX.BLL.Services
             this.mapper = mapper;
         }
 
-        public async Task<IEnumerable<DataTranferObjects.Orders.Order>> GetAllOrders()
+        public async Task<OrderSearchResult> GetAllOrders(OrderSearch model)
         {
-            var orders = (await Repo.GetAllAsync<Models.Orders.Order>(
-                orderBy: q => q.OrderByDescending(o => o.CreatedDate),
-                includeProperties: "OrderDetails,OrderDetails.ItemStatus,OrderTables"
-            )).ToList();
+            if (model.Page <= 0) model.Page = 1;
+            if (model.ItemsPerPage <= 0) model.ItemsPerPage = 20;
+            if (model.ItemsPerPage > 200) model.ItemsPerPage = 200;
 
-            return mapper.Map<List<DataTranferObjects.Orders.Order>>(orders);
+            var result = new OrderSearchResult
+            {
+                Page = model.Page,
+                ItemsPerPage = model.ItemsPerPage
+            };
+
+            var query = new StringBuilder();
+            query.Append(@"
+                SELECT #SELECT#
+                FROM dbo.Orders o
+                WHERE 1 = 1
+            ");
+
+            var countParams = new List<SqlParameter>();
+            var queryParams = new List<SqlParameter>();
+
+            if (model.Status.HasValue)
+            {
+                query.Append(" AND o.OrderStatusId = @Status ");
+
+                var statusValue = (int)model.Status.Value;
+                countParams.Add(new SqlParameter("Status", SqlDbType.Int) { Value = statusValue });
+                queryParams.Add(new SqlParameter("Status", SqlDbType.Int) { Value = statusValue });
+            }
+
+            if (model.From.HasValue)
+            {
+                var fromUtc = model.From.Value.Kind == DateTimeKind.Unspecified
+                    ? DateTime.SpecifyKind(model.From.Value, DateTimeKind.Utc)
+                    : model.From.Value.ToUniversalTime();
+
+                query.Append(" AND o.CreatedDate >= @From ");
+
+                countParams.Add(new SqlParameter("From", SqlDbType.DateTime2) { Value = fromUtc });
+                queryParams.Add(new SqlParameter("From", SqlDbType.DateTime2) { Value = fromUtc });
+            }
+
+            if (model.To.HasValue)
+            {
+                var toUtcExclusive = (model.To.Value.Kind == DateTimeKind.Unspecified
+                        ? DateTime.SpecifyKind(model.To.Value, DateTimeKind.Utc)
+                        : model.To.Value.ToUniversalTime())
+                    .Date
+                    .AddDays(1);
+
+                query.Append(" AND o.CreatedDate < @ToExclusive ");
+
+                countParams.Add(new SqlParameter("ToExclusive", SqlDbType.DateTime2) { Value = toUtcExclusive });
+                queryParams.Add(new SqlParameter("ToExclusive", SqlDbType.DateTime2) { Value = toUtcExclusive });
+            }
+
+            var countQuery = query.ToString().Replace("#SELECT#", "COUNT(1)");
+            result.TotalCount = await Repo.ExecuteSqlCommandAsync<int>(
+                countQuery,
+                countParams.Any() ? countParams.Cast<object>().ToArray() : null
+            );
+
+            result.TotalPages = result.ItemsPerPage <= 0
+                ? 0
+                : (int)Math.Ceiling((decimal)result.TotalCount / result.ItemsPerPage);
+
+            var skip = result.Page <= 1 ? 0 : (result.Page - 1) * result.ItemsPerPage;
+
+            var selectItems = @"
+                o.Id,
+                o.Reference,
+                o.CustomerId,
+                o.ReservationId,
+                o.OrderStatusId,
+                o.PaymentStatusId,
+                o.SubTotal,
+                o.DiscountAmount,
+                o.TaxAmount,
+                o.ServiceCharge,
+                o.TotalAmount,
+                o.CompletedAt,
+                o.CancelledAt,
+                o.HandledBy,
+                o.CreatedDate
+            ";
+
+            var mainQuery = query.ToString().Replace("#SELECT#", selectItems);
+
+            mainQuery += (model.SortBy?.ToLowerInvariant()) switch
+            {
+                "created_asc" => " ORDER BY o.CreatedDate ASC",
+                _ => " ORDER BY o.CreatedDate DESC"
+            };
+
+            mainQuery += $" OFFSET {skip} ROWS FETCH NEXT {result.ItemsPerPage} ROWS ONLY";
+
+            var orders = await Repo.ExecuteSqlSelectAsync<Models.Orders.Order>(
+                mainQuery,
+                queryParams.Any() ? queryParams.Cast<object>().ToArray() : null
+            );
+
+            if (orders.Count == 0)
+            {
+                result.Orders = new List<DataTranferObjects.Orders.Order>();
+                return result;
+            }
+
+            var orderIds = orders.Select(o => o.Id).ToList();
+            var idParams = orderIds
+                .Select((id, i) => new SqlParameter($"OrderId{i}", SqlDbType.UniqueIdentifier) { Value = id })
+                .ToList();
+
+            var inClause = string.Join(", ", idParams.Select(p => "@" + p.ParameterName));
+
+            var orderTablesQuery = $@"
+                SELECT
+                    ot.Id,
+                    ot.OrderId,
+                    ot.TableId
+                FROM dbo.OrderTables ot
+                WHERE ot.OrderId IN ({inClause})
+                ORDER BY ot.OrderId, ot.Id
+            ";
+
+            var orderDetailsQuery = $@"
+                SELECT
+                    od.Id,
+                    od.OrderId,
+                    od.DishId,
+                    od.Quantity,
+                    od.Note,
+                    od.ItemStatusId
+                FROM dbo.OrderDetails od
+                WHERE od.OrderId IN ({inClause})
+                ORDER BY od.OrderId, od.Id
+            ";
+
+            var itemStatusesQuery = $@"
+                SELECT
+                    sv.Id,
+                    sv.Name
+                FROM dbo.StatusValues sv
+                WHERE sv.Id IN (
+                    SELECT DISTINCT od.ItemStatusId
+                    FROM dbo.OrderDetails od
+                    WHERE od.OrderId IN ({inClause})
+                )
+            ";
+
+            var orderTables = await Repo.ExecuteSqlSelectAsync<OrderTable>(
+                orderTablesQuery,
+                CloneParams(idParams)
+            );
+
+            var orderDetails = await Repo.ExecuteSqlSelectAsync<Models.Orders.OrderDetail>(
+                orderDetailsQuery,
+                CloneParams(idParams)
+            );
+
+            var itemStatuses = await Repo.ExecuteSqlSelectAsync<StatusValue>(
+                itemStatusesQuery,
+                CloneParams(idParams)
+            );
+
+            var tablesByOrderId = orderTables
+                .GroupBy(t => t.OrderId)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            var detailsByOrderId = orderDetails
+                .GroupBy(d => d.OrderId)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            var statusById = itemStatuses
+                .GroupBy(s => s.Id)
+                .ToDictionary(g => g.Key, g => g.First());
+
+            foreach (var o in orders)
+            {
+                if (tablesByOrderId.TryGetValue(o.Id, out var ots))
+                    o.OrderTables = ots;
+
+                if (detailsByOrderId.TryGetValue(o.Id, out var ods))
+                {
+                    foreach (var d in ods)
+                    {
+                        if (statusById.TryGetValue(d.ItemStatusId, out var s))
+                            d.ItemStatus = s;
+                    }
+
+                    o.OrderDetails = ods;
+                }
+            }
+
+            result.Orders = mapper.Map<List<DataTranferObjects.Orders.Order>>(orders);
+            return result;
         }
+        private static object[] CloneParams(IEnumerable<SqlParameter> parameters)
+            => parameters
+                .Select(p => new SqlParameter(p.ParameterName, p.SqlDbType)
+                {
+                    Value = p.Value ?? DBNull.Value,
+                    Direction = p.Direction,
+                    Size = p.Size,
+                    Precision = p.Precision,
+                    Scale = p.Scale,
+                    IsNullable = p.IsNullable
+                })
+                .Cast<object>()
+                .ToArray();
+
 
         public async Task<DataTranferObjects.Orders.Order?> GetOrderById(Guid id)
         {

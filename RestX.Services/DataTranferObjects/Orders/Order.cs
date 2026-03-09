@@ -16,7 +16,7 @@ namespace RestX.BLL.DataTranferObjects.Orders
         public Guid CustomerId { get; set; }
         public Guid? ReservationId { get; set; }
 
-        public OrderStatus OrderStatusId { get; set; } = OrderStatus.Reserved;
+        public OrderStatus OrderStatusId { get; set; } = OrderStatus.Pending;
         public PaymentStatus PaymentStatusId { get; set; } = PaymentStatus.Unpaid;
 
         [Range(0, 999999999.99)]

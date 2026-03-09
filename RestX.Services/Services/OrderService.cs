@@ -233,5 +233,28 @@ namespace RestX.BLL.Services
             Repo.Delete<Models.Orders.Order>(id);
             await Repo.SaveAsync();
         }
+        public async Task<bool> UpdateStatusAsync(Guid orderId, int statusId, string? userId)
+        {
+            var order = await Repo.GetByIdAsync<Models.Orders.Order>(orderId);
+            if (order == null)
+                return false;
+
+            if (userId != String.Empty)
+            {
+                order.HandledBy = Guid.Parse(userId);
+            }
+            order.OrderStatusId = (OrderStatus)statusId;
+
+            if (statusId == (int)OrderStatus.Cancelled)
+                order.CancelledAt = DateTime.UtcNow;
+            else if (statusId == (int)OrderStatus.Completed)
+                order.CompletedAt = DateTime.UtcNow;
+
+            Repo.Update(order);
+            await Repo.SaveAsync();
+
+            return true;
+        }
+
     }
 }

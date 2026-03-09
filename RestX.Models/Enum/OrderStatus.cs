@@ -2,7 +2,8 @@
 {
     public enum OrderStatus
     {
-        Reserved,
+        Pending,
+        Confirmed,
         Serving,
         Completed,
         Cancelled

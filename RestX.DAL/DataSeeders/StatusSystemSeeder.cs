@@ -47,7 +47,8 @@ namespace RestX.DAL.DataSeeders
             var typeMap = statusTypes.ToDictionary(t => t.Code, t => t.Id);
             values.AddRange(CreateValuesForType(typeMap["ORDER"], new[]
             {
-                (nameof(OrderStatus.Reserved), "Reserved", "#FFA500", true),
+                (nameof(OrderStatus.Pending), "Pending", "#FFA500", true),
+                (nameof(OrderStatus.Confirmed), "Confirmed", "#FFA500", true),
                 (nameof(OrderStatus.Serving), "Serving", "#9C27B0", false),
                 (nameof(OrderStatus.Completed), "Completed", "#4CAF50", false),
                 (nameof(OrderStatus.Cancelled), "Cancelled", "#F44336", false)

@@ -131,5 +131,31 @@ namespace RestX.WebApp.Controllers
                 return BadRequest("An internal error occurred");
             }
         }
+
+        [HttpPut("{id:guid}/status")]
+        //[Authorize(Roles = "Admin,Waiter,Kitchen")]
+        [AllowAnonymous]
+        public async Task<ActionResult<bool>> UpdateOrderStatus([Required] Guid id, [FromBody] int statusId)
+        {
+            try
+            {
+                var userId = String.Empty;
+                if (statusId == 1) {
+                    var currentUser = await GetCurrentUserAsync();
+                    userId = currentUser?.Id.ToString() ?? string.Empty;
+                }
+
+                var result = await orderService.UpdateStatusAsync(id, statusId, userId);
+                if (!result)
+                    return NotFound(new { success = false, message = "Order not found" });
+
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
     }
 }

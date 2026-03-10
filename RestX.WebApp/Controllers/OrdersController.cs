@@ -85,8 +85,9 @@ namespace RestX.WebApp.Controllers
                 var id = await orderService.CreateOrder(order, userId);
                 if (id == Guid.Empty)
                     return BadRequest(new { success = false, message = "Create order failed" });
+                var createdOrder = await orderService.GetOrderById(id);
 
-                await BroadcastToTenant(SignalrServer.OrderCreated, new { id, order });
+                await BroadcastToTenant(SignalrServer.OrderCreated, new { id, order = createdOrder });
 
                 return Ok(id);
             }
@@ -112,8 +113,9 @@ namespace RestX.WebApp.Controllers
                     var updatedId = await orderService.UpdateOrder(id, order, userId);
                 if (updatedId == Guid.Empty)
                     return NotFound(new { success = false, message = "Order not found" });
+                var updatedOrder = await orderService.GetOrderById(id);
 
-                await BroadcastToTenant(SignalrServer.OrderUpdated, new { id = updatedId, order });
+                await BroadcastToTenant(SignalrServer.OrderUpdated, new { id = updatedId, order = updatedOrder });
 
                 return Ok(updatedId);
             }

@@ -6,15 +6,14 @@ using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using RestX.AdminDAL.Context;
 using RestX.BLL.DataTranferObjects.Tenants;
-using RestX.BLL.Extensions;
 using RestX.BLL.Interfaces;
 using RestX.DAL.DataSeeders;
 using RestX.Models.Enum;
 using RestX.Models.Tenants;
 using Serilog;
 using System.Text.RegularExpressions;
-using static Pipelines.Sockets.Unofficial.SocketConnection;
-using static System.Runtime.InteropServices.JavaScript.JSType;
+using Hangfire;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace RestX.BLL.Services
 {
@@ -294,8 +293,22 @@ namespace RestX.BLL.Services
                 tenant.FaviconUrl = await HandleUploadTenantImage(model.FaviconFile, $"{tenant.Name.Replace(" ", "")}/FaviconUrl", "favicon") ?? tenant.FaviconUrl;
                 tenant.BackgroundUrl = await HandleUploadTenantImage(model.BackgroundFile, $"{tenant.Name.Replace(" ", "")}/BackgroundUrl", "background") ?? tenant.BackgroundUrl;
 
-                await Repo.CreateAsync(tenant);
-                await SeedTenantDataAsync(tenant);
+                await using IDbContextTransaction transaction = await adminContext.Database.BeginTransactionAsync();
+
+                try
+                {
+                    await Repo.CreateAsync(tenant);
+
+                    BackgroundJob.Enqueue(() => SeedTenantDataAsync(tenant));
+
+                    await transaction.CommitAsync();
+                }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync();
+                    logger.LogError(ex, "Failed to create tenant");
+                    throw;
+                }
             }
             return tenant;
         }
@@ -404,7 +417,7 @@ namespace RestX.BLL.Services
             return new string(result);
         }
 
-        private async Task SeedTenantDataAsync(Tenant tenant)
+        public async Task SeedTenantDataAsync(Tenant tenant)
         {
             try
             {

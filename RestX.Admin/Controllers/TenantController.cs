@@ -57,7 +57,7 @@ namespace RestX.Admin.Controllers
             try
             {
                 tenant.Id = id;
-                return Ok(await tenantService.UpsertTenant(tenant));
+                return Ok(await tenantService.UpdateTenant(tenant));
             }
             catch (Exception ex)
             {
@@ -68,11 +68,12 @@ namespace RestX.Admin.Controllers
 
         [HttpPost]
         [Consumes("multipart/form-data")]
-        public async Task<ActionResult<TenantItem>> AddTenant([FromForm] TenantItem tenant)
+        public async Task<IActionResult> AddTenant([FromForm] TenantItem tenant)
         {
             try
             {
-                return Ok(await tenantService.UpsertTenant(tenant));
+                await tenantService.UploadAndCreateTenant(tenant);
+                return Accepted(new { message = "Tenant creation has been queued." });
             }
             catch (Exception ex)
             {

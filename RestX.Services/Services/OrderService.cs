@@ -3,6 +3,7 @@ using Microsoft.Data.SqlClient;
 using RestX.BLL.DataTranferObjects.Orders;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Status;
+using RestX.BLL.Interfaces.Tables;
 using RestX.Models.Common;
 using RestX.Models.Enum;
 using RestX.Models.Menu;
@@ -17,9 +18,11 @@ namespace RestX.BLL.Services
     {
         private readonly IMapper mapper;
         private readonly IStatusValueService statusValueService;
+        private readonly ITableService tableService;
 
         public OrderService(
             IStatusValueService statusValueService,
+            ITableService tableService,
             IMapper mapper,
             IRepository repo,
             IRedisService redisService,
@@ -27,6 +30,7 @@ namespace RestX.BLL.Services
         ) : base(repo, redisService, tenant)
         {
             this.statusValueService = statusValueService;
+            this.tableService = tableService;
             this.mapper = mapper;
         }
 
@@ -303,6 +307,7 @@ namespace RestX.BLL.Services
             orderEntity.CalculateTotalAmount();
 
             await Repo.CreateAsync(orderEntity, userId);
+            tableService.ChangeTableStatus(order.TableId, TableStatus.Reserved);
 
             return orderEntity.Id;
         }

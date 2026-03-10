@@ -53,7 +53,7 @@ namespace RestX.DAL.DataSeeders
                 (nameof(OrderStatus.Completed), "Completed", "#4CAF50", false),
                 (nameof(OrderStatus.Cancelled), "Cancelled", "#F44336", false)
             }));
-            values.AddRange(CreateValuesForType(typeMap["TABLE_STATUS"], new[]
+            values.AddRange(CreateValuesForType(typeMap["TABLE"], new[]
             {
                 (nameof(TableStatus.Available), "Available", "#4CAF50", true),
                 (nameof(TableStatus.Reserved), "Reserved", "#FF9800", false),

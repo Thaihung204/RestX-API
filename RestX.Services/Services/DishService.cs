@@ -368,7 +368,10 @@ namespace RestX.BLL.Services
                     Name = d.Name,
                     Price = d.Price,
                     Description = d.Description,
-                    ImageUrl = mainImageUrl
+                    ImageUrl = mainImageUrl,
+                    IsBestSeller = d.IsBestSeller,
+                    IsSpicy = d.IsSpicy,
+                    IsVegetarian = d.IsVegetarian,
                 };
             }).ToList();
 

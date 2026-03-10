@@ -2,11 +2,13 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using RestX.BLL.DataTranferObjects.Orders;
 using RestX.BLL.Interfaces;
 using RestX.Models.Identity;
 using RestX.Models.Tenants;
 using RestX.WebApp.Controllers.BaseControllers;
+using RestX.WebApp.Helpers;
 using System.ComponentModel.DataAnnotations;
 
 namespace RestX.WebApp.Controllers
@@ -17,9 +19,11 @@ namespace RestX.WebApp.Controllers
     public class OrdersController : BaseController
     {
         private readonly IOrderService orderService;
+        private readonly IHubContext<SignalrServer> hubContext;
 
         public OrdersController(
             IOrderService orderService,
+            IHubContext<SignalrServer> hubContext,
             IMapper mapper,
             UserManager<ApplicationUser> userManager,
             IExceptionHandler exceptionHandler,
@@ -27,17 +31,17 @@ namespace RestX.WebApp.Controllers
         ) : base(mapper, userManager, exceptionHandler, tenant)
         {
             this.orderService = orderService;
+            this.hubContext = hubContext;
         }
 
         [HttpGet]
         //[Authorize(Roles = "Admin,Kitchen Staff,Waiter")]
         [AllowAnonymous]
-
-        public async Task<ActionResult<IEnumerable<Order>>> GetAllOrders()
+        public async Task<ActionResult<OrderSearchResult>> GetAllOrders([FromQuery] OrderSearch model)
         {
             try
             {
-                return Ok(await orderService.GetAllOrders());
+                return Ok(await orderService.GetAllOrders(model));
             }
             catch (Exception ex)
             {
@@ -82,6 +86,8 @@ namespace RestX.WebApp.Controllers
                 if (id == Guid.Empty)
                     return BadRequest(new { success = false, message = "Create order failed" });
 
+                await BroadcastToTenant(SignalrServer.OrderCreated, new { id, order });
+
                 return Ok(id);
             }
             catch (Exception ex)
@@ -107,6 +113,8 @@ namespace RestX.WebApp.Controllers
                 if (updatedId == Guid.Empty)
                     return NotFound(new { success = false, message = "Order not found" });
 
+                await BroadcastToTenant(SignalrServer.OrderUpdated, new { id = updatedId, order });
+
                 return Ok(updatedId);
             }
             catch (Exception ex)
@@ -123,6 +131,7 @@ namespace RestX.WebApp.Controllers
             try
             {
                 await orderService.DeleteOrder(id);
+                await BroadcastToTenant(SignalrServer.OrderDeleted, new { id });
                 return Ok();
             }
             catch (Exception ex)
@@ -149,6 +158,8 @@ namespace RestX.WebApp.Controllers
                 if (!result)
                     return NotFound(new { success = false, message = "Order not found" });
 
+                await BroadcastToTenant(SignalrServer.OrderUpdated, new { id, statusId });
+
                 return Ok(result);
             }
             catch (Exception ex)
@@ -156,6 +167,15 @@ namespace RestX.WebApp.Controllers
                 ExceptionHandler.RaiseException(ex);
                 return BadRequest("An internal error occurred");
             }
+        }
+
+        private Task BroadcastToTenant(string eventName, object payload)
+        {
+            var group = CurrentTenant?.Id != Guid.Empty
+                ? $"tenant_{CurrentTenant!.Id}"
+                : "tenant_default";
+
+            return hubContext.Clients.Group(group).SendAsync(eventName, payload);
         }
     }
 }

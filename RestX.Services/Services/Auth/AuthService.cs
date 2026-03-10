@@ -1,5 +1,7 @@
 using AutoMapper;
+using Hangfire;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Logging;
 using RestX.BLL.DataTranferObjects.Authentication;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Auth;
@@ -18,6 +20,7 @@ namespace RestX.BLL.Services.Auth
         private readonly IAuthLinkService authLinkService;
         private readonly IEmailService emailService;
         private readonly IMapper mapper;
+        private readonly ILogger<AuthService> logger;
         private const string CustomerRole = "Customer";
 
         public AuthService(
@@ -30,6 +33,7 @@ namespace RestX.BLL.Services.Auth
             IEmailService emailService,
             IRedisService redisService,
             IMapper mapper,
+            ILogger<AuthService> logger,
             IEnumerable<ActiveTenant> tenant = null!) : base(repo, redisService, tenant)
         {
             this.userManager = userManager;
@@ -39,6 +43,7 @@ namespace RestX.BLL.Services.Auth
             this.authLinkService = authLinkService;
             this.emailService = emailService;
             this.mapper = mapper;
+            this.logger = logger;
         }
 
         public async Task<AuthResponse> LoginAsync(LoginRequest request)
@@ -83,17 +88,25 @@ namespace RestX.BLL.Services.Auth
             var user = await userManager.FindByEmailAsync(request.Email);
             if (user == null)
                 return AuthResponse.FailureResponse("Please check your email and try again");
+
+            var baseUrl = GetTenantBaseUrl();
+            BackgroundJob.Enqueue(() => SendPasswordResetEmailAsync(request.Email, baseUrl));
+
+            return AuthResponse.SuccessResponse("A password reset link has been sent to your email");
+        }
+
+        public async Task SendPasswordResetEmailAsync(string email, string baseUrl)
+        {
             try
             {
-                var baseUrl = GetTenantBaseUrl();
-                var resetLink = await authLinkService.GeneratePasswordResetLinkAsync(request.Email, baseUrl);
-                await emailService.SendPasswordResetLinkAsync(request.Email, resetLink);
+                var resetLink = await authLinkService.GeneratePasswordResetLinkAsync(email, baseUrl);
+                await emailService.SendPasswordResetLinkAsync(email, resetLink);
             }
-            catch
+            catch (Exception ex)
             {
-                return AuthResponse.FailureResponse("Failed to send password reset email. Please try again later.");
+                logger.LogError(ex, "Failed to send password reset email to {Email}", email);
+                throw;
             }
-            return AuthResponse.SuccessResponse("A password reset link has been sent to your email");
         }
 
         public async Task<AuthResponse> ResetPasswordAsync(ResetPasswordRequest request)

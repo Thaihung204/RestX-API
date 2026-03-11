@@ -307,7 +307,7 @@ namespace RestX.BLL.Services
             orderEntity.CalculateTotalAmount();
 
             await Repo.CreateAsync(orderEntity, userId);
-            tableService.ChangeTableStatus(order.TableId, TableStatus.Reserved);
+            await tableService.ChangeTableStatus(order.TableId, TableStatus.Reserved);
 
             return orderEntity.Id;
         }

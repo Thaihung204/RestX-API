@@ -51,6 +51,7 @@ namespace RestX.BLL.Services
         public async Task<ReservationDetail> CreateReservation(CreateReservationRequest request)
         {
             ValidateFutureDate(request.ReservationDateTime);
+            ValidateOperatingHours(request.ReservationDateTime);
             if (request.TableIds == null || request.TableIds.Count == 0)
                 throw new ArgumentException("At least one table is required");
             ValidateDistinctTableIds(request.TableIds);
@@ -58,6 +59,7 @@ namespace RestX.BLL.Services
             var customerId = await ResolveCustomer(request.Phone, request.Name);
 
             var tables = await ValidateReservationTables(request.TableIds);
+            await ValidateTableNotOccupied(tables, request.ReservationDateTime);
             ValidateCapacity(request.NumberOfGuests, tables);
             var availability = await CheckAvailabilityReservation(new CheckAvailabilityParams
             {
@@ -165,7 +167,10 @@ namespace RestX.BLL.Services
                 throw new InvalidOperationException("Cannot update a reservation that is already cancelled or completed");
 
             if (request.ReservationDateTime.HasValue)
+            {
                 ValidateFutureDate(request.ReservationDateTime.Value);
+                ValidateOperatingHours(request.ReservationDateTime.Value);
+            }
 
             if (request.TableIds is { Count: > 0 })
                 ValidateDistinctTableIds(request.TableIds);
@@ -179,6 +184,9 @@ namespace RestX.BLL.Services
             List<Table> newTables = reservation.ReservationTables.Select(rt => rt.Table).ToList();
             if (tablesChanged)
                 newTables = await ValidateReservationTables(newTableIds);
+
+            if (tablesChanged || dateChanged)
+                await ValidateTableNotOccupied(newTables, newDateTime);
 
             if (tablesChanged || dateChanged)
             {
@@ -350,6 +358,93 @@ namespace RestX.BLL.Services
                 throw new KeyNotFoundException($"Table not found: {missingId}");
 
             return tables;
+        }
+
+        private async Task ValidateTableNotOccupied(List<Table> tables, DateTime reservationDateTime)
+        {
+            var occupiedTables = tables.Where(t => t.TableStatusId == TableStatus.Occupied).ToList();
+            if (!occupiedTables.Any()) return;
+
+            var occupiedTableIds = occupiedTables.Select(t => t.Id).ToList();
+            var activeSessions = (await Repo.GetAsync<TableSession>(
+                filter: ts => occupiedTableIds.Contains(ts.TableId) && ts.IsActive
+            )).ToList();
+
+            foreach (var table in occupiedTables)
+            {
+                var session = activeSessions.FirstOrDefault(s => s.TableId == table.Id);
+                var estimatedEnd = session != null
+                    ? session.StartedAt.AddMinutes(ReservationBufferMinutes)
+                    : DateTime.UtcNow.AddMinutes(ReservationBufferMinutes);
+
+                if (reservationDateTime < estimatedEnd)
+                    throw new InvalidOperationException(
+                        $"Table '{table.Code}' is currently occupied. Estimated available after {estimatedEnd:HH:mm} UTC");
+            }
+        }
+
+        private static readonly Dictionary<string, int> DayOrder = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Mon"] = 0,
+            ["Tue"] = 1,
+            ["Wed"] = 2,
+            ["Thu"] = 3,
+            ["Fri"] = 4,
+            ["Sat"] = 5,
+            ["Sun"] = 6
+        };
+
+        private void ValidateOperatingHours(DateTime reservationDateTime)
+        {
+            var openingHours = CurrentTenant?.BusinessOpeningHours;
+            if (string.IsNullOrWhiteSpace(openingHours)) return;
+
+            var segments = openingHours.Split(',');
+            var hasValidSegment = false;
+            var dayMatched = false;
+
+            foreach (var segment in segments)
+            {
+                var parts = segment.Trim().Split(new[] { ": " }, 2, StringSplitOptions.None);
+                if (parts.Length != 2) continue;
+
+                var timeParts = parts[1].Trim().Split('-');
+                if (timeParts.Length != 2) continue;
+                if (!TimeSpan.TryParse(timeParts[0].Trim(), out var openTime)) continue;
+                if (!TimeSpan.TryParse(timeParts[1].Trim(), out var closeTime)) continue;
+
+                hasValidSegment = true;
+
+                if (!IsDayInRange(reservationDateTime.DayOfWeek, parts[0].Trim())) continue;
+
+                dayMatched = true;
+                var reservationTime = reservationDateTime.TimeOfDay;
+                if (reservationTime < openTime || reservationTime >= closeTime)
+                    throw new ArgumentException(
+                        $"Reservation time must be between {openTime:hh\\:mm} and {closeTime:hh\\:mm}");
+                return;
+            }
+
+            if (hasValidSegment && !dayMatched)
+                throw new ArgumentException(
+                    $"Restaurant is closed on {reservationDateTime.DayOfWeek}");
+        }
+
+        private static bool IsDayInRange(DayOfWeek day, string dayRange)
+        {
+            if (!DayOrder.TryGetValue(day.ToString()[..3], out var dayOrder)) return false;
+
+            var rangeParts = dayRange.Split('-');
+            if (rangeParts.Length == 1)
+                return DayOrder.TryGetValue(rangeParts[0].Trim(), out var single) && single == dayOrder;
+
+            if (rangeParts.Length == 2)
+            {
+                if (!DayOrder.TryGetValue(rangeParts[0].Trim(), out var start)) return false;
+                if (!DayOrder.TryGetValue(rangeParts[1].Trim(), out var end)) return false;
+                return dayOrder >= start && dayOrder <= end;
+            }
+            return false;
         }
 
         private static void ValidateFutureDate(DateTime dateTime)

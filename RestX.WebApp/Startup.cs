@@ -137,10 +137,11 @@ namespace RestX.WebApp
 
             // MSSQL Hangfire
             services.AddHangfire(x => x.UseSqlServerStorage(Configuration.GetConnectionString("AdminDbContext"),
-                new SqlServerStorageOptions
-                {
+                    new SqlServerStorageOptions
+                    {
                     QueuePollInterval = TimeSpan.Zero
-                }));
+                    }));
+            services.AddHangfireServer();
            
             services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
             services.AddHttpContextAccessor();

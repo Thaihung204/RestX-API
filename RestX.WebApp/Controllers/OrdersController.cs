@@ -158,7 +158,9 @@ namespace RestX.WebApp.Controllers
                 if (!result)
                     return NotFound(new { success = false, message = "Order not found" });
 
-                await BroadcastToTenant(SignalrServer.OrderUpdated, new { id, statusId });
+                var updatedOrder = await orderService.GetOrderById(id);
+
+                await BroadcastToTenant(SignalrServer.OrderUpdated, new { id, order = updatedOrder });
 
                 return Ok(result);
             }

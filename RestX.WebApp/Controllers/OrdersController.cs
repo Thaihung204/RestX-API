@@ -35,8 +35,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpGet]
-        //[Authorize(Roles = "Admin,Kitchen Staff,Waiter")]
-        [AllowAnonymous]
+        [Authorize(Roles = "Admin,Kitchen Staff,Waiter")]
         public async Task<ActionResult<OrderSearchResult>> GetAllOrders([FromQuery] OrderSearch model)
         {
             try
@@ -142,8 +141,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpPut("{id:guid}/status")]
-        //[Authorize(Roles = "Admin,Waiter,Kitchen")]
-        [AllowAnonymous]
+        [Authorize(Roles = "Admin,Waiter,Kitchen")]
         public async Task<ActionResult<bool>> UpdateOrderStatus([Required] Guid id, [FromBody] int statusId)
         {
             try

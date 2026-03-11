@@ -35,7 +35,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpGet]
-        [Authorize(Roles = "Admin,Kitchen Staff,Waiter")]
+        [Authorize(Roles = "Admin,Kitchen Staff,Waiter,Customer")]
         public async Task<ActionResult<OrderSearchResult>> GetAllOrders([FromQuery] OrderSearch model)
         {
             try
@@ -50,8 +50,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpGet("{id:guid}")]
-        [AllowAnonymous]
-
+        [Authorize(Roles = "Admin,Kitchen Staff,Waiter,Customer")]
         public async Task<ActionResult<Order>> GetOrderById([Required] Guid id)
         {
             try
@@ -70,7 +69,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpPost]
-        [AllowAnonymous]
+        [Authorize(Roles = "Admin,Kitchen Staff,Waiter,Customer")]
         public async Task<ActionResult<Guid>> CreateOrder([FromBody] Order order)
         {
             try

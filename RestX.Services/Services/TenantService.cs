@@ -6,15 +6,14 @@ using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using RestX.AdminDAL.Context;
 using RestX.BLL.DataTranferObjects.Tenants;
-using RestX.BLL.Extensions;
 using RestX.BLL.Interfaces;
 using RestX.DAL.DataSeeders;
 using RestX.Models.Enum;
 using RestX.Models.Tenants;
 using Serilog;
 using System.Text.RegularExpressions;
-using static Pipelines.Sockets.Unofficial.SocketConnection;
-using static System.Runtime.InteropServices.JavaScript.JSType;
+using Hangfire;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace RestX.BLL.Services
 {
@@ -83,7 +82,7 @@ namespace RestX.BLL.Services
             return mapper.Map<TenantOverview>(tenant);
         }
 
-        public async Task<Tenant> UpsertTenant(TenantItem model)
+        public async Task<Tenant> UpdateTenant(TenantItem model)
         {
             logger.LogInformation("===== UpsertTenant START =====");
             logger.LogInformation("Model Id: {Id}, Name: {Name}, Hostname: {Hostname}",
@@ -222,84 +221,134 @@ namespace RestX.BLL.Services
             }
             else
             {
-                var databaseName = Regex.Replace(RemoveVietnameseDiacritics(model.Name).Replace(" ", ""), "[^A-Za-z0-9 _]", "").ToLower();
-                if (databaseName.Length > 15)
-                {
-                    databaseName = databaseName.Substring(0, 15);
-                }
-
-                var count = 1;
-                var found = true;
-                var name = databaseName;
-                while (found)
-                {
-                    found = await this.adminRepo.GetExistsAsync<Tenant>(t => t.ConnectionString.Contains(name));
-                    if (found)
-                    {
-                        count++;
-                        name = $"{databaseName}{count}";
-                    }
-                }
-
-                string tenantConnectionString = configuration["TenantConnectionStringTemplate"].Replace("{NAME}", name);
-
-                tenant = new Tenant
-                {
-                    // Core
-                    Name = model.Name,
-                    Status = model.Status,
-                    Hostname = model.Hostname,
-
-                    // System / Identity
-                    Prefix = string.Join("", model.Name.Split(" ", System.StringSplitOptions.RemoveEmptyEntries).Select(w => w.Substring(0, 1).ToUpper()).ToList()),
-                    NetworkIp = model.NetworkIp ?? string.Empty,
-                    ConnectionString = model.ConnectionString ?? tenantConnectionString,
-
-                    // Theme / UI
-                    PrimaryColor = model.PrimaryColor ?? "#FF380B",
-                    LightBaseColor = model.LightBaseColor ?? "#FFFFFF",
-                    LightSurfaceColor = model.LightSurfaceColor ?? "#F9FAFB",
-                    LightCardColor = model.LightCardColor ?? "#FFFFFF",
-                    DarkBaseColor = model.DarkBaseColor ?? "#0A0E14",
-                    DarkSurfaceColor = model.DarkSurfaceColor ?? "#1A1F2E",
-                    DarkCardColor = model.DarkCardColor ?? "#151A24",
-
-                    LogoUrl = model.LogoUrl ?? string.Empty,
-                    FaviconUrl = model.FaviconUrl ?? string.Empty,
-                    BackgroundUrl = model.BackgroundUrl ?? string.Empty,
-
-                    // Expiry
-                    ExpiredAt = model.ExpiredAt == default
-                        ? DateTime.UtcNow.AddYears(1)
-                        : model.ExpiredAt,
-
-                    // Business
-                    BusinessName = model.BusinessName,
-                    BusinessAddressLine1 = model.BusinessAddressLine1,
-                    BusinessAddressLine2 = model.BusinessAddressLine2,
-                    BusinessAddressLine3 = model.BusinessAddressLine3,
-                    BusinessAddressLine4 = model.BusinessAddressLine4,
-                    BusinessCounty = model.BusinessCounty ?? string.Empty,
-                    BusinessPostCode = model.BusinessPostCode ?? string.Empty,
-                    BusinessCountry = model.BusinessCountry ?? string.Empty,
-                    BusinessPrimaryPhone = model.BusinessPrimaryPhone,
-                    BusinessSecondaryPhone = model.BusinessSecondaryPhone ?? string.Empty,
-                    BusinessEmailAddress = model.BusinessEmailAddress,
-                    BusinessCompanyNumber = model.BusinessCompanyNumber ?? string.Empty,
-                    BusinessOpeningHours = model.BusinessOpeningHours ?? string.Empty,
-                    AboutUs = model.AboutUs ?? string.Empty
-                };
-
-                tenant.LogoUrl = await HandleUploadTenantImage(model.LogoFile, $"{tenant.Name.Replace(" ", "")}/LogoUrl", "logo") ?? tenant.LogoUrl;
-                tenant.FaviconUrl = await HandleUploadTenantImage(model.FaviconFile, $"{tenant.Name.Replace(" ", "")}/FaviconUrl", "favicon") ?? tenant.FaviconUrl;
-                tenant.BackgroundUrl = await HandleUploadTenantImage(model.BackgroundFile, $"{tenant.Name.Replace(" ", "")}/BackgroundUrl", "background") ?? tenant.BackgroundUrl;
-
-                await Repo.CreateAsync(tenant);
-                await SeedTenantDataAsync(tenant);
+                logger.LogInformation("FLOW: CREATE — delegating to CreateTenantAsync");
+                await CreateTenant(model);
+                tenant = await adminRepo.GetOneAsync<Tenant>(t => t.Hostname == model.Hostname);
             }
+
             return tenant;
         }
 
+        public async Task UploadAndCreateTenant(TenantItem model)
+        {
+            var folderPrefix = model.Name?.Replace(" ", "") ?? "unknown";
+
+            if (model.LogoFile != null)
+            {
+                model.LogoUrl = await HandleUploadTenantImage(
+                    model.LogoFile, $"{folderPrefix}/LogoUrl", "logo") ?? model.LogoUrl;
+                model.LogoFile = null;
+            }
+
+            if (model.FaviconFile != null)
+            {
+                model.FaviconUrl = await HandleUploadTenantImage(
+                    model.FaviconFile, $"{folderPrefix}/FaviconUrl", "favicon") ?? model.FaviconUrl;
+                model.FaviconFile = null;
+            }
+
+            if (model.BackgroundFile != null)
+            {
+                model.BackgroundUrl = await HandleUploadTenantImage(
+                    model.BackgroundFile, $"{folderPrefix}/BackgroundUrl", "background") ?? model.BackgroundUrl;
+                model.BackgroundFile = null;
+            }
+
+            BackgroundJob.Enqueue<ITenantService>(s => s.CreateTenant(model));
+
+            logger.LogInformation("Tenant creation job enqueued for: {Name}", model.Name);
+        }
+
+        public async Task CreateTenant(TenantItem model)
+        {
+            logger.LogInformation("===== CreateTenantAsync START | Name: {Name} =====", model.Name);
+
+            var databaseName = Regex.Replace(RemoveVietnameseDiacritics(model.Name).Replace(" ", ""), "[^A-Za-z0-9 _]", "").ToLower();
+            if (databaseName.Length > 15)
+            {
+                databaseName = databaseName.Substring(0, 15);
+            }
+
+            var count = 1;
+            var found = true;
+            var name = databaseName;
+            while (found)
+            {
+                found = await this.adminRepo.GetExistsAsync<Tenant>(t => t.ConnectionString.Contains(name));
+                if (found)
+                {
+                    count++;
+                    name = $"{databaseName}{count}";
+                }
+            }
+
+            string tenantConnectionString = configuration["TenantConnectionStringTemplate"].Replace("{NAME}", name);
+
+            var tenant = new Tenant
+            {
+                // Core
+                Name = model.Name,
+                Status = model.Status,
+                Hostname = model.Hostname,
+
+                // System / Identity
+                Prefix = string.Join("", model.Name.Split(" ", System.StringSplitOptions.RemoveEmptyEntries).Select(w => w.Substring(0, 1).ToUpper()).ToList()),
+                NetworkIp = model.NetworkIp ?? string.Empty,
+                ConnectionString = model.ConnectionString ?? tenantConnectionString,
+
+                // Theme / UI
+                PrimaryColor = model.PrimaryColor ?? "#FF380B",
+                LightBaseColor = model.LightBaseColor ?? "#FFFFFF",
+                LightSurfaceColor = model.LightSurfaceColor ?? "#F9FAFB",
+                LightCardColor = model.LightCardColor ?? "#FFFFFF",
+                DarkBaseColor = model.DarkBaseColor ?? "#0A0E14",
+                DarkSurfaceColor = model.DarkSurfaceColor ?? "#1A1F2E",
+                DarkCardColor = model.DarkCardColor ?? "#151A24",
+
+                LogoUrl = model.LogoUrl ?? string.Empty,
+                FaviconUrl = model.FaviconUrl ?? string.Empty,
+                BackgroundUrl = model.BackgroundUrl ?? string.Empty,
+
+                // Expiry
+                ExpiredAt = model.ExpiredAt == default
+                    ? DateTime.UtcNow.AddYears(1)
+                    : model.ExpiredAt,
+
+                // Business
+                BusinessName = model.BusinessName,
+                BusinessAddressLine1 = model.BusinessAddressLine1,
+                BusinessAddressLine2 = model.BusinessAddressLine2,
+                BusinessAddressLine3 = model.BusinessAddressLine3,
+                BusinessAddressLine4 = model.BusinessAddressLine4,
+                BusinessCounty = model.BusinessCounty ?? string.Empty,
+                BusinessPostCode = model.BusinessPostCode ?? string.Empty,
+                BusinessCountry = model.BusinessCountry ?? string.Empty,
+                BusinessPrimaryPhone = model.BusinessPrimaryPhone,
+                BusinessSecondaryPhone = model.BusinessSecondaryPhone ?? string.Empty,
+                BusinessEmailAddress = model.BusinessEmailAddress,
+                BusinessCompanyNumber = model.BusinessCompanyNumber ?? string.Empty,
+                BusinessOpeningHours = model.BusinessOpeningHours ?? string.Empty,
+                AboutUs = model.AboutUs ?? string.Empty
+            };
+
+            await using IDbContextTransaction transaction = await adminContext.Database.BeginTransactionAsync();
+
+            try
+            {
+                await Repo.CreateAsync(tenant);
+                await transaction.CommitAsync();
+
+                logger.LogInformation("Tenant record created. Seeding data for: {TenantName}", tenant.Name);
+                await SeedTenantDataAsync(tenant);
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                logger.LogError(ex, "Failed to create tenant record for: {Name}", model.Name);
+                throw;
+            }
+
+        }
         private async Task<string?> HandleUploadTenantImage(IFormFile? file, string folder, string publicId)
         {
             logger.LogInformation("---- HandleUploadTenantImage START ----");
@@ -404,7 +453,7 @@ namespace RestX.BLL.Services
             return new string(result);
         }
 
-        private async Task SeedTenantDataAsync(Tenant tenant)
+        public async Task SeedTenantDataAsync(Tenant tenant)
         {
             try
             {
@@ -527,9 +576,11 @@ namespace RestX.BLL.Services
             var tenantItem = mapper.Map<TenantItem>(tenantRequest);
             tenantItem.Id = null;
 
-            var tenant = await UpsertTenant(tenantItem);
+            await UploadAndCreateTenant(tenantItem);
 
-            return tenant.Id;
+            // Retrieve the created tenant by hostname and return its Id
+            var tenant = await adminRepo.GetOneAsync<Tenant>(t => t.Hostname == tenantItem.Hostname);
+            return tenant?.Id ?? Guid.Empty;
         }
 
         public async Task<Guid> DeclineTenantRequest(Guid tenantRequestsId)

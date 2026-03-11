@@ -164,14 +164,65 @@ namespace RestX.WebApp.Controllers
             }
         }
 
-        [HttpPost("{id:guid}/checkin")]
+        [HttpPost("{id:guid}/confirm")]
         [Authorize(Roles = "Admin,System Admin,Waiter")]
-        public async Task<IActionResult> CheckIn(Guid id)
+        public async Task<IActionResult> ConfirmReservation(Guid id)
         {
             try
             {
-                await reservationService.CheckIn(id);
+                var user = await GetCurrentUserAsync();
+                await reservationService.ConfirmReservation(id, user?.Id.ToString());
+                return Ok(new { success = true, message = "Reservation confirmed successfully" });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { success = false, message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { success = false, message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest(new { success = false, message = "An internal error occurred" });
+            }
+        }
+
+        [HttpPost("{code}/checkin")]
+        [Authorize(Roles = "Admin,System Admin,Waiter")]
+        public async Task<IActionResult> CheckIn(string code)
+        {
+            try
+            {
+                var user = await GetCurrentUserAsync();
+                await reservationService.CheckIn(code, user?.Id.ToString());
                 return Ok(new { success = true, message = "Checked in successfully" });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { success = false, message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { success = false, message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest(new { success = false, message = "An internal error occurred" });
+            }
+        }
+
+        [HttpPost("{id:guid}/complete")]
+        [Authorize(Roles = "Admin,System Admin,Waiter")]
+        public async Task<IActionResult> CompleteReservation(Guid id)
+        {
+            try
+            {
+                var user = await GetCurrentUserAsync();
+                await reservationService.CompleteReservation(id, user?.Id.ToString());
+                return Ok(new { success = true, message = "Reservation completed successfully" });
             }
             catch (KeyNotFoundException ex)
             {

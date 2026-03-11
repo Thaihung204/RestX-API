@@ -35,8 +35,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpGet]
-        //[Authorize(Roles = "Admin,Kitchen Staff,Waiter")]
-        [AllowAnonymous]
+        [Authorize(Roles = "Admin,Kitchen Staff,Waiter")]
         public async Task<ActionResult<OrderSearchResult>> GetAllOrders([FromQuery] OrderSearch model)
         {
             try
@@ -135,6 +134,35 @@ namespace RestX.WebApp.Controllers
                 await orderService.DeleteOrder(id);
                 await BroadcastToTenant(SignalrServer.OrderDeleted, new { id });
                 return Ok();
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
+        [HttpPut("{id:guid}/status")]
+        [Authorize(Roles = "Admin,Waiter,Kitchen")]
+        public async Task<ActionResult<bool>> UpdateOrderStatus([Required] Guid id, [FromBody] int statusId)
+        {
+            try
+            {
+                var userId = String.Empty;
+                if (statusId == 1) {
+                    var currentUser = await GetCurrentUserAsync();
+                    userId = currentUser?.Id.ToString() ?? string.Empty;
+                }
+
+                var result = await orderService.UpdateStatusAsync(id, statusId, userId);
+                if (!result)
+                    return NotFound(new { success = false, message = "Order not found" });
+
+                var updatedOrder = await orderService.GetOrderById(id);
+
+                await BroadcastToTenant(SignalrServer.OrderUpdated, new { id, order = updatedOrder });
+
+                return Ok(result);
             }
             catch (Exception ex)
             {

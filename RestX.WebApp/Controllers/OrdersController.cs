@@ -147,11 +147,8 @@ namespace RestX.WebApp.Controllers
         {
             try
             {
-                var userId = String.Empty;
-                if (statusId == 1) {
-                    var currentUser = await GetCurrentUserAsync();
-                    userId = currentUser?.Id.ToString() ?? string.Empty;
-                }
+                var currentUser = await GetCurrentUserAsync();
+                var userId = currentUser?.MemberId.ToString() ?? string.Empty;
 
                 var result = await orderService.UpdateStatusAsync(id, statusId, userId);
                 if (!result)

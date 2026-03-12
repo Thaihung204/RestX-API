@@ -108,11 +108,11 @@ namespace RestX.WebApp.Controllers
 
         [HttpGet("{floorId}/layout")]
         [AllowAnonymous]
-        public async Task<IActionResult> GetFloorLayout([Required] Guid floorId)
+        public async Task<IActionResult> GetFloorLayout([Required] Guid floorId, [FromQuery] DateTime? at = null)
         {
             try
             {
-                var layout = await floorService.GetFloorLayout(floorId);
+                var layout = await floorService.GetFloorLayout(floorId, at);
                 if (layout == null)
                     return NotFound(new { success = false, message = "Floor layout not found" });
                 return Ok(new { success = true, data = layout });

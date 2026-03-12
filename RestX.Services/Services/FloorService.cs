@@ -3,6 +3,8 @@ using RestX.BLL.DataTranferObjects.Floor;
 using RestX.BLL.Extensions;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Tables;
+using RestX.Models.Enum;
+using RestX.Models.Reservations;
 using RestX.Models.Tenants;
 using FloorEntity = RestX.Models.Tables.Floor;
 
@@ -99,13 +101,38 @@ namespace RestX.BLL.Services
             return floor.Id;
         }
 
-        public async Task<FloorLayoutResponse?> GetFloorLayout(Guid floorId)
+        private const int ReservationBufferMinutes = 120;
+
+        public async Task<FloorLayoutResponse?> GetFloorLayout(Guid floorId, DateTime? at = null)
         {
             var floor = await Repo.GetOneAsync<FloorEntity>(
                 filter: f => f.Id == floorId,
                 includeProperties: "Tables"
             );
             if (floor == null) return null;
+
+            HashSet<Guid> reservedTableIds = new();
+            HashSet<Guid> occupiedTableIds = new();
+
+            if (at.HasValue)
+            {
+                var bufferStart = at.Value.AddMinutes(-ReservationBufferMinutes);
+                var bufferEnd = at.Value.AddMinutes(ReservationBufferMinutes);
+
+                reservedTableIds = (await Repo.GetAsync<ReservationTable>(
+                    filter: rt =>
+                        rt.Reservation.Time >= bufferStart &&
+                        rt.Reservation.Time <= bufferEnd &&
+                        rt.Reservation.ReservationStatus.Code != "CANCELLED" &&
+                        rt.Reservation.ReservationStatus.Code != "COMPLETED",
+                    includeProperties: "Reservation.ReservationStatus"
+                )).Select(rt => rt.TableId).ToHashSet();
+
+                occupiedTableIds = (await Repo.GetAsync<TableSession>(
+                    filter: ts => ts.IsActive && ts.StartedAt.AddMinutes(ReservationBufferMinutes) > at.Value
+                )).Select(ts => ts.TableId).ToHashSet();
+            }
+
             return new FloorLayoutResponse
             {
                 Floor = new FloorLayoutInfo
@@ -116,21 +143,30 @@ namespace RestX.BLL.Services
                     Height = floor.Height,
                     BackgroundImageUrl = floor.ImageUrl
                 },
-                Tables = floor.Tables.Select(t => new TableLayoutItem
+                Tables = floor.Tables.Select(t =>
                 {
-                    Id = t.Id,
-                    Code = t.Code,
-                    SeatingCapacity = t.SeatingCapacity,
-                    Status = t.TableStatusId.ToString(),
-                    Layout = new TableLayoutPosition
+                    var status = at.HasValue
+                        ? (occupiedTableIds.Contains(t.Id) ? TableStatus.Occupied
+                            : reservedTableIds.Contains(t.Id) ? TableStatus.Reserved
+                            : TableStatus.Available)
+                        : t.TableStatusId;
+
+                    return new TableLayoutItem
                     {
-                        X = t.PositionX,
-                        Y = t.PositionY,
-                        Width = t.Width,
-                        Height = t.Height,
-                        Rotation = t.Rotation,
-                        Shape = t.Shape
-                    }
+                        Id = t.Id,
+                        Code = t.Code,
+                        SeatingCapacity = t.SeatingCapacity,
+                        Status = status.ToString(),
+                        Layout = new TableLayoutPosition
+                        {
+                            X = t.PositionX,
+                            Y = t.PositionY,
+                            Width = t.Width,
+                            Height = t.Height,
+                            Rotation = t.Rotation,
+                            Shape = t.Shape
+                        }
+                    };
                 }).ToList()
             };
         }

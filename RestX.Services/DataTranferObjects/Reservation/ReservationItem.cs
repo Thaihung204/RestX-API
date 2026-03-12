@@ -129,4 +129,10 @@ namespace RestX.BLL.DataTranferObjects.Reservation
         public DateTime ConflictTime { get; set; }
         public string ConflictStatus { get; set; } = string.Empty;
     }
+
+    public class ChangeReservationStatusRequest
+    {
+        [Required]
+        public int StatusId { get; set; }
+    }
 }

@@ -164,19 +164,23 @@ namespace RestX.WebApp.Controllers
             }
         }
 
-        [HttpPost("{id:guid}/confirm")]
+        [HttpPut("{id:guid}/status")]
         [Authorize(Roles = "Admin,System Admin,Waiter")]
-        public async Task<IActionResult> ConfirmReservation(Guid id)
+        public async Task<IActionResult> ChangeStatus(Guid id, [FromBody] ChangeReservationStatusRequest request)
         {
             try
             {
                 var user = await GetCurrentUserAsync();
-                await reservationService.ConfirmReservation(id, user?.Id.ToString());
-                return Ok(new { success = true, message = "Reservation confirmed successfully" });
+                await reservationService.ChangeStatus(id, request.StatusCode, user?.Id.ToString());
+                return Ok(new { success = true, message = "Reservation status updated successfully" });
             }
             catch (KeyNotFoundException ex)
             {
                 return NotFound(new { success = false, message = ex.Message });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
             }
             catch (InvalidOperationException ex)
             {
@@ -198,31 +202,6 @@ namespace RestX.WebApp.Controllers
                 var user = await GetCurrentUserAsync();
                 await reservationService.CheckIn(code, user?.Id.ToString());
                 return Ok(new { success = true, message = "Checked in successfully" });
-            }
-            catch (KeyNotFoundException ex)
-            {
-                return NotFound(new { success = false, message = ex.Message });
-            }
-            catch (InvalidOperationException ex)
-            {
-                return Conflict(new { success = false, message = ex.Message });
-            }
-            catch (Exception ex)
-            {
-                ExceptionHandler.RaiseException(ex);
-                return BadRequest(new { success = false, message = "An internal error occurred" });
-            }
-        }
-
-        [HttpPost("{id:guid}/complete")]
-        [Authorize(Roles = "Admin,System Admin,Waiter")]
-        public async Task<IActionResult> CompleteReservation(Guid id)
-        {
-            try
-            {
-                var user = await GetCurrentUserAsync();
-                await reservationService.CompleteReservation(id, user?.Id.ToString());
-                return Ok(new { success = true, message = "Reservation completed successfully" });
             }
             catch (KeyNotFoundException ex)
             {

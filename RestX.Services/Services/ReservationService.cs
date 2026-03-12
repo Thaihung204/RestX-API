@@ -25,6 +25,7 @@ namespace RestX.BLL.Services
         private const int ReservationBufferMinutes = 120;
 
         private static readonly TimeSpan VietnamOffset = TimeSpan.FromHours(7);
+        private static DateTime VnNow => DateTime.UtcNow.Add(VietnamOffset);
 
         private const string ReservationIncludes = "ReservationTables.Table.Floor,Customer.ApplicationUser,ReservationStatus";
         private const string TablesIncludes = "ReservationTables.Table";
@@ -240,7 +241,19 @@ namespace RestX.BLL.Services
             return mapper.Map<ReservationDetail>(saved!);
         }
 
-        public async Task ConfirmReservation(Guid id, string userId)
+        public async Task ChangeStatus(Guid id, string statusCode, string? userId)
+        {
+            if (statusCode.Equals(ConfirmedCode, StringComparison.OrdinalIgnoreCase))
+                await ConfirmReservation(id, userId);
+            else if (statusCode.Equals(CompletedCode, StringComparison.OrdinalIgnoreCase))
+                await CompleteReservation(id, userId);
+            else if (statusCode.Equals(CancelledCode, StringComparison.OrdinalIgnoreCase))
+                await CancelReservation(id, userId);
+            else
+                throw new ArgumentException($"Invalid status '{statusCode}'. Allowed: {ConfirmedCode}, {CompletedCode}, {CancelledCode}");
+        }
+
+        private async Task ConfirmReservation(Guid id, string? userId)
         {
             var reservation = await RequireReservation(id, TablesAndStatusIncludes);
 
@@ -271,7 +284,7 @@ namespace RestX.BLL.Services
             if (reservation.CheckedInAt.HasValue)
                 throw new InvalidOperationException("Reservation has already been checked in");
 
-            reservation.CheckedInAt = DateTime.UtcNow;
+            reservation.CheckedInAt = VnNow;
             Repo.Update(reservation, userId);
 
             foreach (var rt in reservation.ReservationTables)
@@ -283,7 +296,7 @@ namespace RestX.BLL.Services
                 {
                     TableId = rt.TableId,
                     ReservationId = reservation.Id,
-                    StartedAt = DateTime.UtcNow,
+                    StartedAt = VnNow,
                     IsActive = true
                 }, userId);
             }
@@ -291,7 +304,7 @@ namespace RestX.BLL.Services
             await Repo.SaveAsync();
         }
 
-        public async Task CompleteReservation(Guid id, string userId)
+        private async Task CompleteReservation(Guid id, string? userId)
         {
             var reservation = await RequireReservation(id, TablesIncludes);
 
@@ -314,13 +327,18 @@ namespace RestX.BLL.Services
 
         public async Task CancelReservation(Guid id)
         {
+            await CancelReservation(id, null);
+        }
+
+        private async Task CancelReservation(Guid id, string? userId)
+        {
             var reservation = await RequireReservation(id, TablesIncludes);
             var statuses = await statusValueService.GetStatuses(ReservationStatusTypeCode);
             var cancelledStatus = statuses.FirstOrDefault(s => s.Code == CancelledCode)
                 ?? throw new InvalidOperationException("Cancelled status not configured");
             reservation.ReservationStatusId = cancelledStatus.Id;
-            Repo.Update(reservation);
-            await FreeTablesAndSessions(reservation, CancelledCode);
+            Repo.Update(reservation, userId);
+            await FreeTablesAndSessions(reservation, CancelledCode, userId);
             await Repo.SaveAsync();
         }
 
@@ -422,11 +440,11 @@ namespace RestX.BLL.Services
                 var session = activeSessions.FirstOrDefault(s => s.TableId == table.Id);
                 var estimatedEnd = session != null
                     ? session.StartedAt.AddMinutes(ReservationBufferMinutes)
-                    : DateTime.UtcNow.AddMinutes(ReservationBufferMinutes);
+                    : VnNow.AddMinutes(ReservationBufferMinutes);
 
                 if (reservationDateTime < estimatedEnd)
                     throw new InvalidOperationException(
-                        $"Table '{table.Code}' is currently occupied. Estimated available after {estimatedEnd:HH:mm} UTC");
+                        $"Table '{table.Code}' is currently occupied. Estimated available after {estimatedEnd:HH:mm}");
             }
         }
 
@@ -500,7 +518,10 @@ namespace RestX.BLL.Services
 
         private static void ValidateFutureDate(DateTime dateTime)
         {
-            if (dateTime <= DateTime.UtcNow)
+            var localDateTime = dateTime.Kind == DateTimeKind.Utc
+                ? dateTime.Add(VietnamOffset)
+                : dateTime;
+            if (localDateTime <= VnNow)
                 throw new ArgumentException("Reservation date and time must be in the future");
         }
 
@@ -534,7 +555,7 @@ namespace RestX.BLL.Services
             foreach (var session in activeSessions)
             {
                 session.IsActive = false;
-                session.EndedAt = DateTime.UtcNow;
+                session.EndedAt = VnNow;
                 Repo.Update(session, userId);
             }
         }

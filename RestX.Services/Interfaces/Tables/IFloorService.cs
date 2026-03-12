@@ -8,7 +8,7 @@ namespace RestX.BLL.Interfaces.Tables
         Task<Floor?> GetFloorById(Guid id);
         Task<Guid> UpsertFloor(Floor request, string? currentUser = null);
         Task<bool> DeleteFloor(Guid id);
-        Task<FloorLayoutResponse?> GetFloorLayout(Guid floorId);
+        Task<FloorLayoutResponse?> GetFloorLayout(Guid floorId, DateTime? at = null);
         Task<bool> SaveLayout(Guid floorId, SaveLayoutRequest request, string? currentUser = null);
     }
 }

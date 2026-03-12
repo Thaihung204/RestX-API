@@ -171,7 +171,7 @@ namespace RestX.WebApp.Controllers
             try
             {
                 var user = await GetCurrentUserAsync();
-                await reservationService.ChangeStatus(id, request.StatusCode, user?.Id.ToString());
+                await reservationService.ChangeStatus(id, request.StatusId, user?.Id.ToString());
                 return Ok(new { success = true, message = "Reservation status updated successfully" });
             }
             catch (KeyNotFoundException ex)

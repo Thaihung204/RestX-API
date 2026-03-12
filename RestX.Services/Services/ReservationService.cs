@@ -241,16 +241,20 @@ namespace RestX.BLL.Services
             return mapper.Map<ReservationDetail>(saved!);
         }
 
-        public async Task ChangeStatus(Guid id, string statusCode, string? userId)
+        public async Task ChangeStatus(Guid id, int statusId, string? userId)
         {
-            if (statusCode.Equals(ConfirmedCode, StringComparison.OrdinalIgnoreCase))
+            var statuses = await statusValueService.GetStatuses(ReservationStatusTypeCode);
+            var status = statuses.FirstOrDefault(s => s.Id == statusId)
+                ?? throw new KeyNotFoundException($"Status ID {statusId} not found");
+
+            if (status.Code.Equals(ConfirmedCode, StringComparison.OrdinalIgnoreCase))
                 await ConfirmReservation(id, userId);
-            else if (statusCode.Equals(CompletedCode, StringComparison.OrdinalIgnoreCase))
+            else if (status.Code.Equals(CompletedCode, StringComparison.OrdinalIgnoreCase))
                 await CompleteReservation(id, userId);
-            else if (statusCode.Equals(CancelledCode, StringComparison.OrdinalIgnoreCase))
+            else if (status.Code.Equals(CancelledCode, StringComparison.OrdinalIgnoreCase))
                 await CancelReservation(id, userId);
             else
-                throw new ArgumentException($"Invalid status '{statusCode}'. Allowed: {ConfirmedCode}, {CompletedCode}, {CancelledCode}");
+                throw new ArgumentException($"Cannot manually set status '{status.Code}'");
         }
 
         private async Task ConfirmReservation(Guid id, string? userId)

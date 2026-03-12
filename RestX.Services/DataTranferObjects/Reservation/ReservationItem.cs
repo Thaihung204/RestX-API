@@ -133,6 +133,6 @@ namespace RestX.BLL.DataTranferObjects.Reservation
     public class ChangeReservationStatusRequest
     {
         [Required]
-        public string StatusCode { get; set; } = string.Empty;
+        public int StatusId { get; set; }
     }
 }

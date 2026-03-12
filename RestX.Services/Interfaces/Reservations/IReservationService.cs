@@ -11,7 +11,7 @@ namespace RestX.BLL.Interfaces.Reservations
         Task<ReservationDetail?> GetReservationById(Guid id);
         Task<ReservationDetail?> GetReservationByCode(string confirmationCode);
         Task<ReservationDetail> UpdateReservation(Guid id, UpdateReservationRequest request);
-        Task ChangeStatus(Guid id, string statusCode, string? userId);
+        Task ChangeStatus(Guid id, int statusId, string? userId);
         Task CheckIn(string confirmationCode, string userId);
         Task CancelReservation(Guid id);
         Task<CheckAvailabilityResponse> CheckAvailabilityReservation(CheckAvailabilityParams request);

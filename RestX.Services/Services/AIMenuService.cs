@@ -59,9 +59,7 @@ namespace RestX.BLL.Services
                 ? Guid.NewGuid().ToString()
                 : request.SessionId;
 
-            var history = await LoadHistoryAsync(sessionId);
-            var menu = await _dishService.GetMenu();
-            var userPrefs = await LoadUserPrefsAsync(request.UserId);
+            var (history, menu, userPrefs) = await LoadContextAsync(sessionId, request.UserId);
             var systemPrompt = BuildSystemPrompt(menu, request.TableId, userPrefs);
 
             var rawResponse = await CallGroqAsync(systemPrompt, history, request.Message);
@@ -94,9 +92,7 @@ namespace RestX.BLL.Services
                 ? Guid.NewGuid().ToString()
                 : request.SessionId;
 
-            var history = await LoadHistoryAsync(sessionId);
-            var menu = await _dishService.GetMenu();
-            var userPrefs = await LoadUserPrefsAsync(request.UserId);
+            var (history, menu, userPrefs) = await LoadContextAsync(sessionId, request.UserId);
             var systemPrompt = BuildSystemPrompt(menu, request.TableId, userPrefs);
 
             httpResponse.ContentType = "text/event-stream";
@@ -226,8 +222,9 @@ namespace RestX.BLL.Services
                     - Gợi ý 1-3 món mỗi lần, phù hợp với yêu cầu của khách
                     - quickReplies là 2-3 câu hỏi/hành động gợi ý tiếp theo, viết tự nhiên như khách đang nói
                     - Nếu không cần gợi ý món, để suggestions là mảng rỗng []
-                    - Chỉ tạo orderDraft khi khách RÕ RÀNG muốn đặt món (ví dụ: ""cho tôi 2 phở"", ""đặt món này"", ""order đi""). Nếu chỉ hỏi thăm, để orderDraft là null
+                    - Chỉ tạo orderDraft khi khách RÕ RÀNG muốn đặt món (ví dụ: ""cho tôi 2 phở"", ""đặt món này"", ""order đi"", ""thêm 1 cái nữa"", ""thêm món X""). Nếu chỉ hỏi thăm, để orderDraft là null
                     - Khi tạo orderDraft, đồng thời trả về ""orderAction"": ""create"" và trong ""message"" tóm tắt đơn theo phong cách thân thiện (tên món, số lượng, tổng tiền)
+                    - MỖI lần khách muốn đặt thêm (dù đã có đơn trước đó), hãy tạo orderDraft MỚI CHỈ chứa các món khách vừa yêu cầu. KHÔNG gộp với đơn cũ đã tạo trước đó
                     - UPSELL: Khi tạo orderDraft, nếu đơn hàng KHÔNG có đồ uống, gợi ý 1-2 đồ uống/tráng miệng vào ""upsellSuggestions"" và đề cập nhẹ trong message. Nếu đã đủ, để mảng rỗng []
 
                     JSON format đầy đủ:
@@ -487,6 +484,29 @@ namespace RestX.BLL.Services
                 Suggestions = new List<AISuggestion>(),
                 QuickReplies = new List<string> { "Xem thêm món", "Gợi ý combo", "Tạo đơn hàng" }
             };
+        }
+
+        private async Task<(List<ChatMessage> history, List<MenuCategory> menu, List<string> userPrefs)> LoadContextAsync(string sessionId, string? userId)
+        {
+            var historyTask = LoadHistoryAsync(sessionId);
+            var menuTask = LoadMenuCachedAsync();
+            var prefsTask = LoadUserPrefsAsync(userId);
+
+            await Task.WhenAll(historyTask, menuTask, prefsTask);
+
+            return (await historyTask, await menuTask, await prefsTask);
+        }
+
+        private async Task<List<MenuCategory>> LoadMenuCachedAsync()
+        {
+            var cacheKey = $"AIMenu:{_currentTenant?.Hostname ?? "default"}";
+            var cached = await _redisService.GetStringAsync(cacheKey);
+            if (!string.IsNullOrEmpty(cached))
+                return JsonSerializer.Deserialize<List<MenuCategory>>(cached, _jsonOptions) ?? new List<MenuCategory>();
+
+            var menu = await _dishService.GetMenu();
+            await _redisService.SetStringAsync(cacheKey, JsonSerializer.Serialize(menu, _jsonOptions), TimeSpan.FromMinutes(5));
+            return menu;
         }
 
         private async Task<List<ChatMessage>> LoadHistoryAsync(string sessionId)

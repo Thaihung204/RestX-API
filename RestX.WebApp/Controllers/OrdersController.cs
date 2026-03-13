@@ -150,7 +150,7 @@ namespace RestX.WebApp.Controllers
                 var currentUser = await GetCurrentUserAsync();
                 var userId = currentUser?.MemberId.ToString() ?? string.Empty;
 
-                var result = await orderService.UpdateStatusAsync(id, statusId, userId);
+                var result = await orderService.UpdateStatus(id, statusId, userId);
                 if (!result)
                     return NotFound(new { success = false, message = "Order not found" });
 
@@ -167,7 +167,7 @@ namespace RestX.WebApp.Controllers
             }
         }
 
-        [HttpPut("{orderId:guid}/details/{detailId:guid}/status")]
+        [HttpPut("{orderId:guid}/order-details-status/{detailId:guid}")]
         [Authorize(Roles = "System Admin,Admin,Waiter,Kitchen Staff")]
         public async Task<ActionResult<bool>> UpdateOrderDetailStatus([Required] Guid orderId, [Required] Guid detailId, [FromBody] int statusId)
         {
@@ -176,7 +176,7 @@ namespace RestX.WebApp.Controllers
                 var currentUser = await GetCurrentUserAsync();
                 var userId = currentUser?.MemberId.ToString() ?? string.Empty;
 
-                var result = await orderService.UpdateOrderDetailStatusAsync(detailId, statusId, userId);
+                var result = await orderService.UpdateOrderDetailStatus(detailId, statusId, userId);
                 if (!result)
                     return NotFound(new { success = false, message = "Order detail not found" });
 

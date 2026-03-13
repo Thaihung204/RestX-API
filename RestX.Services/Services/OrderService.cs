@@ -394,7 +394,7 @@ namespace RestX.BLL.Services
             orderEntity.SubTotal = subTotal;
             orderEntity.CalculateTotalAmount();
 
-            Repo.Update(orderEntity);
+            Repo.Update(orderEntity, userId);
             await Repo.SaveAsync();
 
             return orderEntity.Id;
@@ -443,7 +443,8 @@ namespace RestX.BLL.Services
             Repo.Delete<Models.Orders.Order>(id);
             await Repo.SaveAsync();
         }
-        public async Task<bool> UpdateStatusAsync(Guid orderId, int statusId, string? userId)
+
+        public async Task<bool> UpdateStatus(Guid orderId, int statusId, string userId)
         {
             var order = await Repo.GetByIdAsync<Models.Orders.Order>(orderId);
             if (order == null)
@@ -460,11 +461,24 @@ namespace RestX.BLL.Services
             else if (statusId == (int)OrderStatus.Completed)
                 order.CompletedAt = DateTime.UtcNow;
 
-            Repo.Update(order);
+            Repo.Update(order, userId);
             await Repo.SaveAsync();
 
             return true;
         }
 
+        public async Task<bool> UpdateOrderDetailStatus(Guid orderDetailId, int statusId, string userId)
+        {
+            var orderDetail = await Repo.GetByIdAsync<Models.Orders.OrderDetail>(orderDetailId);
+            if (orderDetail == null)
+                return false;
+
+            orderDetail.ItemStatusId = statusId;
+
+            Repo.Update(orderDetail, userId);
+            await Repo.SaveAsync();
+
+            return true;
+        }
     }
 }

@@ -97,8 +97,6 @@ namespace RestX.BLL.Services
                     ReservationId = reservation.Id,
                     TableId = table.Id
                 });
-                table.TableStatusId = TableStatus.Reserved;
-                Repo.Update(table);
             }
             await Repo.SaveAsync();
 
@@ -219,15 +217,11 @@ namespace RestX.BLL.Services
 
                 foreach (var rt in reservation.ReservationTables.Where(rt => removedTableIds.Contains(rt.TableId)).ToList())
                 {
-                    rt.Table.TableStatusId = TableStatus.Available;
-                    Repo.Update(rt.Table);
                     Repo.Delete<ReservationTable>(rt.Id);
                 }
                 foreach (var table in newTables.Where(t => addedTableIds.Contains(t.Id)))
                 {
                     await Repo.CreateAsync(new ReservationTable { ReservationId = id, TableId = table.Id });
-                    table.TableStatusId = TableStatus.Reserved;
-                    Repo.Update(table);
                 }
             }
 

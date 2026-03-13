@@ -45,15 +45,6 @@ namespace RestX.WebApp.Controllers
                     return BadRequest(new { success = false, message = "Validation failed", errors = ModelState });
 
                 var result = await reservationService.CreateReservation(request);
-
-                foreach (var tableId in request.TableIds)
-                    await BroadcastToTenant(SignalrServer.TableStatusChanged, new
-                    {
-                        tableId,
-                        status = (int)TableStatus.Reserved,
-                        statusName = TableStatus.Reserved.ToString()
-                    });
-
                 return Ok(new { success = true, message = "Reservation created successfully", data = new { result.Id } });
             }
             catch (KeyNotFoundException ex)
@@ -157,30 +148,7 @@ namespace RestX.WebApp.Controllers
                 if (!ModelState.IsValid)
                     return BadRequest(new { success = false, message = "Validation failed", errors = ModelState });
 
-                var existing = await reservationService.GetReservationById(id);
-                var beforeTableIds = existing?.Tables.Select(t => t.Id).ToHashSet() ?? new HashSet<Guid>();
-
                 var result = await reservationService.UpdateReservation(id, request);
-
-                if (request.TableIds != null)
-                {
-                    var afterTableIds = result.Tables.Select(t => t.Id).ToHashSet();
-                    foreach (var tableId in beforeTableIds.Except(afterTableIds))
-                        await BroadcastToTenant(SignalrServer.TableStatusChanged, new
-                        {
-                            tableId,
-                            status = (int)TableStatus.Available,
-                            statusName = TableStatus.Available.ToString()
-                        });
-                    foreach (var tableId in afterTableIds.Except(beforeTableIds))
-                        await BroadcastToTenant(SignalrServer.TableStatusChanged, new
-                        {
-                            tableId,
-                            status = (int)TableStatus.Reserved,
-                            statusName = TableStatus.Reserved.ToString()
-                        });
-                }
-
                 return Ok(new { success = true, message = "Reservation updated successfully", data = result });
             }
             catch (KeyNotFoundException ex)

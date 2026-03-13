@@ -444,7 +444,7 @@ namespace RestX.BLL.Services
             await Repo.SaveAsync();
         }
 
-        public async Task<bool> UpdateStatusAsync(Guid orderId, int statusId, string userId)
+        public async Task<bool> UpdateStatus(Guid orderId, int statusId, string userId)
         {
             var order = await Repo.GetByIdAsync<Models.Orders.Order>(orderId);
             if (order == null)
@@ -467,7 +467,7 @@ namespace RestX.BLL.Services
             return true;
         }
 
-        public async Task<bool> UpdateOrderDetailStatusAsync(Guid orderDetailId, int statusId, string userId)
+        public async Task<bool> UpdateOrderDetailStatus(Guid orderDetailId, int statusId, string userId)
         {
             var orderDetail = await Repo.GetByIdAsync<Models.Orders.OrderDetail>(orderDetailId);
             if (orderDetail == null)

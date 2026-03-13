@@ -15,8 +15,8 @@ namespace RestX.BLL.Interfaces
         Task<Guid> CreateOrder(Order order, string userId);
         Task<Guid> UpdateOrder(Guid id, Order order, string userId);
         Task DeleteOrder(Guid id);
-        Task<bool> UpdateStatusAsync(Guid orderId, int statusId, string userId);
-        Task<bool> UpdateOrderDetailStatusAsync(Guid orderDetailId, int statusId, string userId);
+        Task<bool> UpdateStatus(Guid orderId, int statusId, string userId);
+        Task<bool> UpdateOrderDetailStatus(Guid orderDetailId, int statusId, string userId);
 
     }
 }

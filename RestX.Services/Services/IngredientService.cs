@@ -5,9 +5,10 @@ using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Inventory;
 using RestX.Models.Enum;
 using RestX.Models.Inventory;
+using RestX.Models.Menu;
 using RestX.Models.Tenants;
-using IngredientCategory = RestX.Models.Inventory.IngredientCategory;
 using IngredientCategories = RestX.BLL.DataTranferObjects.Inventory.IngredientCategory;
+using IngredientCategory = RestX.Models.Inventory.IngredientCategory;
 
 namespace RestX.BLL.Services
 {
@@ -171,5 +172,27 @@ namespace RestX.BLL.Services
             return true;
         }
         #endregion
+
+        public async Task DeductFromRecipe(Guid dishId, int quantity)
+        {
+            var recipes = await Repo.GetAsync<DishRecipe>(
+                filter: r => r.DishId == dishId,
+                includeProperties: "Ingredient,Ingredient.InventoryStock"
+            );
+
+            foreach (var recipe in recipes)
+            {
+                var ingredient = recipe.Ingredient;
+                if (ingredient?.InventoryStock == null) continue;
+
+                var deduction = recipe.Quantity * quantity;
+                ingredient.InventoryStock.CurrentQuantity -= deduction;
+
+                await UpdateIngredientStatus(ingredient.Id, ingredient.InventoryStock.CurrentQuantity);
+            }
+
+            await Repo.SaveAsync();
+        }
+
     }
 }

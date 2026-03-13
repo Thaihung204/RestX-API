@@ -180,7 +180,7 @@ namespace RestX.BLL.Services.Auth
         private async Task<AuthResponse> GenerateAuthResponseAsync(ApplicationUser user, string message, Guid? customerId = null)
         {
             var roles = await userManager.GetRolesAsync(user);
-            var accessToken = tokenService.GenerateAccessToken(user, roles);
+            var accessToken = tokenService.GenerateAccessToken(user, roles, CurrentTenant?.Hostname ?? string.Empty);
             var refreshToken = tokenService.GenerateRefreshToken();
             await UpdateUserTokensAsync(user, refreshToken);
             var userInfo = mapper.Map<UserInfo>(user);

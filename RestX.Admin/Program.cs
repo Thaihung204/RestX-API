@@ -53,7 +53,7 @@ builder.Services.AddCors(options =>
             {
                 if (Uri.TryCreate(origin, UriKind.Absolute, out var uri))
                 {
-                    return uri.Host.EndsWith(".restx.food");
+                    return uri.Host == "restx.food" || uri.Host.EndsWith(".restx.food");
                 }
                 return false;
             })

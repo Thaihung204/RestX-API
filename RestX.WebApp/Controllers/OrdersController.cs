@@ -167,6 +167,31 @@ namespace RestX.WebApp.Controllers
             }
         }
 
+        [HttpPut("{orderId:guid}/details/{detailId:guid}/status")]
+        [Authorize(Roles = "System Admin,Admin,Waiter,Kitchen Staff")]
+        public async Task<ActionResult<bool>> UpdateOrderDetailStatus([Required] Guid orderId, [Required] Guid detailId, [FromBody] int statusId)
+        {
+            try
+            {
+                var currentUser = await GetCurrentUserAsync();
+                var userId = currentUser?.MemberId.ToString() ?? string.Empty;
+
+                var result = await orderService.UpdateOrderDetailStatusAsync(detailId, statusId, userId);
+                if (!result)
+                    return NotFound(new { success = false, message = "Order detail not found" });
+
+                var updatedOrder = await orderService.GetOrderById(orderId);
+                await BroadcastToTenant(SignalrServer.OrderUpdated, new { id = orderId, order = updatedOrder });
+
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
         private Task BroadcastToTenant(string eventName, object payload)
         {
             var group = CurrentTenant?.Id != Guid.Empty

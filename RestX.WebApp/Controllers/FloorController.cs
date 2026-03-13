@@ -9,6 +9,7 @@ using RestX.Models.Identity;
 using RestX.Models.Tenants;
 using RestX.WebApp.Controllers.BaseControllers;
 using System.ComponentModel.DataAnnotations;
+using RestX.WebApp.Helpers;
 
 namespace RestX.WebApp.Controllers
 {
@@ -137,6 +138,7 @@ namespace RestX.WebApp.Controllers
                 if (!success)
                     return NotFound(new { success = false, message = "Floor layout not found" });
 
+                await BroadcastToTenant(SignalrServer.TableLayoutUpdated, new { floorId });
                 return Ok(new { success = true, message = "Layout saved successfully" });
             }
             catch (Exception ex)

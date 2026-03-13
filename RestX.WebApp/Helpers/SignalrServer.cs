@@ -8,6 +8,9 @@ namespace RestX.WebApp.Helpers
         public const string OrderUpdated = "orders.updated";
         public const string OrderDeleted = "orders.deleted";
 
+        public const string TableStatusChanged = "tables.status_changed";
+        public const string TableLayoutUpdated = "tables.layout_updated";
+
         public async Task JoinTenantGroup(string tenantId)
             => await Groups.AddToGroupAsync(Context.ConnectionId, $"tenant_{tenantId}");
 

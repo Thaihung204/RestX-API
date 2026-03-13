@@ -9,6 +9,7 @@ using RestX.Models.Identity;
 using RestX.Models.Tenants;
 using RestX.Models.Enum;
 using RestX.WebApp.Controllers.BaseControllers;
+using RestX.WebApp.Helpers;
 using System.ComponentModel.DataAnnotations;
 
 namespace RestX.WebApp.Controllers
@@ -111,7 +112,16 @@ namespace RestX.WebApp.Controllers
         {
             try
             {
-                return Ok(await tableService.ChangeTableStatus(id, status));
+                var result = await tableService.ChangeTableStatus(id, status);
+                await BroadcastToTenant(SignalrServer.TableStatusChanged, new
+                {
+                    tableId = result.Id,
+                    tableCode = result.Code,
+                    floorId = result.FloorId,
+                    status = (int)result.TableStatusId,
+                    statusName = result.TableStatusId.ToString()
+                });
+                return Ok(result);
             }
             catch (Exception ex)
             {
@@ -119,5 +129,6 @@ namespace RestX.WebApp.Controllers
                 return BadRequest("An internal error occurred");
             }
         }
+
     }
 }

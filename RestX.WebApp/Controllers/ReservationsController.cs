@@ -6,9 +6,12 @@ using RestX.BLL.DataTranferObjects.Common;
 using RestX.BLL.DataTranferObjects.Reservation;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Reservations;
+using RestX.BLL.Interfaces.Tables;
+using RestX.Models.Enum;
 using RestX.Models.Identity;
 using RestX.Models.Tenants;
 using RestX.WebApp.Controllers.BaseControllers;
+using RestX.WebApp.Helpers;
 
 namespace RestX.WebApp.Controllers
 {
@@ -18,15 +21,18 @@ namespace RestX.WebApp.Controllers
     public class ReservationsController : BaseController
     {
         private readonly IReservationService reservationService;
+        private readonly ITableService tableService;
 
         public ReservationsController(
             IReservationService reservationService,
+            ITableService tableService,
             IMapper mapper,
             UserManager<ApplicationUser> userManager,
             IExceptionHandler exceptionHandler,
             IEnumerable<ActiveTenant> tenant) : base(mapper, userManager, exceptionHandler, tenant)
         {
             this.reservationService = reservationService;
+            this.tableService = tableService;
         }
 
         [HttpPost]
@@ -39,6 +45,15 @@ namespace RestX.WebApp.Controllers
                     return BadRequest(new { success = false, message = "Validation failed", errors = ModelState });
 
                 var result = await reservationService.CreateReservation(request);
+
+                foreach (var tableId in request.TableIds)
+                    await BroadcastToTenant(SignalrServer.TableStatusChanged, new
+                    {
+                        tableId,
+                        status = (int)TableStatus.Reserved,
+                        statusName = TableStatus.Reserved.ToString()
+                    });
+
                 return Ok(new { success = true, message = "Reservation created successfully", data = new { result.Id } });
             }
             catch (KeyNotFoundException ex)
@@ -142,7 +157,30 @@ namespace RestX.WebApp.Controllers
                 if (!ModelState.IsValid)
                     return BadRequest(new { success = false, message = "Validation failed", errors = ModelState });
 
+                var existing = await reservationService.GetReservationById(id);
+                var beforeTableIds = existing?.Tables.Select(t => t.Id).ToHashSet() ?? new HashSet<Guid>();
+
                 var result = await reservationService.UpdateReservation(id, request);
+
+                if (request.TableIds != null)
+                {
+                    var afterTableIds = result.Tables.Select(t => t.Id).ToHashSet();
+                    foreach (var tableId in beforeTableIds.Except(afterTableIds))
+                        await BroadcastToTenant(SignalrServer.TableStatusChanged, new
+                        {
+                            tableId,
+                            status = (int)TableStatus.Available,
+                            statusName = TableStatus.Available.ToString()
+                        });
+                    foreach (var tableId in afterTableIds.Except(beforeTableIds))
+                        await BroadcastToTenant(SignalrServer.TableStatusChanged, new
+                        {
+                            tableId,
+                            status = (int)TableStatus.Reserved,
+                            statusName = TableStatus.Reserved.ToString()
+                        });
+                }
+
                 return Ok(new { success = true, message = "Reservation updated successfully", data = result });
             }
             catch (KeyNotFoundException ex)
@@ -171,7 +209,26 @@ namespace RestX.WebApp.Controllers
             try
             {
                 var user = await GetCurrentUserAsync();
+                var reservation = await reservationService.GetReservationById(id);
                 await reservationService.ChangeStatus(id, request.StatusId, user?.Id.ToString());
+
+                if (reservation != null)
+                {
+                    foreach (var tableInfo in reservation.Tables)
+                    {
+                        var updatedTable = await tableService.GetTableById(tableInfo.Id);
+                        if (updatedTable != null)
+                            await BroadcastToTenant(SignalrServer.TableStatusChanged, new
+                            {
+                                tableId = updatedTable.Id,
+                                tableCode = updatedTable.Code,
+                                floorId = updatedTable.FloorId,
+                                status = (int)updatedTable.TableStatusId,
+                                statusName = updatedTable.TableStatusId.ToString()
+                            });
+                    }
+                }
+
                 return Ok(new { success = true, message = "Reservation status updated successfully" });
             }
             catch (KeyNotFoundException ex)
@@ -200,7 +257,18 @@ namespace RestX.WebApp.Controllers
             try
             {
                 var user = await GetCurrentUserAsync();
+                var reservation = await reservationService.GetReservationByCode(code);
                 await reservationService.CheckIn(code, user?.Id.ToString());
+
+                if (reservation != null)
+                    foreach (var tableInfo in reservation.Tables)
+                        await BroadcastToTenant(SignalrServer.TableStatusChanged, new
+                        {
+                            tableId = tableInfo.Id,
+                            status = (int)TableStatus.Occupied,
+                            statusName = TableStatus.Occupied.ToString()
+                        });
+
                 return Ok(new { success = true, message = "Checked in successfully" });
             }
             catch (KeyNotFoundException ex)
@@ -224,7 +292,18 @@ namespace RestX.WebApp.Controllers
         {
             try
             {
+                var reservation = await reservationService.GetReservationById(id);
                 await reservationService.CancelReservation(id);
+
+                if (reservation != null)
+                    foreach (var tableInfo in reservation.Tables)
+                        await BroadcastToTenant(SignalrServer.TableStatusChanged, new
+                        {
+                            tableId = tableInfo.Id,
+                            status = (int)TableStatus.Available,
+                            statusName = TableStatus.Available.ToString()
+                        });
+
                 return Ok(new { success = true, message = "Reservation cancelled successfully" });
             }
             catch (KeyNotFoundException ex)
@@ -241,5 +320,6 @@ namespace RestX.WebApp.Controllers
                 return BadRequest(new { success = false, message = "An internal error occurred" });
             }
         }
+
     }
 }

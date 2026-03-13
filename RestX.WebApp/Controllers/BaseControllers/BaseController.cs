@@ -3,10 +3,13 @@ using Microsoft.ApplicationInsights.DataContracts;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.DependencyInjection;
 using RestX.BLL.Helpers;
 using RestX.BLL.Interfaces;
 using RestX.Models.Identity;
 using RestX.Models.Tenants;
+using RestX.WebApp.Helpers;
 
 namespace RestX.WebApp.Controllers.BaseControllers
     {
@@ -72,6 +75,15 @@ namespace RestX.WebApp.Controllers.BaseControllers
                 this.UserManager = userManager;
                 this.ExceptionHandler = exceptionHandler;
                 this.CurrentTenant = tenant.FirstOrDefault();
+            }
+
+            protected Task BroadcastToTenant(string eventName, object payload)
+            {
+                var hubContext = HttpContext.RequestServices.GetRequiredService<IHubContext<SignalrServer>>();
+                var group = CurrentTenant?.Id != Guid.Empty
+                    ? $"tenant_{CurrentTenant!.Id}"
+                    : "tenant_default";
+                return hubContext.Clients.Group(group).SendAsync(eventName, payload);
             }
 
         }

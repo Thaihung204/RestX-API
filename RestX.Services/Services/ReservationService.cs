@@ -597,7 +597,7 @@ namespace RestX.BLL.Services
         }
 
         private static string GenerateConfirmationCode(Guid id)
-            => "RX-" + id.ToString("N")[..6].ToUpper();
+            => id.ToString("N")[..6].ToUpper();
 
         #endregion
     }

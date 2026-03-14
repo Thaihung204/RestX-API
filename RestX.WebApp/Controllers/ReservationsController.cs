@@ -109,7 +109,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpGet("{code}")]
-        [Authorize(Roles = "Admin,System Admin,Waiter")]
+        [AllowAnonymous]
         public async Task<IActionResult> GetReservationByCode(string code)
         {
             try

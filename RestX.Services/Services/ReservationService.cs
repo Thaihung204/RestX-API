@@ -521,6 +521,8 @@ namespace RestX.BLL.Services
                 : dateTime;
             if (localDateTime <= VnNow)
                 throw new ArgumentException("Reservation date and time must be in the future");
+            if (localDateTime > VnNow.AddMonths(1))
+                throw new ArgumentException("Reservation can only be made up to 1 month in advance");
         }
 
         private static void ValidateDistinctTableIds(List<Guid> tableIds)

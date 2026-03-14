@@ -48,7 +48,7 @@ namespace RestX.BLL.Services
                 return null;
 
             Tenant? tenant = null;
-            var cacheKey = $"Tenant:{data.ToLower()}";
+            var cacheKey = $"{data.ToLower():Tenant}";
 
             var cachedTenant = await RedisService.GetStringAsync(cacheKey);
             if (!string.IsNullOrEmpty(cachedTenant))
@@ -70,7 +70,7 @@ namespace RestX.BLL.Services
                 if (tenant != null)
                 {
                     await RedisService.SetStringAsync(
-                        $"Tenant:{tenant.Hostname}",
+                        $"{tenant.Hostname}:Tenant",
                         JsonConvert.SerializeObject(tenant)
                     );
                 }
@@ -96,7 +96,7 @@ namespace RestX.BLL.Services
 
                 try
                 {
-                    var oldHostnameCacheKey = $"Tenant:{model.Hostname?.ToLower()}";
+                    var oldHostnameCacheKey = $"{model.Hostname?.ToLower():Tenant}";
                     logger.LogInformation("Removing Redis key: {Key}", oldHostnameCacheKey);
 
                     await RedisService.RemoveAsync(oldHostnameCacheKey);
@@ -487,7 +487,7 @@ namespace RestX.BLL.Services
             await DropTenantDatabaseAsync(tenant.ConnectionString);
             adminRepo.Delete<Tenant>(tenant.Id);
             await adminRepo.SaveAsync();
-            await RedisService.RemoveAsync($"Tenant:{tenant.Hostname.ToLower()}");
+            await RedisService.RemoveAsync($"{tenant.Hostname.ToLower():Tenant}");
         }
 
         private static async Task DropTenantDatabaseAsync(string tenantConnectionString)

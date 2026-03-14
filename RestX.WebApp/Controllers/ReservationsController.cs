@@ -164,13 +164,43 @@ namespace RestX.WebApp.Controllers
             }
         }
 
-        [HttpPost("{id:guid}/checkin")]
+        [HttpPut("{id:guid}/status")]
         [Authorize(Roles = "Admin,System Admin,Waiter")]
-        public async Task<IActionResult> CheckIn(Guid id)
+        public async Task<IActionResult> ChangeStatus(Guid id, [FromBody] ChangeReservationStatusRequest request)
         {
             try
             {
-                await reservationService.CheckIn(id);
+                var user = await GetCurrentUserAsync();
+                await reservationService.ChangeStatus(id, request.StatusId, user?.Id.ToString());
+                return Ok(new { success = true, message = "Reservation status updated successfully" });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { success = false, message = ex.Message });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { success = false, message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest(new { success = false, message = "An internal error occurred" });
+            }
+        }
+
+        [HttpPost("{code}/checkin")]
+        [Authorize(Roles = "Admin,System Admin,Waiter")]
+        public async Task<IActionResult> CheckIn(string code)
+        {
+            try
+            {
+                var user = await GetCurrentUserAsync();
+                await reservationService.CheckIn(code, user?.Id.ToString());
                 return Ok(new { success = true, message = "Checked in successfully" });
             }
             catch (KeyNotFoundException ex)

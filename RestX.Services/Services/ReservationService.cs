@@ -18,10 +18,14 @@ namespace RestX.BLL.Services
     public class ReservationService : BaseService, IReservationService
     {
         private const string ReservationStatusTypeCode = "RESERVATION";
+        private const string PendingCode = "PENDING";
         private const string ConfirmedCode = "CONFIRMED";
         private const string CancelledCode = "CANCELLED";
         private const string CompletedCode = "COMPLETED";
         private const int ReservationBufferMinutes = 120;
+
+        private static readonly TimeSpan VietnamOffset = TimeSpan.FromHours(7);
+        private static DateTime VnNow => DateTime.UtcNow.Add(VietnamOffset);
 
         private const string ReservationIncludes = "ReservationTables.Table.Floor,Customer.ApplicationUser,ReservationStatus";
         private const string TablesIncludes = "ReservationTables.Table";
@@ -237,9 +241,45 @@ namespace RestX.BLL.Services
             return mapper.Map<ReservationDetail>(saved!);
         }
 
-        public async Task CheckIn(Guid id)
+        public async Task ChangeStatus(Guid id, int statusId, string? userId)
+        {
+            var statuses = await statusValueService.GetStatuses(ReservationStatusTypeCode);
+            var status = statuses.FirstOrDefault(s => s.Id == statusId)
+                ?? throw new KeyNotFoundException($"Status ID {statusId} not found");
+
+            if (status.Code.Equals(ConfirmedCode, StringComparison.OrdinalIgnoreCase))
+                await ConfirmReservation(id, userId);
+            else if (status.Code.Equals(CompletedCode, StringComparison.OrdinalIgnoreCase))
+                await CompleteReservation(id, userId);
+            else if (status.Code.Equals(CancelledCode, StringComparison.OrdinalIgnoreCase))
+                await CancelReservation(id, userId);
+            else
+                throw new ArgumentException($"Cannot manually set status '{status.Code}'");
+        }
+
+        private async Task ConfirmReservation(Guid id, string? userId)
         {
             var reservation = await RequireReservation(id, TablesAndStatusIncludes);
+
+            var statusCode = reservation.ReservationStatus?.Code;
+            if (statusCode != PendingCode)
+                throw new InvalidOperationException("Only pending reservations can be confirmed");
+
+            var statuses = await statusValueService.GetStatuses(ReservationStatusTypeCode);
+            var confirmedStatus = statuses.FirstOrDefault(s => s.Code == ConfirmedCode)
+                ?? throw new InvalidOperationException("Confirmed status not configured");
+
+            reservation.ReservationStatusId = confirmedStatus.Id;
+            Repo.Update(reservation, userId);
+            await Repo.SaveAsync();
+        }
+
+        public async Task CheckIn(string confirmationCode, string userId)
+        {
+            var reservation = await Repo.GetOneAsync<Reservation>(
+                filter: r => r.ConfirmationCode == confirmationCode,
+                includeProperties: TablesAndStatusIncludes)
+                ?? throw new KeyNotFoundException("Reservation not found");
 
             var statusCode = reservation.ReservationStatus?.Code;
             if (statusCode == CancelledCode || statusCode == CompletedCode)
@@ -248,32 +288,61 @@ namespace RestX.BLL.Services
             if (reservation.CheckedInAt.HasValue)
                 throw new InvalidOperationException("Reservation has already been checked in");
 
-            var statuses = await statusValueService.GetStatuses(ReservationStatusTypeCode);
-            var confirmedStatus = statuses.FirstOrDefault(s => s.Code == ConfirmedCode)
-                ?? throw new InvalidOperationException("Confirmed status not configured");
-
-            reservation.CheckedInAt = DateTime.UtcNow;
-            reservation.ReservationStatusId = confirmedStatus.Id;
-            Repo.Update(reservation);
+            reservation.CheckedInAt = VnNow;
+            Repo.Update(reservation, userId);
 
             foreach (var rt in reservation.ReservationTables)
             {
                 rt.Table.TableStatusId = TableStatus.Occupied;
-                Repo.Update(rt.Table);
+                Repo.Update(rt.Table, userId);
+
+                await Repo.CreateAsync(new TableSession
+                {
+                    TableId = rt.TableId,
+                    ReservationId = reservation.Id,
+                    StartedAt = VnNow,
+                    IsActive = true
+                }, userId);
             }
 
             await Repo.SaveAsync();
         }
 
+        private async Task CompleteReservation(Guid id, string? userId)
+        {
+            var reservation = await RequireReservation(id, TablesIncludes);
+
+            var statusCode = reservation.ReservationStatus?.Code;
+            if (statusCode == CancelledCode || statusCode == CompletedCode)
+                throw new InvalidOperationException("Reservation is already cancelled or completed");
+
+            if (!reservation.CheckedInAt.HasValue)
+                throw new InvalidOperationException("Cannot complete a reservation that has not been checked in");
+
+            var statuses = await statusValueService.GetStatuses(ReservationStatusTypeCode);
+            var completedStatus = statuses.FirstOrDefault(s => s.Code == CompletedCode)
+                ?? throw new InvalidOperationException("Completed status not configured");
+
+            reservation.ReservationStatusId = completedStatus.Id;
+            Repo.Update(reservation, userId);
+            await FreeTablesAndSessions(reservation, CompletedCode, userId);
+            await Repo.SaveAsync();
+        }
+
         public async Task CancelReservation(Guid id)
+        {
+            await CancelReservation(id, null);
+        }
+
+        private async Task CancelReservation(Guid id, string? userId)
         {
             var reservation = await RequireReservation(id, TablesIncludes);
             var statuses = await statusValueService.GetStatuses(ReservationStatusTypeCode);
             var cancelledStatus = statuses.FirstOrDefault(s => s.Code == CancelledCode)
                 ?? throw new InvalidOperationException("Cancelled status not configured");
             reservation.ReservationStatusId = cancelledStatus.Id;
-            Repo.Update(reservation);
-            await FreeTablesAndSessions(reservation, CancelledCode);
+            Repo.Update(reservation, userId);
+            await FreeTablesAndSessions(reservation, CancelledCode, userId);
             await Repo.SaveAsync();
         }
 
@@ -375,11 +444,11 @@ namespace RestX.BLL.Services
                 var session = activeSessions.FirstOrDefault(s => s.TableId == table.Id);
                 var estimatedEnd = session != null
                     ? session.StartedAt.AddMinutes(ReservationBufferMinutes)
-                    : DateTime.UtcNow.AddMinutes(ReservationBufferMinutes);
+                    : VnNow.AddMinutes(ReservationBufferMinutes);
 
                 if (reservationDateTime < estimatedEnd)
                     throw new InvalidOperationException(
-                        $"Table '{table.Code}' is currently occupied. Estimated available after {estimatedEnd:HH:mm} UTC");
+                        $"Table '{table.Code}' is currently occupied. Estimated available after {estimatedEnd:HH:mm}");
             }
         }
 
@@ -399,6 +468,10 @@ namespace RestX.BLL.Services
             var openingHours = CurrentTenant?.BusinessOpeningHours;
             if (string.IsNullOrWhiteSpace(openingHours)) return;
 
+            var localDateTime = reservationDateTime.Kind == DateTimeKind.Utc
+                ? reservationDateTime.Add(VietnamOffset)
+                : reservationDateTime;
+
             var segments = openingHours.Split(',');
             var hasValidSegment = false;
             var dayMatched = false;
@@ -415,10 +488,10 @@ namespace RestX.BLL.Services
 
                 hasValidSegment = true;
 
-                if (!IsDayInRange(reservationDateTime.DayOfWeek, parts[0].Trim())) continue;
+                if (!IsDayInRange(localDateTime.DayOfWeek, parts[0].Trim())) continue;
 
                 dayMatched = true;
-                var reservationTime = reservationDateTime.TimeOfDay;
+                var reservationTime = localDateTime.TimeOfDay;
                 if (reservationTime < openTime || reservationTime >= closeTime)
                     throw new ArgumentException(
                         $"Reservation time must be between {openTime:hh\\:mm} and {closeTime:hh\\:mm}");
@@ -427,7 +500,7 @@ namespace RestX.BLL.Services
 
             if (hasValidSegment && !dayMatched)
                 throw new ArgumentException(
-                    $"Restaurant is closed on {reservationDateTime.DayOfWeek}");
+                    $"Restaurant is closed on {localDateTime.DayOfWeek}");
         }
 
         private static bool IsDayInRange(DayOfWeek day, string dayRange)
@@ -449,7 +522,10 @@ namespace RestX.BLL.Services
 
         private static void ValidateFutureDate(DateTime dateTime)
         {
-            if (dateTime <= DateTime.UtcNow)
+            var localDateTime = dateTime.Kind == DateTimeKind.Utc
+                ? dateTime.Add(VietnamOffset)
+                : dateTime;
+            if (localDateTime <= VnNow)
                 throw new ArgumentException("Reservation date and time must be in the future");
         }
 
@@ -467,7 +543,7 @@ namespace RestX.BLL.Services
                     $"Number of guests ({numberOfGuests}) exceeds total table capacity ({totalCapacity})");
         }
 
-        private async Task FreeTablesAndSessions(Reservation reservation, string newStatusCode)
+        private async Task FreeTablesAndSessions(Reservation reservation, string newStatusCode, string? userId = null)
         {
             if (newStatusCode != CompletedCode && newStatusCode != CancelledCode)
                 return;
@@ -475,7 +551,7 @@ namespace RestX.BLL.Services
             foreach (var rt in reservation.ReservationTables)
             {
                 rt.Table.TableStatusId = TableStatus.Available;
-                Repo.Update(rt.Table);
+                Repo.Update(rt.Table, userId);
             }
 
             var activeSessions = (await Repo.GetAsync<TableSession>(
@@ -483,8 +559,8 @@ namespace RestX.BLL.Services
             foreach (var session in activeSessions)
             {
                 session.IsActive = false;
-                session.EndedAt = DateTime.UtcNow;
-                Repo.Update(session);
+                session.EndedAt = VnNow;
+                Repo.Update(session, userId);
             }
         }
 

@@ -21,7 +21,7 @@ public class FormListHelper : BaseService, IFormListHelper
 
     public async Task<List<SelectOption>> GetListByName(string name)
     {
-        var cacheKey = $"FormList:{CurrentTenant.Hostname}:{name}";
+        var cacheKey = $"{CurrentTenant.Hostname}:FormList:{name}";
 
         var cached = await RedisService.GetAsync<List<SelectOption>>(cacheKey);
         if (cached != null)

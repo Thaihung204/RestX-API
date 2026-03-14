@@ -115,7 +115,11 @@ namespace RestX.BLL.Services
                 filter: predicate,
                 orderBy: filter.SortDescending
                     ? q => q.OrderByDescending(r => r.Time)
-                    : q => q.OrderBy(r => r.Time),
+                    : q => q.OrderBy(r =>
+                                r.ReservationStatus.Code == CompletedCode || r.ReservationStatus.Code == CancelledCode ? 2 :
+                                r.Time >= VnNow ? 0 : 1)
+                            .ThenBy(r => r.Time)
+                            .ThenBy(r => r.ReservationStatus.Code == ConfirmedCode ? 0 : r.ReservationStatus.Code == PendingCode ? 1 : 2),
                 includeProperties: ReservationIncludes,
                 skip: (filter.PageNumber - 1) * filter.PageSize,
                 take: filter.PageSize

@@ -1,4 +1,5 @@
 ﻿using RestX.BLL.DataTranferObjects.Share;
+using RestX.BLL.Interfaces;
 using RestX.Models.Enum;
 using System.ComponentModel;
 using System.Reflection;

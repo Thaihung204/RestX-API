@@ -9,7 +9,7 @@ using System.Reflection;
 
 namespace RestX.BLL.Helpers;
 
-public class FormListHelper : BaseService
+public class FormListHelper : BaseService, IFormListHelper
 {
     public FormListHelper(
         IRepository repo,

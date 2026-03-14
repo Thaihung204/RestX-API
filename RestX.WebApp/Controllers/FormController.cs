@@ -15,10 +15,10 @@ namespace RestX.WebApp.Controllers;
 [Authorize(AuthenticationSchemes = "Bearer")]
 public class FormController : BaseController
 {
-    private readonly FormListHelper formListHelper;
+    private readonly IFormListHelper formListHelper;
 
     public FormController(
-            FormListHelper formListHelper,
+            IFormListHelper formListHelper,
             IMapper mapper,
             UserManager<ApplicationUser> userManager,
             IExceptionHandler exceptionHandler,

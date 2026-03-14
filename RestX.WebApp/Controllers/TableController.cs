@@ -1,13 +1,14 @@
 using AutoMapper;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using RestX.BLL.DataTranferObjects.Table;
+using RestX.BLL.Exceptionhandling;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Tables;
+using RestX.Models.Enum;
 using RestX.Models.Identity;
 using RestX.Models.Tenants;
-using RestX.Models.Enum;
 using RestX.WebApp.Controllers.BaseControllers;
 using System.ComponentModel.DataAnnotations;
 
@@ -38,6 +39,10 @@ namespace RestX.WebApp.Controllers
             {
                 return Ok(await tableService.GetAllTables());
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (Exception ex)
             {
                 this.ExceptionHandler.RaiseException(ex);
@@ -52,6 +57,10 @@ namespace RestX.WebApp.Controllers
             try
             {
                 return Ok(await tableService.GetTableById(id));
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
             }
             catch (Exception ex)
             {
@@ -68,6 +77,10 @@ namespace RestX.WebApp.Controllers
             {
                 return Ok(await tableService.UpsertTable(id, request));
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (Exception ex)
             {
                 this.ExceptionHandler.RaiseException(ex);
@@ -82,6 +95,10 @@ namespace RestX.WebApp.Controllers
             try
             {
                 return Ok(await tableService.UpsertTable(null, request));
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
             }
             catch (Exception ex)
             {
@@ -99,6 +116,10 @@ namespace RestX.WebApp.Controllers
                 await tableService.DeleteTable(id);
                 return Ok();
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (Exception ex)
             {
                 this.ExceptionHandler.RaiseException(ex);
@@ -112,6 +133,10 @@ namespace RestX.WebApp.Controllers
             try
             {
                 return Ok(await tableService.ChangeTableStatus(id, status));
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
             }
             catch (Exception ex)
             {

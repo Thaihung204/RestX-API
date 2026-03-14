@@ -1,7 +1,8 @@
 ﻿using AutoMapper;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using RestX.BLL.Exceptionhandling;
 using RestX.BLL.Helpers;
 using RestX.BLL.Interfaces;
 using RestX.Models.Identity;
@@ -29,6 +30,10 @@ public class FormController : BaseController
         {
             var data = FormListHelper.GetListByName(name);
             return Ok(new { success = true, data });
+        }
+        catch (AppException ex)
+        {
+            return this.BadRequest(ex.Message);
         }
         catch (Exception ex)
         {

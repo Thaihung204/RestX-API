@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using PayOS.Models.Webhooks;
 using RestX.BLL.DataTranferObjects.Payments;
+using RestX.BLL.Exceptionhandling;
 using RestX.BLL.Interfaces;
 using RestX.Models.Identity;
 using RestX.Models.Tenants;
@@ -45,6 +46,10 @@ namespace RestX.WebApp.Controllers
                 var result = await paymentService.GetAllPayments(from, to, method, status);
                 return Ok(result);
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (Exception ex)
             {
                 ExceptionHandler.RaiseException(ex);
@@ -60,6 +65,10 @@ namespace RestX.WebApp.Controllers
             {
                 var result = await paymentService.GetPaymentsByOrder(orderId);
                 return Ok(result);
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
             }
             catch (Exception ex)
             {
@@ -79,6 +88,10 @@ namespace RestX.WebApp.Controllers
                     return NotFound(new { success = false, message = "Payment not found" });
                 return Ok(result);
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (Exception ex)
             {
                 ExceptionHandler.RaiseException(ex);
@@ -95,6 +108,10 @@ namespace RestX.WebApp.Controllers
                 var user = await GetCurrentUserAsync();
                 var result = await paymentService.PayByCash(orderId, request, user?.Id.ToString());
                 return Ok(result);
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
             }
             catch (KeyNotFoundException ex)
             {
@@ -121,6 +138,10 @@ namespace RestX.WebApp.Controllers
                 var result = await paymentService.CreatePaymentLink(orderId, user?.Id.ToString());
                 return Ok(result);
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (KeyNotFoundException ex)
             {
                 return NotFound(new { success = false, message = ex.Message });
@@ -146,6 +167,10 @@ namespace RestX.WebApp.Controllers
                 await paymentService.CancelPaymentLink(id, reason, user?.Id.ToString());
                 return Ok(new { success = true });
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (KeyNotFoundException ex)
             {
                 return NotFound(new { success = false, message = ex.Message });
@@ -170,6 +195,10 @@ namespace RestX.WebApp.Controllers
                 var pdf = await receiptService.GenerateReceiptAsync(id);
                 return File(pdf, "application/pdf", $"receipt-{id}.pdf");
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (KeyNotFoundException ex)
             {
                 return NotFound(new { success = false, message = ex.Message });
@@ -189,6 +218,10 @@ namespace RestX.WebApp.Controllers
             {
                 await paymentService.HandleWebhook(webhookBody);
                 return Ok(new { success = true });
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
             }
             catch (Exception ex)
             {

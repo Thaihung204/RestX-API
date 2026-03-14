@@ -1,8 +1,9 @@
+using AutoMapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
-using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
 using RestX.BLL.DataTranferObjects.Customer;
+using RestX.BLL.Exceptionhandling;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Customers;
 using RestX.Models.Identity;
@@ -34,6 +35,10 @@ namespace RestX.WebApp.Controllers
             {
                 var result = await customerService.GetAllCustomers(filter);
                 return Ok(new { success = true, data = result });
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
             }
             catch (Exception ex)
             {
@@ -73,6 +78,10 @@ namespace RestX.WebApp.Controllers
                 var result = await customerService.CreateCustomer(dto);
                 return Ok(new { success = true, message = "Customer created successfully", data = result });
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (InvalidOperationException ex)
             {
                 return BadRequest(new { success = false, message = ex.Message });
@@ -100,6 +109,10 @@ namespace RestX.WebApp.Controllers
                 }
                 return Ok(new { success = true, message = "Customer updated successfully", data = result });
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (InvalidOperationException ex)
             {
                 return BadRequest(new { success = false, message = ex.Message });
@@ -122,6 +135,10 @@ namespace RestX.WebApp.Controllers
                     return NotFound(new { success = false, message = "Customer not found" });
                 }
                 return Ok(new { success = true, message = "Customer deleted successfully" });
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
             }
             catch (Exception ex)
             {

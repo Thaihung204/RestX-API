@@ -1,8 +1,9 @@
 ﻿using AutoMapper;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using RestX.BLL.DataTranferObjects.Dish;
+using RestX.BLL.Exceptionhandling;
 using RestX.BLL.Interfaces;
 using RestX.Models.Identity;
 using RestX.Models.Menu;
@@ -37,6 +38,10 @@ namespace RestX.WebApp.Controllers
                 var dishes = await dishService.GetAllDishes(searchModel);
                 return Ok(dishes);
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (Exception ex)
             {
                 this.ExceptionHandler.RaiseException(ex);
@@ -52,6 +57,10 @@ namespace RestX.WebApp.Controllers
             {
                 var dish = await dishService.GetDishById(id);
                 return Ok(dish);
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
             }
             catch (Exception ex)
             {
@@ -69,6 +78,10 @@ namespace RestX.WebApp.Controllers
                 dish.Id = id;
                 return Ok(await dishService.UpsertDish(dish));
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (Exception ex)
             {
                 this.ExceptionHandler.RaiseException(ex);
@@ -83,6 +96,10 @@ namespace RestX.WebApp.Controllers
             try
             {
                 return Ok(await dishService.UpsertDish(dish));
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
             }
             catch (Exception ex)
             {
@@ -100,6 +117,10 @@ namespace RestX.WebApp.Controllers
                 await dishService.DeleteDish(id);
                 return Ok();
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (Exception ex)
             {
                 this.ExceptionHandler.RaiseException(ex);
@@ -115,6 +136,10 @@ namespace RestX.WebApp.Controllers
             {
                 var menu = await dishService.GetMenu();
                 return Ok(menu);
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
             }
             catch (Exception ex)
             {

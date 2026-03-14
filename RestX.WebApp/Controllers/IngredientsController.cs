@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using RestX.BLL.DataTranferObjects.Inventory;
+using RestX.BLL.Exceptionhandling;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Inventory;
 using RestX.Models.Identity;
@@ -36,6 +37,10 @@ namespace RestX.WebApp.Controllers
                 var ingredients = await ingredientService.GetAllIngredients();
                 return Ok(ingredients);
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (Exception ex)
             {
                 this.ExceptionHandler.RaiseException(ex);
@@ -50,6 +55,10 @@ namespace RestX.WebApp.Controllers
             {
                 var ingredient = await ingredientService.GetIngredientById(id);
                 return Ok(ingredient);
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
             }
             catch (Exception ex)
             {
@@ -67,6 +76,10 @@ namespace RestX.WebApp.Controllers
                 var ingredientId = await ingredientService.UpsertIngredient(ingredient);
                 return Ok(ingredientId);
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (Exception ex)
             {
                 this.ExceptionHandler.RaiseException(ex);
@@ -82,6 +95,10 @@ namespace RestX.WebApp.Controllers
                 var ingredientId = await ingredientService.UpsertIngredient(ingredient);
                 return Ok(ingredientId);
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (Exception ex)
             {
                 this.ExceptionHandler.RaiseException(ex);
@@ -96,6 +113,10 @@ namespace RestX.WebApp.Controllers
             {
                 await ingredientService.DeleteIngredient(id);
                 return Ok();
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
             }
             catch (Exception ex)
             {
@@ -114,6 +135,10 @@ namespace RestX.WebApp.Controllers
                 var categories = await ingredientService.GetAllIngredientCategories();
                 return Ok(categories);
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (Exception ex)
             {
                 this.ExceptionHandler.RaiseException(ex);
@@ -128,6 +153,10 @@ namespace RestX.WebApp.Controllers
             {
                 var category = await ingredientService.GetIngredientCategoryById(id);
                 return Ok(category);
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
             }
             catch (Exception ex)
             {
@@ -144,6 +173,10 @@ namespace RestX.WebApp.Controllers
                 var user = await GetCurrentUserAsync();
                 var result = await ingredientService.UpsertIngredientCategory(category, user?.Id.ToString());
                 return Ok(result);
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
             }
             catch (Exception ex)
             {
@@ -162,6 +195,10 @@ namespace RestX.WebApp.Controllers
                 var result = await ingredientService.UpsertIngredientCategory(category, user?.Id.ToString());
                 return Ok(result);
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (Exception ex)
             {
                 this.ExceptionHandler.RaiseException(ex);
@@ -178,6 +215,10 @@ namespace RestX.WebApp.Controllers
                 if (!result)
                     return BadRequest("Cannot delete category. It may not exist or still has ingredients assigned.");
                 return Ok();
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
             }
             catch (Exception ex)
             {

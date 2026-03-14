@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using RestX.BLL.DataTranferObjects.Orders;
+using RestX.BLL.Exceptionhandling;
 using RestX.BLL.Interfaces;
 using RestX.Models.Identity;
 using RestX.Models.Tenants;
@@ -42,6 +43,10 @@ namespace RestX.WebApp.Controllers
             {
                 return Ok(await orderService.GetAllOrders(model));
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (Exception ex)
             {
                 ExceptionHandler.RaiseException(ex);
@@ -60,6 +65,10 @@ namespace RestX.WebApp.Controllers
                     return NotFound(new { success = false, message = "Order not found" });
 
                 return Ok(order);
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
             }
             catch (Exception ex)
             {
@@ -89,6 +98,10 @@ namespace RestX.WebApp.Controllers
 
                 return Ok(id);
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (Exception ex)
             {
                 ExceptionHandler.RaiseException(ex);
@@ -117,6 +130,10 @@ namespace RestX.WebApp.Controllers
 
                 return Ok(updatedId);
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (Exception ex)
             {
                 ExceptionHandler.RaiseException(ex);
@@ -133,6 +150,10 @@ namespace RestX.WebApp.Controllers
                 await orderService.DeleteOrder(id);
                 await BroadcastToTenant(SignalrServer.OrderDeleted, new { id });
                 return Ok();
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
             }
             catch (Exception ex)
             {
@@ -160,6 +181,10 @@ namespace RestX.WebApp.Controllers
 
                 return Ok(result);
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (Exception ex)
             {
                 ExceptionHandler.RaiseException(ex);
@@ -184,6 +209,10 @@ namespace RestX.WebApp.Controllers
                 await BroadcastToTenant(SignalrServer.OrderUpdated, new { id = orderId, order = updatedOrder });
 
                 return Ok(result);
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
             }
             catch (Exception ex)
             {

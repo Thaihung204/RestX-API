@@ -123,6 +123,21 @@ namespace RestX.WebApp
                      ClockSkew = TimeSpan.Zero,
                      RoleClaimType = ClaimTypes.Role
                  };
+                 cfg.Events = new JwtBearerEvents
+                 {
+                     OnTokenValidated = context =>
+                     {
+                         var tokenTenant = context.Principal?.FindFirst("tenant")?.Value;
+                         var currentTenant = context.HttpContext.GetTenant<ActiveTenant>();
+                         if (!string.IsNullOrEmpty(tokenTenant)
+                             && currentTenant != null
+                             && !tokenTenant.Equals(currentTenant.Hostname, StringComparison.OrdinalIgnoreCase))
+                         {
+                             context.Fail("Token is not valid for this tenant.");
+                         }
+                         return Task.CompletedTask;
+                     }
+                 };
              });
 
             services.AddAuthorization(options =>

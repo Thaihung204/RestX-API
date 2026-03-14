@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using RestX.BLL.DataTranferObjects.Status;
+using RestX.BLL.Exceptionhandling;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Status;
 using RestX.Models.Identity;
@@ -36,6 +37,10 @@ public class StatusValuesController : BaseController
             var data = await statusValueService.GetStatuses(typeCode);
             return Ok(new { success = true, data });
         }
+        catch (AppException ex)
+        {
+            return this.BadRequest(ex.Message);
+        }
         catch (Exception ex)
         {
             this.ExceptionHandler.RaiseException(ex);
@@ -53,6 +58,10 @@ public class StatusValuesController : BaseController
                 return NotFound(new { success = false, message = "Status value not found" });
             return Ok(new { success = true, data });
         }
+        catch (AppException ex)
+        {
+            return this.BadRequest(ex.Message);
+        }
         catch (Exception ex)
         {
             this.ExceptionHandler.RaiseException(ex);
@@ -69,6 +78,10 @@ public class StatusValuesController : BaseController
         {
             var data = await statusValueService.UpsertStatusValue(typeCode, null, request);
             return Ok(new { success = true, data });
+        }
+        catch (AppException ex)
+        {
+            return this.BadRequest(ex.Message);
         }
         catch (Exception ex)
         {
@@ -88,6 +101,10 @@ public class StatusValuesController : BaseController
             var data = await statusValueService.UpsertStatusValue(typeCode, id, request);
             return Ok(new { success = true, data });
         }
+        catch (AppException ex)
+        {
+            return this.BadRequest(ex.Message);
+        }
         catch (Exception ex)
         {
             this.ExceptionHandler.RaiseException(ex);
@@ -102,6 +119,10 @@ public class StatusValuesController : BaseController
         {
             await statusValueService.DeleteStatusValue(typeCode, id);
             return Ok(new { success = true });
+        }
+        catch (AppException ex)
+        {
+            return this.BadRequest(ex.Message);
         }
         catch (Exception ex)
         {

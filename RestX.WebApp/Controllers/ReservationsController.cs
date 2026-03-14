@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using RestX.BLL.DataTranferObjects.Common;
 using RestX.BLL.DataTranferObjects.Reservation;
+using RestX.BLL.Exceptionhandling;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Reservations;
 using RestX.Models.Identity;
@@ -41,6 +42,10 @@ namespace RestX.WebApp.Controllers
                 var result = await reservationService.CreateReservation(request);
                 return Ok(new { success = true, message = "Reservation created successfully", data = new { result.Id } });
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (KeyNotFoundException ex)
             {
                 return NotFound(new { success = false, message = ex.Message });
@@ -69,6 +74,10 @@ namespace RestX.WebApp.Controllers
                 var result = await reservationService.GetReservations(filter);
                 return Ok(new { success = true, data = result });
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (Exception ex)
             {
                 ExceptionHandler.RaiseException(ex);
@@ -87,6 +96,10 @@ namespace RestX.WebApp.Controllers
                     return Unauthorized(new { success = false, message = "User not found" });
                 var result = await reservationService.GetMyReservations(user.Id, pagination);
                 return Ok(new { success = true, data = result });
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
             }
             catch (Exception ex)
             {
@@ -107,6 +120,10 @@ namespace RestX.WebApp.Controllers
 
                 return Ok(new { success = true, data = result });
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (Exception ex)
             {
                 ExceptionHandler.RaiseException(ex);
@@ -126,6 +143,10 @@ namespace RestX.WebApp.Controllers
 
                 return Ok(new { success = true, data = result });
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (Exception ex)
             {
                 ExceptionHandler.RaiseException(ex);
@@ -144,6 +165,10 @@ namespace RestX.WebApp.Controllers
 
                 var result = await reservationService.UpdateReservation(id, request);
                 return Ok(new { success = true, message = "Reservation updated successfully", data = result });
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
             }
             catch (KeyNotFoundException ex)
             {
@@ -174,6 +199,10 @@ namespace RestX.WebApp.Controllers
                 await reservationService.ChangeStatus(id, request.StatusId, user?.Id.ToString());
                 return Ok(new { success = true, message = "Reservation status updated successfully" });
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (KeyNotFoundException ex)
             {
                 return NotFound(new { success = false, message = ex.Message });
@@ -203,6 +232,10 @@ namespace RestX.WebApp.Controllers
                 await reservationService.CheckIn(code, user?.Id.ToString());
                 return Ok(new { success = true, message = "Checked in successfully" });
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (KeyNotFoundException ex)
             {
                 return NotFound(new { success = false, message = ex.Message });
@@ -226,6 +259,10 @@ namespace RestX.WebApp.Controllers
             {
                 await reservationService.CancelReservation(id);
                 return Ok(new { success = true, message = "Reservation cancelled successfully" });
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
             }
             catch (KeyNotFoundException ex)
             {

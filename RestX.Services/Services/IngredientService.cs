@@ -104,7 +104,7 @@ namespace RestX.BLL.Services
 
         #region Ingredient Category
         private string GetCategoryCacheKey()
-            => $"IngredientCategory:{CurrentTenant.Hostname}";
+            => $"{CurrentTenant.Hostname}:IngredientCategory";
 
         public async Task<IEnumerable<IngredientCategories>> GetAllIngredientCategories()
         {

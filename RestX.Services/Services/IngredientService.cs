@@ -50,7 +50,11 @@ namespace RestX.BLL.Services
             Ingredient ingredient;
             if (ingredientItem.Id != null)
             {
-                ingredient = await Repo.GetByIdAsync<Ingredient>(ingredientItem.Id);
+                ingredient = await Repo.GetOneAsync<Ingredient>(
+                    filter: i => i.Id == ingredientItem.Id,
+                    includeProperties: "InventoryStock"
+                );
+
                 if (ingredient == null)
                     return Guid.Empty;
                 ingredient.Name = ingredientItem.Name;
@@ -61,11 +65,9 @@ namespace RestX.BLL.Services
                 ingredient.SupplierId = ingredientItem.SupplierId;
                 ingredient.Type = ingredientItem.Type;
                 ingredient.IsActive = ingredientItem.IsActive;
-                Repo.Update(ingredient);
-
                 ingredient.InventoryStock.CurrentQuantity = ingredientItem.CurrentQuantity;
                 ingredient.InventoryStock.LastUpdated = DateTime.UtcNow;
-                Repo.Update(ingredient.InventoryStock);
+                Repo.Update(ingredient);
 
                 await Repo.SaveAsync();
                 return ingredient.Id;
@@ -80,19 +82,14 @@ namespace RestX.BLL.Services
                 MaxStockLevel = ingredientItem.MaxStockLevel,
                 SupplierId = ingredientItem.SupplierId,
                 Type = ingredientItem.Type,
-                IsActive = ingredientItem.IsActive
+                IsActive = ingredientItem.IsActive,
+                InventoryStock = new InventoryStock
+                {
+                    CurrentQuantity = ingredientItem.CurrentQuantity,
+                    LastUpdated = DateTime.UtcNow
+                }
             };
             await Repo.CreateAsync(ingredient);
-
-            var inventoryStock = new InventoryStock
-            {
-                IngredientId = ingredient.Id,
-                CurrentQuantity = ingredientItem.CurrentQuantity,
-                LastUpdated = DateTime.UtcNow
-            };
-            await Repo.CreateAsync(inventoryStock);
-
-
             return ingredient.Id;
         }
 
@@ -201,6 +198,13 @@ namespace RestX.BLL.Services
                 if (ingredient?.InventoryStock == null) continue;
 
                 var deduction = recipe.Quantity * quantity;
+
+                if (ingredient.InventoryStock.CurrentQuantity < deduction)
+                {
+                    throw new InvalidOperationException(
+                        $"Not enough '{ingredient.Name}'. Avalablie Stock: {ingredient.InventoryStock.CurrentQuantity} {ingredient.Unit}"
+                    );
+                }
                 ingredient.InventoryStock.CurrentQuantity -= deduction;
 
                 await UpdateIngredientStatus(ingredient.Id, ingredient.InventoryStock.CurrentQuantity);

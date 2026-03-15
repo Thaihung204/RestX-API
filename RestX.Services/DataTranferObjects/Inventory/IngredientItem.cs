@@ -35,6 +35,6 @@ namespace RestX.BLL.DataTranferObjects.Inventory
 
         public decimal CurrentQuantity { get; set; } = 0;
 
-        public IngredientStatus Status { get; set; }
+        public IngredientStatus Status { get; set; } = 0;
     }
 }

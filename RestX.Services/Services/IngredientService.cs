@@ -62,6 +62,11 @@ namespace RestX.BLL.Services
                 ingredient.Type = ingredientItem.Type;
                 ingredient.IsActive = ingredientItem.IsActive;
                 Repo.Update(ingredient);
+
+                ingredient.InventoryStock.CurrentQuantity = ingredientItem.CurrentQuantity;
+                ingredient.InventoryStock.LastUpdated = DateTime.UtcNow;
+                Repo.Update(ingredient.InventoryStock);
+
                 await Repo.SaveAsync();
                 return ingredient.Id;
             }
@@ -78,6 +83,16 @@ namespace RestX.BLL.Services
                 IsActive = ingredientItem.IsActive
             };
             await Repo.CreateAsync(ingredient);
+
+            var inventoryStock = new InventoryStock
+            {
+                IngredientId = ingredient.Id,
+                CurrentQuantity = ingredientItem.CurrentQuantity,
+                LastUpdated = DateTime.UtcNow
+            };
+            await Repo.CreateAsync(inventoryStock);
+
+
             return ingredient.Id;
         }
 

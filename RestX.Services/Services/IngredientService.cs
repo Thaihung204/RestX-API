@@ -1,5 +1,6 @@
 ﻿using AutoMapper;
 using RestX.BLL.DataTranferObjects.Inventory;
+using RestX.BLL.Exceptionhandling;
 using RestX.BLL.Extensions;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Inventory;
@@ -201,7 +202,7 @@ namespace RestX.BLL.Services
 
                 if (ingredient.InventoryStock.CurrentQuantity < deduction)
                 {
-                    throw new InvalidOperationException(
+                    throw new AppException(
                         $"Not enough '{ingredient.Name}'. Avalablie Stock: {ingredient.InventoryStock.CurrentQuantity} {ingredient.Unit}"
                     );
                 }

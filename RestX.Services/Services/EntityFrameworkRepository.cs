@@ -20,7 +20,7 @@ namespace RestX.BLL.Services
         public virtual object Create<TEntity>(TEntity entity, string createdBy = null)
             where TEntity : class, IEntity
         {
-            entity.CreatedDate = DateTime.UtcNow;
+            entity.CreatedDate = DateTime.UtcNow.AddHours(7);
             entity.CreatedBy = createdBy;
             //            entity.CustomProperties = this.ValidateCustomProperties(entity);
             var newEntity = context.Set<TEntity>().Add(entity);
@@ -32,7 +32,7 @@ namespace RestX.BLL.Services
         public virtual async Task<object> CreateAsync<TEntity>(TEntity entity, string createdBy = null)
             where TEntity : class, IEntity
         {
-            entity.CreatedDate = DateTime.UtcNow;
+            entity.CreatedDate = DateTime.UtcNow.AddHours(7);
             entity.CreatedBy = createdBy ?? string.Empty;
             //            entity.CustomProperties = this.ValidateCustomProperties(entity);
             var newEntity = context.Set<TEntity>().Add(entity);
@@ -44,7 +44,7 @@ namespace RestX.BLL.Services
         public virtual void Update<TEntity>(TEntity entity, string modifiedBy = null)
             where TEntity : class, IEntity
         {
-            entity.ModifiedDate = DateTime.UtcNow;
+            entity.ModifiedDate = DateTime.UtcNow.AddHours(7);
             entity.ModifiedBy = modifiedBy;
             //            entity.CustomProperties = this.ValidateCustomProperties(entity);
             context.Set<TEntity>().Attach(entity);

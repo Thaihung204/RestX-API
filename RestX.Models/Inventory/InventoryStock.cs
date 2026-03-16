@@ -19,7 +19,7 @@ namespace RestX.Models.Inventory
 
         public DateTime? LastRestockDate { get; set; }
 
-        public DateTime LastUpdated { get; set; } = DateTime.UtcNow;
+        public DateTime LastUpdated { get; set; } = DateTime.UtcNow.AddHours(7);
 
         public virtual Ingredient Ingredient { get; set; } = null!;
     }

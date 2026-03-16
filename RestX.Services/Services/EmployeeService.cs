@@ -147,7 +147,7 @@ namespace RestX.BLL.Services
             if (employee == null) return false;
 
             employee.IsActive = false;
-            employee.TerminationDate = DateTime.UtcNow;
+            employee.TerminationDate = DateTime.UtcNow.AddHours(7);
             Repo.Update(employee);
 
             if (employee.ApplicationUser != null)

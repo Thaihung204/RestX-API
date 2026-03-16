@@ -21,7 +21,7 @@ namespace RestX.Models.BaseModel
         [TriggerProperty(DisplayName = "Created Date")]
         [DataType(DataType.DateTime)]
         [Column(TypeName = "datetime2")]
-        public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
+        public DateTime CreatedDate { get; set; } = DateTime.UtcNow.AddHours(7);
 
         [TriggerProperty(DisplayName = "Modified Date")]
         [DataType(DataType.DateTime)]

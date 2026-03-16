@@ -403,7 +403,7 @@ namespace RestX.BLL.Services
         private async Task<string> GetNextOrderReference()
         {
             var tenantPrefix = CurrentTenant.Prefix;
-            var reference = $"{tenantPrefix}{DateTime.UtcNow:yMdsff}";
+            var reference = $"{tenantPrefix}{DateTime.UtcNow.AddHours(7):yMdsff}";
 
             var exists = await Repo.GetExistsAsync<Models.Orders.Order>(o => o.Reference == reference);
             var count = 0;
@@ -412,19 +412,19 @@ namespace RestX.BLL.Services
             {
                 if (count < 1)
                 {
-                    reference = $"{tenantPrefix}{DateTime.UtcNow:yMdsff}";
+                    reference = $"{tenantPrefix}{DateTime.UtcNow.AddHours(7):yMdsff}";
                 }
                 else if (count < 2)
                 {
-                    reference = $"{tenantPrefix}{DateTime.UtcNow:yMdsfff}";
+                    reference = $"{tenantPrefix}{DateTime.UtcNow.AddHours(7):yMdsfff}";
                 }
                 else if (count < 10)
                 {
-                    reference = $"{tenantPrefix}{DateTime.UtcNow:yMdsHHfff}";
+                    reference = $"{tenantPrefix}{DateTime.UtcNow.AddHours(7):yMdsHHfff}";
                 }
                 else
                 {
-                    reference = $"{tenantPrefix}{DateTime.UtcNow:yMdsHHmmfff}";
+                    reference = $"{tenantPrefix}{DateTime.UtcNow.AddHours(7):yMdsHHmmfff}";
                 }
 
                 exists = await Repo.GetExistsAsync<Models.Orders.Order>(o => o.Reference == reference);
@@ -457,9 +457,9 @@ namespace RestX.BLL.Services
             order.OrderStatusId = (OrderStatus)statusId;
 
             if (statusId == (int)OrderStatus.Cancelled)
-                order.CancelledAt = DateTime.UtcNow;
+                order.CancelledAt = DateTime.UtcNow.AddHours(7);
             else if (statusId == (int)OrderStatus.Completed)
-                order.CompletedAt = DateTime.UtcNow;
+                order.CompletedAt = DateTime.UtcNow.AddHours(7);
 
             Repo.Update(order, userId);
             await Repo.SaveAsync();

@@ -57,7 +57,7 @@ namespace RestX.DAL.DataSeeders
                 RefreshToken = string.Empty,
                 LockoutEnabled = false,
                 AccessFailedCount = 0,
-                LastModified = DateTime.UtcNow
+                LastModified = DateTime.UtcNow.AddHours(7)
             };
         }
 

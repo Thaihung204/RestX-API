@@ -334,6 +334,11 @@ namespace RestX.WebApp
             app.UseAuthorization();
             app.UseMiddleware<TelemetryExtender>();
             app.ApplyMigrations();
+            RecurringJob.AddOrUpdate<IAIMenuService>(
+                "cleanup-ai-sessions",
+                s => s.CleanupExpiredSessions(),
+                Cron.Hourly);
+
             app.UseEndpoints(endpoints =>
             {
                 endpoints.MapControllers();

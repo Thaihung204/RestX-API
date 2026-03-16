@@ -3,11 +3,11 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using RestX.BLL.DataTranferObjects.AI;
+using RestX.BLL.Exceptionhandling;
 using RestX.BLL.Interfaces;
 using RestX.Models.Identity;
 using RestX.Models.Tenants;
 using RestX.WebApp.Controllers.BaseControllers;
-using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 
 namespace RestX.WebApp.Controllers
@@ -16,6 +16,7 @@ namespace RestX.WebApp.Controllers
     [ApiController]
     public class AIMenuController : BaseController
     {
+        private const string SessionCookieName = "restx_ai_session";
         private readonly IAIMenuService _aiMenuService;
 
         public AIMenuController(
@@ -28,6 +29,7 @@ namespace RestX.WebApp.Controllers
         {
             _aiMenuService = aiMenuService;
         }
+
         [HttpPost("chat")]
         [AllowAnonymous]
         public async Task<ActionResult<AIChatResponse>> Chat([FromBody] AIChatRequest request)
@@ -38,14 +40,21 @@ namespace RestX.WebApp.Controllers
                     return BadRequest("Message không được để trống.");
 
                 request.UserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                request.SessionId = await _aiMenuService.ResolveSession(Request.Cookies[SessionCookieName], request.UserId);
 
-                var response = await _aiMenuService.ChatAsync(request);
+                var response = await _aiMenuService.Chat(request);
+
+                SetSessionCookie(response.SessionId);
                 return Ok(response);
+            }
+            catch (AppException ex)
+            {
+                return BadRequest(ex.Message);
             }
             catch (Exception ex)
             {
                 ExceptionHandler.RaiseException(ex);
-                return StatusCode(500, ex.InnerException?.Message ?? ex.Message);
+                return BadRequest("An internal error occurred");
             }
         }
 
@@ -61,36 +70,117 @@ namespace RestX.WebApp.Controllers
             }
 
             request.UserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            request.SessionId = await _aiMenuService.ResolveSession(Request.Cookies[SessionCookieName], request.UserId);
+
+            SetSessionCookie(request.SessionId);
 
             try
             {
-                await _aiMenuService.ChatStreamAsync(request, Response);
+                await _aiMenuService.ChatStream(request, Response);
+            }
+            catch (AppException ex)
+            {
+                if (!Response.HasStarted)
+                {
+                    Response.StatusCode = 400;
+                    await Response.WriteAsync(ex.Message);
+                }
             }
             catch (Exception ex)
             {
                 ExceptionHandler.RaiseException(ex);
                 if (!Response.HasStarted)
                 {
-                    Response.StatusCode = 500;
-                    await Response.WriteAsync(ex.Message);
+                    Response.StatusCode = 400;
+                    await Response.WriteAsync("An internal error occurred");
                 }
             }
         }
 
-        [HttpDelete("chat/{sessionId}")]
-        [AllowAnonymous]
-        public async Task<IActionResult> ClearSession([Required] string sessionId)
+        [HttpPost("chat/confirm-order")]
+        [Authorize]
+        public async Task<ActionResult<Guid>> ConfirmOrder([FromBody] AIOrderDraft draft)
         {
             try
             {
-                await _aiMenuService.ClearSessionAsync(sessionId);
-                return Ok();
+                var sessionId = Request.Cookies[SessionCookieName];
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+                if (string.IsNullOrEmpty(userId))
+                    return Unauthorized();
+
+                var orderId = await _aiMenuService.ConfirmOrder(sessionId ?? string.Empty, userId, draft);
+                return Ok(orderId);
+            }
+            catch (AppException ex)
+            {
+                return BadRequest(ex.Message);
             }
             catch (Exception ex)
             {
                 ExceptionHandler.RaiseException(ex);
-                return StatusCode(500, "Có lỗi xảy ra khi xóa session.");
+                return BadRequest("An internal error occurred");
             }
+        }
+
+        [HttpGet("chat/history")]
+        [AllowAnonymous]
+        public async Task<ActionResult<ChatHistoryResponse>> GetHistory()
+        {
+            var sessionId = Request.Cookies[SessionCookieName];
+            if (string.IsNullOrEmpty(sessionId))
+                return Ok(new ChatHistoryResponse());
+
+            try
+            {
+                var history = await _aiMenuService.GetHistory(sessionId);
+                return Ok(history ?? new ChatHistoryResponse());
+            }
+            catch (AppException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
+        [HttpDelete("chat")]
+        [AllowAnonymous]
+        public async Task<IActionResult> ClearSession()
+        {
+            var sessionId = Request.Cookies[SessionCookieName];
+            if (string.IsNullOrEmpty(sessionId))
+                return NoContent();
+
+            try
+            {
+                await _aiMenuService.ClearSession(sessionId);
+                Response.Cookies.Delete(SessionCookieName);
+                return Ok();
+            }
+            catch (AppException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
+        private void SetSessionCookie(string sessionId)
+        {
+            Response.Cookies.Append(SessionCookieName, sessionId, new CookieOptions
+            {
+                HttpOnly = false,
+                SameSite = SameSiteMode.None,
+                Secure = true,
+                MaxAge = TimeSpan.FromMinutes(30)
+            });
         }
     }
 }

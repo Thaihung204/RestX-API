@@ -5,8 +5,12 @@ namespace RestX.BLL.Interfaces
 {
     public interface IAIMenuService
     {
-        Task<AIChatResponse> ChatAsync(AIChatRequest request);
-        Task ChatStreamAsync(AIChatRequest request, HttpResponse httpResponse);
-        Task ClearSessionAsync(string sessionId);
+        Task<string> ResolveSession(string? cookieSessionId, string? userId);
+        Task<AIChatResponse> Chat(AIChatRequest request);
+        Task ChatStream(AIChatRequest request, HttpResponse httpResponse);
+        Task<Guid> ConfirmOrder(string sessionId, string userId, AIOrderDraft draft);
+        Task ClearSession(string sessionId);
+        Task<ChatHistoryResponse?> GetHistory(string sessionId);
+        Task CleanupExpiredSessions();
     }
 }

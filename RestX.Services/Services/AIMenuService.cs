@@ -3,8 +3,10 @@ using Microsoft.Extensions.Configuration;
 using RestX.BLL.DataTranferObjects.AI;
 using RestX.BLL.DataTranferObjects.Dish;
 using RestX.BLL.DataTranferObjects.Orders;
+using RestX.BLL.Exceptionhandling;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Customers;
+using RestX.Models.AI;
 using RestX.Models.Tenants;
 using System.Text;
 using System.Text.Json;
@@ -12,14 +14,12 @@ using System.Text.Json.Serialization;
 
 namespace RestX.BLL.Services
 {
-    public class AIMenuService : IAIMenuService
+    public class AIMenuService : BaseService, IAIMenuService
     {
         private readonly IDishService _dishService;
         private readonly IOrderService _orderService;
         private readonly ICustomerService _customerService;
-        private readonly IRedisService _redisService;
         private readonly IHttpClientFactory _httpClientFactory;
-        private readonly ActiveTenant _currentTenant;
 
         private readonly string _model;
         private readonly int _maxHistoryMessages;
@@ -35,17 +35,17 @@ namespace RestX.BLL.Services
             IDishService dishService,
             IOrderService orderService,
             ICustomerService customerService,
-            IRedisService redisService,
             IHttpClientFactory httpClientFactory,
             IConfiguration configuration,
-            IEnumerable<ActiveTenant> tenant)
+            IRepository repo,
+            IRedisService redisService,
+            IEnumerable<ActiveTenant> tenant = null)
+            : base(repo, redisService, tenant)
         {
             _dishService = dishService;
             _orderService = orderService;
             _customerService = customerService;
-            _redisService = redisService;
             _httpClientFactory = httpClientFactory;
-            _currentTenant = tenant?.FirstOrDefault();
 
             var aiConfig = configuration.GetSection("AISuggestion");
             _model = aiConfig["Model"] ?? "llama-3.3-70b-versatile";
@@ -53,47 +53,45 @@ namespace RestX.BLL.Services
             _sessionExpireMinutes = int.TryParse(aiConfig["SessionExpireMinutes"], out var expire) ? expire : 30;
         }
 
-        public async Task<AIChatResponse> ChatAsync(AIChatRequest request)
+        public async Task<string> ResolveSession(string? cookieSessionId, string? userId)
         {
-            var sessionId = string.IsNullOrEmpty(request.SessionId)
-                ? Guid.NewGuid().ToString()
-                : request.SessionId;
-
-            var (history, menu, userPrefs) = await LoadContextAsync(sessionId, request.UserId);
-            var systemPrompt = BuildSystemPrompt(menu, request.TableId, userPrefs);
-
-            var rawResponse = await CallGroqAsync(systemPrompt, history, request.Message);
-            var (aiResponse, orderAction) = ParseAIResponse(rawResponse, sessionId, menu, request.TableId);
-
-            history.Add(new ChatMessage { Role = "user", Content = request.Message });
-            history.Add(new ChatMessage { Role = "assistant", Content = rawResponse });
-
-            if (history.Count > _maxHistoryMessages)
-                history = history.Skip(history.Count - _maxHistoryMessages).ToList();
-
-            await SaveHistoryAsync(sessionId, history);
-
-            if (aiResponse.OrderDraft != null && !string.IsNullOrEmpty(request.UserId))
-                await SaveUserPrefsAsync(request.UserId, aiResponse.OrderDraft.Items);
-
-            if (orderAction == "create" && aiResponse.OrderDraft != null && request.TableId.HasValue && !string.IsNullOrEmpty(request.UserId))
+            if (!string.IsNullOrEmpty(userId) && Guid.TryParse(userId, out var appUserId))
             {
-                aiResponse.CreatedOrderId = await AutoCreateOrderAsync(aiResponse.OrderDraft, request.UserId, request.TableId.Value);
-                if (aiResponse.CreatedOrderId.HasValue)
-                    aiResponse.OrderDraft = null;
+                var customerId = await _customerService.GetCustomerIdByApplicationUserIdAsync(appUserId);
+                if (customerId.HasValue)
+                {
+                    var existing = await Repo.GetOneAsync<AIChatSession>(s => s.CustomerId == customerId.Value);
+                    if (existing != null)
+                        return existing.SessionId;
+                }
             }
+            return string.IsNullOrEmpty(cookieSessionId) ? Guid.NewGuid().ToString() : cookieSessionId;
+        }
+
+        public async Task<AIChatResponse> Chat(AIChatRequest request)
+        {
+            var sessionId = request.SessionId ?? Guid.NewGuid().ToString();
+            var customerId = await GetCustomerId(request.UserId);
+
+            var (history, menu, orderHistory) = await LoadContext(sessionId, customerId);
+            var systemPrompt = BuildSystemPrompt(menu, request.TableId, orderHistory);
+
+            var rawResponse = await CallGroq(systemPrompt, history, request.Message);
+            var session = await SaveHistory(sessionId, request.Message, rawResponse, customerId, request.TableId);
+
+            var tableId = request.TableId ?? session.TableId;
+            var (aiResponse, _) = ParseAIResponse(rawResponse, sessionId, menu, tableId);
 
             return aiResponse;
         }
 
-        public async Task ChatStreamAsync(AIChatRequest request, HttpResponse httpResponse)
+        public async Task ChatStream(AIChatRequest request, HttpResponse httpResponse)
         {
-            var sessionId = string.IsNullOrEmpty(request.SessionId)
-                ? Guid.NewGuid().ToString()
-                : request.SessionId;
+            var sessionId = request.SessionId ?? Guid.NewGuid().ToString();
+            var customerId = await GetCustomerId(request.UserId);
 
-            var (history, menu, userPrefs) = await LoadContextAsync(sessionId, request.UserId);
-            var systemPrompt = BuildSystemPrompt(menu, request.TableId, userPrefs);
+            var (history, menu, orderHistory) = await LoadContext(sessionId, customerId);
+            var systemPrompt = BuildSystemPrompt(menu, request.TableId, orderHistory);
 
             httpResponse.ContentType = "text/event-stream";
             httpResponse.Headers["Cache-Control"] = "no-cache";
@@ -101,7 +99,7 @@ namespace RestX.BLL.Services
 
             var fullContent = new StringBuilder();
 
-            await foreach (var delta in StreamGroqAsync(systemPrompt, history, request.Message))
+            await foreach (var delta in StreamGroq(systemPrompt, history, request.Message))
             {
                 fullContent.Append(delta);
                 var sseData = JsonSerializer.Serialize(new { content = delta });
@@ -113,25 +111,10 @@ namespace RestX.BLL.Services
 
             try
             {
-                var (aiResponse, orderAction) = ParseAIResponse(rawResponse, sessionId, menu, request.TableId);
+                var session = await SaveHistory(sessionId, request.Message, rawResponse, customerId, request.TableId);
 
-                history.Add(new ChatMessage { Role = "user", Content = request.Message });
-                history.Add(new ChatMessage { Role = "assistant", Content = rawResponse });
-
-                if (history.Count > _maxHistoryMessages)
-                    history = history.Skip(history.Count - _maxHistoryMessages).ToList();
-
-                await SaveHistoryAsync(sessionId, history);
-
-                if (aiResponse.OrderDraft != null && !string.IsNullOrEmpty(request.UserId))
-                    await SaveUserPrefsAsync(request.UserId, aiResponse.OrderDraft.Items);
-
-                if (orderAction == "create" && aiResponse.OrderDraft != null && request.TableId.HasValue && !string.IsNullOrEmpty(request.UserId))
-                {
-                    aiResponse.CreatedOrderId = await AutoCreateOrderAsync(aiResponse.OrderDraft, request.UserId, request.TableId.Value);
-                    if (aiResponse.CreatedOrderId.HasValue)
-                        aiResponse.OrderDraft = null;
-                }
+                var tableId = request.TableId ?? session.TableId;
+                var (aiResponse, _) = ParseAIResponse(rawResponse, sessionId, menu, tableId);
 
                 var completeData = JsonSerializer.Serialize(aiResponse);
                 await httpResponse.WriteAsync($"event: complete\ndata: {completeData}\n\n");
@@ -146,14 +129,137 @@ namespace RestX.BLL.Services
             }
         }
 
-        public async Task ClearSessionAsync(string sessionId)
+        public async Task ClearSession(string sessionId)
         {
-            await _redisService.RemoveAsync(GetSessionKey(sessionId));
+            var session = await Repo.GetOneAsync<AIChatSession>(s => s.SessionId == sessionId);
+            if (session != null)
+            {
+                Repo.Delete(session);
+                await Repo.SaveAsync();
+            }
         }
 
-        private string BuildSystemPrompt(List<MenuCategory> menu, Guid? tableId, List<string> userPrefs)
+        public async Task CleanupExpiredSessions()
         {
-            var tenantName = _currentTenant?.Name ?? "nhà hàng";
+            var expired = await Repo.GetAsync<AIChatSession>(
+                s => !s.CustomerId.HasValue && s.ExpiresAt < DateTime.UtcNow);
+
+            foreach (var session in expired)
+                Repo.Delete(session);
+
+            if (expired.Any())
+                await Repo.SaveAsync();
+        }
+
+        public async Task<ChatHistoryResponse?> GetHistory(string sessionId)
+        {
+            var session = await Repo.GetOneAsync<AIChatSession>(s => s.SessionId == sessionId, "Messages");
+            if (session == null) return null;
+
+            var items = session.Messages.Select(m =>
+            {
+                var item = new ChatHistoryItem
+                {
+                    Role = m.Role,
+                    Content = m.Content,
+                    CreatedDate = m.CreatedDate
+                };
+
+                if (m.Role == "assistant")
+                {
+                    try
+                    {
+                        var start = m.Content.IndexOf('{');
+                        var end = m.Content.LastIndexOf('}');
+                        if (start != -1 && end > start)
+                        {
+                            var jsonStr = m.Content[start..(end + 1)];
+                            using var doc = JsonDocument.Parse(jsonStr);
+                            var root = doc.RootElement;
+
+                            var parsed = new AIChatResponse { SessionId = sessionId };
+
+                            if (root.TryGetProperty("message", out var msg))
+                                parsed.Message = msg.GetString() ?? "";
+
+                            if (root.TryGetProperty("quickReplies", out var qr) && qr.ValueKind == JsonValueKind.Array)
+                                parsed.QuickReplies = qr.EnumerateArray()
+                                    .Select(x => x.GetString() ?? "")
+                                    .Where(x => !string.IsNullOrEmpty(x))
+                                    .ToList();
+
+                            if (root.TryGetProperty("suggestions", out var sugsEl) && sugsEl.ValueKind == JsonValueKind.Array)
+                            {
+                                foreach (var s in sugsEl.EnumerateArray())
+                                {
+                                    if (!s.TryGetProperty("dishId", out var did) || !Guid.TryParse(did.GetString(), out var dishId)) continue;
+                                    parsed.Suggestions.Add(new AISuggestion
+                                    {
+                                        DishId = dishId,
+                                        DishName = s.TryGetProperty("dishName", out var dn) ? dn.GetString() ?? "" : "",
+                                        Price = s.TryGetProperty("price", out var pr) ? pr.GetDecimal() : 0,
+                                        Reason = s.TryGetProperty("reason", out var rs) ? rs.GetString() ?? "" : "",
+                                        Category = s.TryGetProperty("category", out var cat) ? cat.GetString() ?? "" : "",
+                                        Actions = BuildActions(dishId)
+                                    });
+                                }
+                            }
+
+                            if (root.TryGetProperty("upsellSuggestions", out var upsellEl) && upsellEl.ValueKind == JsonValueKind.Array)
+                            {
+                                foreach (var s in upsellEl.EnumerateArray())
+                                {
+                                    if (!s.TryGetProperty("dishId", out var did) || !Guid.TryParse(did.GetString(), out var dishId)) continue;
+                                    parsed.UpsellSuggestions.Add(new AISuggestion
+                                    {
+                                        DishId = dishId,
+                                        DishName = s.TryGetProperty("dishName", out var dn) ? dn.GetString() ?? "" : "",
+                                        Price = s.TryGetProperty("price", out var pr) ? pr.GetDecimal() : 0,
+                                        Reason = s.TryGetProperty("reason", out var rs) ? rs.GetString() ?? "" : "",
+                                        Category = s.TryGetProperty("category", out var cat) ? cat.GetString() ?? "" : "",
+                                        Actions = BuildActions(dishId)
+                                    });
+                                }
+                            }
+
+                            if (root.TryGetProperty("orderDraft", out var draftEl) && draftEl.ValueKind == JsonValueKind.Object)
+                            {
+                                var draft = new AIOrderDraft();
+                                if (draftEl.TryGetProperty("tableId", out var tid) && Guid.TryParse(tid.GetString(), out var tableId))
+                                    draft.TableId = tableId;
+                                if (draftEl.TryGetProperty("items", out var itemsEl) && itemsEl.ValueKind == JsonValueKind.Array)
+                                {
+                                    foreach (var it in itemsEl.EnumerateArray())
+                                    {
+                                        if (!it.TryGetProperty("dishId", out var did) || !Guid.TryParse(did.GetString(), out var dishId)) continue;
+                                        draft.Items.Add(new AIOrderDraftItem
+                                        {
+                                            DishId = dishId,
+                                            DishName = it.TryGetProperty("dishName", out var dn) ? dn.GetString() ?? "" : "",
+                                            Quantity = it.TryGetProperty("quantity", out var qty) ? qty.GetInt32() : 1,
+                                            Price = it.TryGetProperty("price", out var pr) ? pr.GetDecimal() : 0
+                                        });
+                                    }
+                                }
+                                if (draft.Items.Count > 0)
+                                    parsed.OrderDraft = draft;
+                            }
+
+                            item.Parsed = parsed;
+                        }
+                    }
+                    catch { }
+                }
+
+                return item;
+            }).ToList();
+
+            return new ChatHistoryResponse { SessionId = sessionId, Messages = items };
+        }
+
+        private string BuildSystemPrompt(List<MenuCategory> menu, Guid? tableId, List<string> orderHistory = null)
+        {
+            var tenantName = CurrentTenant?.Name ?? "nhà hàng";
 
             var menuText = new StringBuilder();
             foreach (var category in menu)
@@ -177,68 +283,63 @@ namespace RestX.BLL.Services
                 ? $"\nKhách đang ngồi tại bàn ID: {tableId}. Khi tạo orderDraft, hãy điền tableId này vào trường tableId."
                 : "";
 
-            var prefsContext = userPrefs.Count > 0
-                ? $"\nKhách này thường đặt: {string.Join(", ", userPrefs)}. Ưu tiên gợi ý các món tương tự hoặc phù hợp."
+            var historyContext = orderHistory != null && orderHistory.Count > 0
+                ? $"\nKhách này trước đây hay đặt: {string.Join(", ", orderHistory)}. Ưu tiên gợi ý các món tương tự hoặc phù hợp khẩu vị đó."
                 : "";
 
-            return $@"Bạn là trợ lý AI thân thiện của nhà hàng {tenantName}, tên là ""Foody"".
-                    Bạn nói chuyện như một người bạn am hiểu ẩm thực — dùng ngôn ngữ tự nhiên, có cảm xúc, đôi khi hài hước nhẹ nhàng.
-                    Nhiệm vụ: giúp khách tìm món ngon, gợi ý phù hợp sở thích, và hỗ trợ đặt hàng nhanh gọn.{tableContext}{prefsContext}
+            return $@"Bạn là Foody — trợ lý AI ẩm thực thông minh của nhà hàng {tenantName}.
+                    Bạn am hiểu sâu về ẩm thực, biết phân tích khẩu vị, và trò chuyện như một người bạn thân — tự nhiên, vui vẻ, đôi khi hài hước nhẹ.
+                    Nhiệm vụ: tư vấn món ăn phù hợp, gợi ý thông minh dựa trên sở thích/ngữ cảnh, hỗ trợ đặt hàng nhanh gọn.{tableContext}{historyContext}
 
                     PHONG CÁCH VIẾT ""message"":
-                    - Mở đầu tự nhiên: ""Ồ, lựa chọn tuyệt đấy!"", ""Để Foody gợi ý nhé..."", ""Hôm nay thử cái này xem sao!"", ""Nghe hấp dẫn ghê, để mình tìm cho bạn...""
-                    - Dùng ngôn ngữ gần gũi: ""bạn"", ""mình"", ""nha"", ""nhé"", ""đó"", ""á""
-                    - Khi confirm đơn: viết tóm tắt tự nhiên kiểu ""Okie! Mình đã đặt cho bạn: 2 Bánh mì thịt nướng + 1 Phở bò tái = 125.000đ. Đơn đang được chuẩn bị nha! 🍜""
-                    - Khi upsell: gợi ý nhẹ nhàng, không ép: ""Thêm ly trà sữa cho đủ bộ không? 😄""
-                    - Tránh câu cứng nhắc kiểu ""Đã nhận đơn hàng của bạn"", ""Hệ thống đã xử lý""
+                    - Mở đầu tự nhiên, đa dạng: ""Ồ hay đấy!"", ""Để Foody gợi ý cho bạn nhé..."", ""Hôm nay thử cái này xem sao!"", ""Nghe hấp dẫn ghê!"", ""Foody có ngay món hợp bạn rồi đây!""
+                    - Ngôn ngữ gần gũi: ""bạn"", ""mình"", ""nha"", ""nhé"", ""đó"", ""á"", ""thật ra"", ""thú thật""
+                    - Phân tích ngữ cảnh: nếu khách nói mệt → gợi ý đồ ăn bổ dưỡng/nhẹ; nếu đói bụng → gợi ý món no; nếu muốn uống gì → tập trung đồ uống
+                    - Khi tạo orderDraft (chưa xác nhận): tóm tắt tự nhiên kiểu ""Foody chọn cho bạn: 2 Phở bò tái + 1 Nước cam ép = 125.000đ nha. Bạn xem lại rồi nhấn xác nhận để đặt nhé!"" — KHÔNG được nói ""đã đặt"", ""đơn đang chuẩn bị"" vì khách chưa xác nhận
+                    - Khi upsell: gợi ý nhẹ nhàng, có lý do: ""Thêm ly chanh muối cho bữa ăn đỡ ngán không? 😄""
+                    - Tránh: câu cứng nhắc kiểu ""Đã nhận đơn hàng"", ""Hệ thống đã xử lý"", nói đơn đang chuẩn bị khi chưa có xác nhận, lặp lại câu hỏi dư thừa
+
+                    NGUYÊN TẮC GỢI Ý THÔNG MINH:
+                    - Phân tích ngữ cảnh: thời gian ngày (sáng/trưa/tối), số người ăn nếu khách đề cập, món đã gợi ý trước đó
+                    - Kết hợp món: gợi ý combo hợp lý (món chính + phụ + đồ uống), không gợi ý lặp lại món đã có trong đơn
+                    - Cá nhân hóa: ưu tiên món phù hợp sở thích đã biết của khách, giải thích lý do cụ thể (""vì bạn thích cay"", ""món bán chạy nhất hôm nay"")
+                    - Nếu khách hỏi chung chung (""có gì ngon không?"") → hỏi thêm 1 câu để hiểu khẩu vị, rồi gợi ý 2-3 món phù hợp
 
                     === MENU HIỆN TẠI ===
                     {menuText}
                     === HẾT MENU ===
 
-                    QUY TẮC QUAN TRỌNG:
+                    QUY TẮC BẮT BUỘC:
                     - Luôn trả lời bằng tiếng Việt
-                    - LUÔN trả về đúng định dạng JSON sau, không thêm text bên ngoài JSON:
+                    - LUÔN trả về đúng định dạng JSON bên dưới, KHÔNG thêm bất kỳ text nào bên ngoài JSON
+                    - Chỉ gợi ý món CÓ TRONG MENU, dùng ĐÚNG ID từ menu
+                    - Gợi ý 1-3 món mỗi lần, phù hợp yêu cầu
+                    - quickReplies: 2-3 câu gợi ý tiếp theo viết như khách đang nói (không phải lệnh hệ thống)
+                    - Nếu không cần gợi ý món, để suggestions là mảng rỗng []
+                    - Chỉ tạo orderDraft khi khách RÕ RÀNG muốn đặt (""cho tôi 2 phở"", ""đặt đi"", ""order món này""). Nếu chỉ hỏi thăm → orderDraft: null
+                    - Khi tạo orderDraft: đây chỉ là bản xem trước, chưa được đặt. Tóm tắt tên món + số lượng + tổng tiền, nhắc khách nhấn xác nhận. TUYỆT ĐỐI không dùng các cụm ""đã đặt"", ""đang chuẩn bị"", ""đơn của bạn đang được xử lý""
+                    - Mỗi lần đặt thêm: tạo orderDraft MỚI chỉ chứa món vừa yêu cầu, KHÔNG gộp đơn cũ
+                    - UPSELL: khi orderDraft không có đồ uống → thêm 1-2 gợi ý đồ uống/tráng miệng vào upsellSuggestions, đề cập nhẹ trong message
+
+                    JSON OUTPUT (bắt buộc dùng đúng format này):
                     {{
                       ""message"": ""Nội dung trả lời tự nhiên, có cảm xúc"",
                       ""suggestions"": [
-                        {{
-                          ""dishId"": ""uuid-của-món"",
-                          ""dishName"": ""Tên món"",
-                          ""price"": 45000,
-                          ""reason"": ""Lý do gợi ý hấp dẫn, ngắn gọn"",
-                          ""category"": ""Tên danh mục""
-                        }}
+                        {{""dishId"": ""uuid"", ""dishName"": ""Tên món"", ""price"": 45000, ""reason"": ""Lý do cụ thể, hấp dẫn"", ""category"": ""Danh mục""}}
                       ],
-                      ""quickReplies"": [""Gợi ý 1"", ""Gợi ý 2"", ""Gợi ý 3""],
+                      ""upsellSuggestions"": [
+                        {{""dishId"": ""uuid"", ""dishName"": ""Tên"", ""price"": 15000, ""reason"": ""Gợi ý thêm tự nhiên"", ""category"": ""Đồ uống""}}
+                      ],
+                      ""quickReplies"": [""Câu gợi ý 1"", ""Câu gợi ý 2"", ""Câu gợi ý 3""],
                       ""orderDraft"": {{
-                        ""tableId"": ""uuid-bàn-hoặc-null"",
-                        ""items"": [
-                          {{""dishId"": ""uuid"", ""dishName"": ""Tên món"", ""quantity"": 1, ""price"": 45000}}
-                        ]
-                      }}
-                    }}
-                    - Chỉ gợi ý món có trong menu, dùng đúng ID từ menu
-                    - Gợi ý 1-3 món mỗi lần, phù hợp với yêu cầu của khách
-                    - quickReplies là 2-3 câu hỏi/hành động gợi ý tiếp theo, viết tự nhiên như khách đang nói
-                    - Nếu không cần gợi ý món, để suggestions là mảng rỗng []
-                    - Chỉ tạo orderDraft khi khách RÕ RÀNG muốn đặt món (ví dụ: ""cho tôi 2 phở"", ""đặt món này"", ""order đi"", ""thêm 1 cái nữa"", ""thêm món X""). Nếu chỉ hỏi thăm, để orderDraft là null
-                    - Khi tạo orderDraft, đồng thời trả về ""orderAction"": ""create"" và trong ""message"" tóm tắt đơn theo phong cách thân thiện (tên món, số lượng, tổng tiền)
-                    - MỖI lần khách muốn đặt thêm (dù đã có đơn trước đó), hãy tạo orderDraft MỚI CHỈ chứa các món khách vừa yêu cầu. KHÔNG gộp với đơn cũ đã tạo trước đó
-                    - UPSELL: Khi tạo orderDraft, nếu đơn hàng KHÔNG có đồ uống, gợi ý 1-2 đồ uống/tráng miệng vào ""upsellSuggestions"" và đề cập nhẹ trong message. Nếu đã đủ, để mảng rỗng []
-
-                    JSON format đầy đủ:
-                    {{
-                      ""message"": ""Nội dung trả lời"",
-                      ""suggestions"": [{{""dishId"": ""uuid"", ""dishName"": ""Tên"", ""price"": 45000, ""reason"": ""Lý do"", ""category"": ""Danh mục""}}],
-                      ""upsellSuggestions"": [{{""dishId"": ""uuid"", ""dishName"": ""Tên"", ""price"": 15000, ""reason"": ""Gợi ý thêm"", ""category"": ""Đồ uống""}}],
-                      ""quickReplies"": [""Gợi ý 1"", ""Gợi ý 2""],
-                      ""orderDraft"": {{""tableId"": null, ""items"": [{{""dishId"": ""uuid"", ""dishName"": ""Tên"", ""quantity"": 1, ""price"": 45000}}]}},
+                        ""tableId"": null,
+                        ""items"": [{{""dishId"": ""uuid"", ""dishName"": ""Tên"", ""quantity"": 1, ""price"": 45000}}]
+                      }},
                       ""orderAction"": ""create""
                     }}";
-        }
+                            }
 
-        private async Task<string> CallGroqAsync(string systemPrompt, List<ChatMessage> history, string userMessage)
+        private async Task<string> CallGroq(string systemPrompt, List<ChatMessage> history, string userMessage)
         {
             var client = _httpClientFactory.CreateClient("OpenAI");
             var messages = BuildMessages(systemPrompt, history, userMessage);
@@ -247,7 +348,7 @@ namespace RestX.BLL.Services
             {
                 model = _model,
                 messages,
-                max_tokens = 1024,
+                max_tokens = 2048,
                 temperature = 0.7,
                 response_format = new { type = "json_object" }
             };
@@ -270,7 +371,7 @@ namespace RestX.BLL.Services
                 .GetString() ?? string.Empty;
         }
 
-        private async IAsyncEnumerable<string> StreamGroqAsync(string systemPrompt, List<ChatMessage> history, string userMessage)
+        private async IAsyncEnumerable<string> StreamGroq(string systemPrompt, List<ChatMessage> history, string userMessage)
         {
             var client = _httpClientFactory.CreateClient("OpenAI");
             var messages = BuildMessages(systemPrompt, history, userMessage);
@@ -279,7 +380,7 @@ namespace RestX.BLL.Services
             {
                 model = _model,
                 messages,
-                max_tokens = 1024,
+                max_tokens = 2048,
                 temperature = 0.7,
                 response_format = new { type = "json_object" },
                 stream = true
@@ -445,16 +546,28 @@ namespace RestX.BLL.Services
             }
         }
 
-        private async Task<Guid?> AutoCreateOrderAsync(AIOrderDraft draft, string userId, Guid tableId)
+        public async Task<Guid> ConfirmOrder(string sessionId, string userId, AIOrderDraft draft)
         {
-            if (!Guid.TryParse(userId, out var applicationUserId)) return null;
+            if (!Guid.TryParse(userId, out var applicationUserId))
+                throw new AppException("Không xác định được người dùng.");
 
             var customerId = await _customerService.GetCustomerIdByApplicationUserIdAsync(applicationUserId);
-            if (!customerId.HasValue) return null;
+            if (!customerId.HasValue)
+                throw new AppException("Không tìm thấy thông tin khách hàng.");
+
+            var tableId = draft.TableId;
+            if (!tableId.HasValue)
+            {
+                var session = await Repo.GetOneAsync<AIChatSession>(s => s.SessionId == sessionId);
+                tableId = session?.TableId;
+            }
+
+            if (!tableId.HasValue)
+                throw new AppException("Không xác định được bàn. Vui lòng thử lại.");
 
             var order = new Order
             {
-                TableId = tableId,
+                TableId = tableId.Value,
                 CustomerId = customerId.Value,
                 TotalAmount = draft.TotalEstimate,
                 OrderDetails = draft.Items.Select(i => new OrderDetail
@@ -486,72 +599,94 @@ namespace RestX.BLL.Services
             };
         }
 
-        private async Task<(List<ChatMessage> history, List<MenuCategory> menu, List<string> userPrefs)> LoadContextAsync(string sessionId, string? userId)
+        private async Task<(List<ChatMessage> history, List<MenuCategory> menu, List<string> orderHistory)> LoadContext(string sessionId, Guid? customerId = null)
         {
-            var historyTask = LoadHistoryAsync(sessionId);
-            var menuTask = LoadMenuCachedAsync();
-            var prefsTask = LoadUserPrefsAsync(userId);
+            var historyTask = LoadHistory(sessionId);
+            var menuTask = _dishService.GetMenu();
+            var orderHistoryTask = LoadOrderHistory(customerId);
 
-            await Task.WhenAll(historyTask, menuTask, prefsTask);
+            await Task.WhenAll(historyTask, menuTask, orderHistoryTask);
 
-            return (await historyTask, await menuTask, await prefsTask);
+            return (await historyTask, await menuTask, await orderHistoryTask);
         }
 
-        private async Task<List<MenuCategory>> LoadMenuCachedAsync()
+        private async Task<List<string>> LoadOrderHistory(Guid? customerId)
         {
-            var cacheKey = $"AIMenu:{_currentTenant?.Hostname ?? "default"}";
-            var cached = await _redisService.GetStringAsync(cacheKey);
-            if (!string.IsNullOrEmpty(cached))
-                return JsonSerializer.Deserialize<List<MenuCategory>>(cached, _jsonOptions) ?? new List<MenuCategory>();
+            if (!customerId.HasValue) return new List<string>();
 
-            var menu = await _dishService.GetMenu();
-            await _redisService.SetStringAsync(cacheKey, JsonSerializer.Serialize(menu, _jsonOptions), TimeSpan.FromMinutes(5));
-            return menu;
+            var orders = await Repo.GetAsync<RestX.Models.Orders.Order>(
+                filter: o => o.CustomerId == customerId.Value,
+                includeProperties: "OrderDetails,OrderDetails.Dish");
+
+            return orders
+                .SelectMany(o => o.OrderDetails)
+                .Where(d => d.Dish != null)
+                .GroupBy(d => d.Dish.Name)
+                .OrderByDescending(g => g.Sum(d => d.Quantity))
+                .Take(5)
+                .Select(g => g.Key)
+                .ToList();
         }
 
-        private async Task<List<ChatMessage>> LoadHistoryAsync(string sessionId)
+        private async Task<List<ChatMessage>> LoadHistory(string sessionId)
         {
-            var json = await _redisService.GetStringAsync(GetSessionKey(sessionId));
-            if (string.IsNullOrEmpty(json)) return new List<ChatMessage>();
-            return JsonSerializer.Deserialize<List<ChatMessage>>(json, _jsonOptions) ?? new List<ChatMessage>();
+            var session = await Repo.GetOneAsync<AIChatSession>(s => s.SessionId == sessionId, "Messages");
+            if (session == null) return new List<ChatMessage>();
+
+            return session.Messages
+                .OrderBy(m => m.CreatedDate)
+                .Select(m => new ChatMessage { Role = m.Role, Content = m.Content })
+                .ToList();
         }
 
-        private async Task SaveHistoryAsync(string sessionId, List<ChatMessage> history)
+        private async Task<AIChatSession> SaveHistory(string sessionId, string userMessage, string assistantMessage, Guid? customerId = null, Guid? tableId = null)
         {
-            var json = JsonSerializer.Serialize(history, _jsonOptions);
-            await _redisService.SetStringAsync(GetSessionKey(sessionId), json, TimeSpan.FromMinutes(_sessionExpireMinutes));
+            var session = await Repo.GetOneAsync<AIChatSession>(s => s.SessionId == sessionId);
+            if (session == null)
+            {
+                session = new AIChatSession
+                {
+                    SessionId = sessionId,
+                    CustomerId = customerId,
+                    TableId = tableId,
+                    ExpiresAt = DateTime.UtcNow.AddMinutes(_sessionExpireMinutes)
+                };
+                await Repo.CreateAsync(session);
+            }
+            else
+            {
+                session.ExpiresAt = DateTime.UtcNow.AddMinutes(_sessionExpireMinutes);
+                if (customerId.HasValue && !session.CustomerId.HasValue)
+                    session.CustomerId = customerId;
+                if (tableId.HasValue && !session.TableId.HasValue)
+                    session.TableId = tableId;
+                Repo.Update(session);
+            }
+
+            await Repo.CreateAsync(new AIChatMessage { AIChatSessionId = session.Id, Role = "user", Content = userMessage });
+            await Repo.CreateAsync(new AIChatMessage { AIChatSessionId = session.Id, Role = "assistant", Content = assistantMessage });
+
+            var allMessages = (await Repo.GetAsync<AIChatMessage>(
+                m => m.AIChatSessionId == session.Id,
+                orderBy: q => q.OrderBy(m => m.CreatedDate))).ToList();
+
+            if (allMessages.Count > _maxHistoryMessages)
+            {
+                var toDelete = allMessages.Take(allMessages.Count - _maxHistoryMessages).ToList();
+                foreach (var msg in toDelete)
+                    Repo.Delete(msg);
+                await Repo.SaveAsync();
+            }
+
+            return session;
         }
 
-        private async Task<List<string>> LoadUserPrefsAsync(string? userId)
+        private async Task<Guid?> GetCustomerId(string? userId)
         {
-            if (string.IsNullOrEmpty(userId)) return new List<string>();
-            var json = await _redisService.GetStringAsync(GetUserPrefsKey(userId));
-            if (string.IsNullOrEmpty(json)) return new List<string>();
-            return JsonSerializer.Deserialize<List<string>>(json, _jsonOptions) ?? new List<string>();
+            if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var appUserId))
+                return null;
+            return await _customerService.GetCustomerIdByApplicationUserIdAsync(appUserId);
         }
 
-        private async Task SaveUserPrefsAsync(string userId, List<AIOrderDraftItem> items)
-        {
-            var key = GetUserPrefsKey(userId);
-            var existingJson = await _redisService.GetStringAsync(key);
-            var existing = string.IsNullOrEmpty(existingJson)
-                ? new List<string>()
-                : JsonSerializer.Deserialize<List<string>>(existingJson, _jsonOptions) ?? new List<string>();
-
-            foreach (var item in items)
-                if (!existing.Contains(item.DishName))
-                    existing.Add(item.DishName);
-
-            if (existing.Count > 10)
-                existing = existing.Skip(existing.Count - 10).ToList();
-
-            await _redisService.SetStringAsync(key, JsonSerializer.Serialize(existing, _jsonOptions), TimeSpan.FromDays(30));
-        }
-
-        private string GetSessionKey(string sessionId) =>
-            $"AIChat:{_currentTenant?.Hostname ?? "default"}:{sessionId}";
-
-        private string GetUserPrefsKey(string userId) =>
-            $"AIUserPrefs:{_currentTenant?.Hostname ?? "default"}:{userId}";
     }
 }

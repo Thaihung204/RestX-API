@@ -13,5 +13,6 @@ namespace RestX.BLL.Interfaces.Inventory
         Task<IngredientCategory?> GetIngredientCategoryById(Guid id);
         Task<Guid> UpsertIngredientCategory(IngredientCategory model, string userId);
         Task<bool> DeleteIngredientCategory(Guid id);
+        Task DeductFromRecipe(Guid dishId, int quantity);
     }
 }

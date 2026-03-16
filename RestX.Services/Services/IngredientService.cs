@@ -1,13 +1,15 @@
 ﻿using AutoMapper;
 using RestX.BLL.DataTranferObjects.Inventory;
+using RestX.BLL.Exceptionhandling;
 using RestX.BLL.Extensions;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Inventory;
 using RestX.Models.Enum;
 using RestX.Models.Inventory;
+using RestX.Models.Menu;
 using RestX.Models.Tenants;
-using IngredientCategory = RestX.Models.Inventory.IngredientCategory;
 using IngredientCategories = RestX.BLL.DataTranferObjects.Inventory.IngredientCategory;
+using IngredientCategory = RestX.Models.Inventory.IngredientCategory;
 
 namespace RestX.BLL.Services
 {
@@ -49,7 +51,11 @@ namespace RestX.BLL.Services
             Ingredient ingredient;
             if (ingredientItem.Id != null)
             {
-                ingredient = await Repo.GetByIdAsync<Ingredient>(ingredientItem.Id);
+                ingredient = await Repo.GetOneAsync<Ingredient>(
+                    filter: i => i.Id == ingredientItem.Id,
+                    includeProperties: "InventoryStock"
+                );
+
                 if (ingredient == null)
                     return Guid.Empty;
                 ingredient.Name = ingredientItem.Name;
@@ -60,7 +66,10 @@ namespace RestX.BLL.Services
                 ingredient.SupplierId = ingredientItem.SupplierId;
                 ingredient.Type = ingredientItem.Type;
                 ingredient.IsActive = ingredientItem.IsActive;
+                ingredient.InventoryStock.CurrentQuantity = ingredientItem.CurrentQuantity;
+                ingredient.InventoryStock.LastUpdated = DateTime.UtcNow;
                 Repo.Update(ingredient);
+
                 await Repo.SaveAsync();
                 return ingredient.Id;
             }
@@ -74,7 +83,12 @@ namespace RestX.BLL.Services
                 MaxStockLevel = ingredientItem.MaxStockLevel,
                 SupplierId = ingredientItem.SupplierId,
                 Type = ingredientItem.Type,
-                IsActive = ingredientItem.IsActive
+                IsActive = ingredientItem.IsActive,
+                InventoryStock = new InventoryStock
+                {
+                    CurrentQuantity = ingredientItem.CurrentQuantity,
+                    LastUpdated = DateTime.UtcNow
+                }
             };
             await Repo.CreateAsync(ingredient);
             return ingredient.Id;
@@ -171,5 +185,34 @@ namespace RestX.BLL.Services
             return true;
         }
         #endregion
+
+        public async Task DeductFromRecipe(Guid dishId, int quantity)
+        {
+            var recipes = await Repo.GetAsync<DishRecipe>(
+                filter: r => r.DishId == dishId,
+                includeProperties: "Ingredient,Ingredient.InventoryStock"
+            );
+
+            foreach (var recipe in recipes)
+            {
+                var ingredient = recipe.Ingredient;
+                if (ingredient?.InventoryStock == null) continue;
+
+                var deduction = recipe.Quantity * quantity;
+
+                if (ingredient.InventoryStock.CurrentQuantity < deduction)
+                {
+                    throw new AppException(
+                        $"Not enough '{ingredient.Name}'. Avalablie Stock: {ingredient.InventoryStock.CurrentQuantity} {ingredient.Unit}"
+                    );
+                }
+                ingredient.InventoryStock.CurrentQuantity -= deduction;
+
+                await UpdateIngredientStatus(ingredient.Id, ingredient.InventoryStock.CurrentQuantity);
+            }
+
+            await Repo.SaveAsync();
+        }
+
     }
 }

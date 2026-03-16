@@ -2,6 +2,7 @@
 using Microsoft.Data.SqlClient;
 using RestX.BLL.DataTranferObjects.Orders;
 using RestX.BLL.Interfaces;
+using RestX.BLL.Interfaces.Inventory;
 using RestX.BLL.Interfaces.Status;
 using RestX.BLL.Interfaces.Tables;
 using RestX.Models.Common;
@@ -19,8 +20,10 @@ namespace RestX.BLL.Services
         private readonly IMapper mapper;
         private readonly IStatusValueService statusValueService;
         private readonly ITableService tableService;
+        private readonly IIngredientService ingredientService;
 
         public OrderService(
+            IIngredientService ingredientService,
             IStatusValueService statusValueService,
             ITableService tableService,
             IMapper mapper,
@@ -29,6 +32,7 @@ namespace RestX.BLL.Services
             IEnumerable<ActiveTenant> tenant = null
         ) : base(repo, redisService, tenant)
         {
+            this.ingredientService = ingredientService;
             this.statusValueService = statusValueService;
             this.tableService = tableService;
             this.mapper = mapper;
@@ -450,6 +454,8 @@ namespace RestX.BLL.Services
             if (order == null)
                 return false;
 
+            var oldStatus = order.OrderStatusId;
+
             if (userId != String.Empty)
             {
                 order.HandledBy = Guid.Parse(userId);
@@ -460,6 +466,23 @@ namespace RestX.BLL.Services
                 order.CancelledAt = DateTime.UtcNow;
             else if (statusId == (int)OrderStatus.Completed)
                 order.CompletedAt = DateTime.UtcNow;
+
+            if (oldStatus != OrderStatus.Confirmed && statusId == (int)OrderStatus.Confirmed)
+            {
+                var orderDetails = await Repo.GetAsync<Models.Orders.OrderDetail>(
+                    filter: od => od.OrderId == orderId,
+                    includeProperties: "Dish"
+                );
+
+                foreach (var detail in orderDetails)
+                {
+                    var hasRecipe = await Repo.GetExistsAsync<DishRecipe>(r => r.DishId == detail.DishId);
+                    if (hasRecipe)
+                    {
+                        await ingredientService.DeductFromRecipe(detail.DishId, detail.Quantity);
+                    }
+                }
+            }
 
             Repo.Update(order, userId);
             await Repo.SaveAsync();

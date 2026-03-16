@@ -10,5 +10,13 @@ namespace RestX.BLL.Interfaces
         Task<Guid> UpsertDish(DishItem dishItem);
         Task<bool> DeleteDish(Guid id);
         Task<List<MenuCategory>> GetMenu();
+
+        // Recipe methods
+        Task<List<DishRecipeItem>> GetRecipesByDishId(Guid dishId);
+        Task<DishRecipeItem?> GetRecipeById(Guid id);
+        Task<Guid> CreateRecipe(DishRecipeItem item);
+        Task<Guid> UpdateRecipe(Guid id, DishRecipeItem item);
+        Task<bool> DeleteRecipe(Guid id);
+        Task<Guid> SetRecipes(Guid dishId, List<DishRecipeItem> items);
     }
 }

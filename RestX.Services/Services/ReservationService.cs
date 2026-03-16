@@ -115,7 +115,11 @@ namespace RestX.BLL.Services
                 filter: predicate,
                 orderBy: filter.SortDescending
                     ? q => q.OrderByDescending(r => r.Time)
-                    : q => q.OrderBy(r => r.Time),
+                    : q => q.OrderBy(r =>
+                                r.ReservationStatus.Code == CompletedCode || r.ReservationStatus.Code == CancelledCode ? 2 :
+                                r.Time >= VnNow ? 0 : 1)
+                            .ThenBy(r => r.Time)
+                            .ThenBy(r => r.ReservationStatus.Code == ConfirmedCode ? 0 : r.ReservationStatus.Code == PendingCode ? 1 : 2),
                 includeProperties: ReservationIncludes,
                 skip: (filter.PageNumber - 1) * filter.PageSize,
                 take: filter.PageSize
@@ -521,6 +525,8 @@ namespace RestX.BLL.Services
                 : dateTime;
             if (localDateTime <= VnNow)
                 throw new ArgumentException("Reservation date and time must be in the future");
+            if (localDateTime > VnNow.AddMonths(1))
+                throw new ArgumentException("Reservation can only be made up to 1 month in advance");
         }
 
         private static void ValidateDistinctTableIds(List<Guid> tableIds)
@@ -591,7 +597,7 @@ namespace RestX.BLL.Services
         }
 
         private static string GenerateConfirmationCode(Guid id)
-            => "RX-" + id.ToString("N")[..6].ToUpper();
+            => id.ToString("N")[..6].ToUpper();
 
         #endregion
     }

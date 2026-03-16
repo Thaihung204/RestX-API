@@ -1,8 +1,9 @@
 using AutoMapper;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using RestX.BLL.DataTranferObjects.Employee;
+using RestX.BLL.Exceptionhandling;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Employees;
 using RestX.Models.Identity;
@@ -35,6 +36,10 @@ namespace RestX.WebApp.Controllers
                 var result = await employeeService.GetAllEmployeesPaginated(filter);
                 return Ok(new { success = true, data = result });
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (Exception ex)
             {
                 this.ExceptionHandler.RaiseException(ex);
@@ -54,6 +59,10 @@ namespace RestX.WebApp.Controllers
                 }
                 return Ok(new { success = true, data = employee });
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (Exception ex)
             {
                 this.ExceptionHandler.RaiseException(ex);
@@ -72,6 +81,10 @@ namespace RestX.WebApp.Controllers
                 }
                 var result = await employeeService.CreateEmployee(dto);
                 return Ok(new { success = true, message = "Employee created successfully", data = result });
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
             }
             catch (InvalidOperationException ex)
             {
@@ -100,6 +113,10 @@ namespace RestX.WebApp.Controllers
                 }
                 return Ok(new { success = true, message = "Employee updated successfully", data = result });
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (InvalidOperationException ex)
             {
                 return BadRequest(new { success = false, message = ex.Message });
@@ -122,6 +139,10 @@ namespace RestX.WebApp.Controllers
                     return NotFound(new { success = false, message = "Employee not found" });
                 }
                 return Ok(new { success = true, message = "Employee deleted successfully" });
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
             }
             catch (Exception ex)
             {

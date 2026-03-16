@@ -1,8 +1,9 @@
 using AutoMapper;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using RestX.BLL.DataTranferObjects.Floor;
+using RestX.BLL.Exceptionhandling;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Tables;
 using RestX.Models.Identity;
@@ -39,6 +40,10 @@ namespace RestX.WebApp.Controllers
                 var floors = await floorService.GetAllFloors();
                 return Ok(new { success = true, data = floors });
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (Exception ex)
             {
                 this.ExceptionHandler.RaiseException(ex);
@@ -56,6 +61,10 @@ namespace RestX.WebApp.Controllers
                 if (floor == null)
                     return NotFound(new { success = false, message = "Floor not found" });
                 return Ok(new { success = true, data = floor });
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
             }
             catch (Exception ex)
             {
@@ -76,6 +85,10 @@ namespace RestX.WebApp.Controllers
                 var floorId = await floorService.UpsertFloor(request, user?.Id.ToString());
                 return Ok(new { success = true, message = "Floor created successfully", data = new { id = floorId } });
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (Exception ex)
             {
                 this.ExceptionHandler.RaiseException(ex);
@@ -95,6 +108,10 @@ namespace RestX.WebApp.Controllers
                 var user = await GetCurrentUserAsync();
                 var floorId = await floorService.UpsertFloor(request, user?.Id.ToString());
                 return Ok(new { success = true, message = "Floor updated successfully", data = new { id = floorId } });
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
             }
             catch (InvalidOperationException)
             {
@@ -117,6 +134,10 @@ namespace RestX.WebApp.Controllers
                 if (layout == null)
                     return NotFound(new { success = false, message = "Floor layout not found" });
                 return Ok(new { success = true, data = layout });
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
             }
             catch (Exception ex)
             {
@@ -141,6 +162,10 @@ namespace RestX.WebApp.Controllers
                 await BroadcastToTenant(SignalrServer.TableLayoutUpdated, new { floorId });
                 return Ok(new { success = true, message = "Layout saved successfully" });
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (Exception ex)
             {
                 this.ExceptionHandler.RaiseException(ex);
@@ -158,6 +183,10 @@ namespace RestX.WebApp.Controllers
                 if (!success)
                     return NotFound(new { success = false, message = "Floor not found" });
                 return Ok(new { success = true, message = "Floor deleted successfully" });
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
             }
             catch (Exception ex)
             {

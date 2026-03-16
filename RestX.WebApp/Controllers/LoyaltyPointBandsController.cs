@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using RestX.BLL.DataTranferObjects.Loyalty;
+using RestX.BLL.Exceptionhandling;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Loyalty;
 using RestX.Models.Identity;
@@ -39,6 +40,10 @@ namespace RestX.WebApp.Controllers
                 var bands = await loyaltyPointBandService.GetAllLoyaltyPointBands();
                 return Ok(new { success = true, data = bands });
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (Exception ex)
             {
                 this.ExceptionHandler.RaiseException(ex);
@@ -56,6 +61,10 @@ namespace RestX.WebApp.Controllers
                 if (band == null)
                     return NotFound(new { success = false, message = "Loyalty point band not found" });
                 return Ok(new { success = true, data = band });
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
             }
             catch (Exception ex)
             {
@@ -75,6 +84,10 @@ namespace RestX.WebApp.Controllers
                 var user = await GetCurrentUserAsync();
                 var id = await loyaltyPointBandService.UpsertLoyaltyPointBand(request, user?.Id.ToString());
                 return Ok(new { success = true, message = "Loyalty point band created successfully", data = new { id } });
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
             }
             catch (ArgumentException ex)
             {
@@ -102,6 +115,10 @@ namespace RestX.WebApp.Controllers
                     return NotFound(new { success = false, message = "Loyalty point band not found" });
                 return Ok(new { success = true, message = "Loyalty point band updated successfully", data = new { id = resultId } });
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (ArgumentException ex)
             {
                 return BadRequest(new { success = false, message = ex.Message });
@@ -123,6 +140,10 @@ namespace RestX.WebApp.Controllers
                 if (!success)
                     return NotFound(new { success = false, message = "Loyalty point band not found" });
                 return Ok(new { success = true, message = "Loyalty point band deleted successfully" });
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
             }
             catch (Exception ex)
             {

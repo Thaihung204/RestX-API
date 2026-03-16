@@ -179,6 +179,8 @@ namespace RestX.BLL.Helpers
                 .ForMember(dest => dest.Status, opt => opt.MapFrom(src => src.ReservationStatus))
                 .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(src => src.CreatedDate))
                 .ForMember(dest => dest.UpdatedAt, opt => opt.MapFrom(src => src.ModifiedDate));
+
+            CreateMap<DishRecipe, DishRecipeItem>().ReverseMap();
         }
     }
 }

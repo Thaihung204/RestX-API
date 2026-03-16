@@ -1,8 +1,9 @@
 ﻿using AutoMapper;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using RestX.BLL.DataTranferObjects.Category;
+using RestX.BLL.Exceptionhandling;
 using RestX.BLL.Interfaces;
 using RestX.Models.Identity;
 using RestX.Models.Menu;
@@ -37,6 +38,10 @@ namespace RestX.WebApp.Controllers
                 var categories = await categoryService.GetAllCategories();
                 return Ok(categories);
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (Exception ex)
             {
                 this.ExceptionHandler.RaiseException(ex);
@@ -52,6 +57,10 @@ namespace RestX.WebApp.Controllers
             {
                 var category = await categoryService.GetCategoryById(id);
                 return Ok(category);
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
             }
             catch (Exception ex)
             {
@@ -71,6 +80,10 @@ namespace RestX.WebApp.Controllers
                 var categoryId = await categoryService.UpsertCategory(category);
                 return Ok(categoryId);
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (Exception ex)
             {
                 this.ExceptionHandler.RaiseException(ex);
@@ -87,6 +100,10 @@ namespace RestX.WebApp.Controllers
                 var categoryId = await categoryService.UpsertCategory(category);
                 return Ok(categoryId);
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (Exception ex)
             {
                 this.ExceptionHandler.RaiseException(ex);
@@ -102,6 +119,10 @@ namespace RestX.WebApp.Controllers
             {
                 await categoryService.DeleteCategory(id);
                 return Ok();
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
             }
             catch (Exception ex)
             {

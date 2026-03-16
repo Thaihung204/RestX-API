@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using RestX.BLL.DataTranferObjects.Inventory;
+using RestX.BLL.Exceptionhandling;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Inventory;
 using RestX.Models.Identity;
@@ -36,6 +37,10 @@ namespace RestX.WebApp.Controllers
                 var suppliers = await supplierService.GetAllSuppliers();
                 return Ok(suppliers);
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (Exception ex)
             {
                 this.ExceptionHandler.RaiseException(ex);
@@ -50,6 +55,10 @@ namespace RestX.WebApp.Controllers
             {
                 var supplier = await supplierService.GetSupplierById(id);
                 return Ok(supplier);
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
             }
             catch (Exception ex)
             {
@@ -67,6 +76,10 @@ namespace RestX.WebApp.Controllers
                 var supplierId = await supplierService.UpsertSupplier(supplier);
                 return Ok(supplierId);
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (Exception ex)
             {
                 this.ExceptionHandler.RaiseException(ex);
@@ -82,6 +95,10 @@ namespace RestX.WebApp.Controllers
                 var supplierId = await supplierService.UpsertSupplier(supplier);
                 return Ok(supplierId);
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (Exception ex)
             {
                 this.ExceptionHandler.RaiseException(ex);
@@ -96,6 +113,10 @@ namespace RestX.WebApp.Controllers
             {
                 await supplierService.DeleteSupplier(id);
                 return Ok();
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
             }
             catch (Exception ex)
             {

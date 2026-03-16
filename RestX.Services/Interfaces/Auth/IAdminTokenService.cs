@@ -1,10 +1,10 @@
-using RestX.Models.Identity;
+using RestX.Models.Admin;
 
 namespace RestX.BLL.Interfaces.Auth
 {
-    public interface ITokenService
+    public interface IAdminTokenService
     {
-        string GenerateAccessToken(ApplicationUser user, IList<string> roles, string hostname);
+        string GenerateAccessToken(Admin admin, IList<string> roles);
         string GenerateRefreshToken();
         DateTime GetAccessTokenExpiry();
         DateTime GetRefreshTokenExpiry();

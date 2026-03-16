@@ -1,4 +1,5 @@
-﻿using RestX.BLL.DataTranferObjects.Tenants;
+﻿using Microsoft.AspNetCore.Http;
+using RestX.BLL.DataTranferObjects.Tenants;
 using RestX.Models.Tenants;
 
 namespace RestX.BLL.Interfaces
@@ -7,7 +8,9 @@ namespace RestX.BLL.Interfaces
     {
         Task<IEnumerable<Tenant>> GetAllTenants();
         Task<TenantOverview> GetTenantByIdOrHostname(string id);
-        Task<Tenant> UpsertTenant(TenantItem model);
+        Task<Tenant> UpdateTenant(TenantItem model);
+        Task UploadAndCreateTenant(TenantItem model);
+        Task CreateTenant(TenantItem model);
         Task DeleteTenant(string id);
         Task<IEnumerable<DataTranferObjects.Tenants.TenantRequest>> GetAllTenantRequests();
         Task<DataTranferObjects.Tenants.TenantRequest?> GetTenantRequestById(Guid tenantRequestsId);

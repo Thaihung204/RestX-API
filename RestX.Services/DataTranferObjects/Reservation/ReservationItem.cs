@@ -45,6 +45,7 @@ namespace RestX.BLL.DataTranferObjects.Reservation
 
     public class ReservationFilterParams : BaseFilterParams
     {
+        public new bool SortDescending { get; set; } = false;
         public int? StatusId { get; set; }
         public DateTime? Date { get; set; }
         public Guid? TableId { get; set; }
@@ -128,5 +129,11 @@ namespace RestX.BLL.DataTranferObjects.Reservation
         public string TableCode { get; set; } = string.Empty;
         public DateTime ConflictTime { get; set; }
         public string ConflictStatus { get; set; } = string.Empty;
+    }
+
+    public class ChangeReservationStatusRequest
+    {
+        [Required]
+        public int StatusId { get; set; }
     }
 }

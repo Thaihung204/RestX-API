@@ -2,6 +2,7 @@
 using Microsoft.Data.SqlClient;
 using RestX.BLL.DataTranferObjects.Orders;
 using RestX.BLL.Interfaces;
+using RestX.BLL.Interfaces.Inventory;
 using RestX.BLL.Interfaces.Status;
 using RestX.BLL.Interfaces.Tables;
 using RestX.Models.Common;
@@ -19,8 +20,10 @@ namespace RestX.BLL.Services
         private readonly IMapper mapper;
         private readonly IStatusValueService statusValueService;
         private readonly ITableService tableService;
+        private readonly IIngredientService ingredientService;
 
         public OrderService(
+            IIngredientService ingredientService,
             IStatusValueService statusValueService,
             ITableService tableService,
             IMapper mapper,
@@ -29,6 +32,7 @@ namespace RestX.BLL.Services
             IEnumerable<ActiveTenant> tenant = null
         ) : base(repo, redisService, tenant)
         {
+            this.ingredientService = ingredientService;
             this.statusValueService = statusValueService;
             this.tableService = tableService;
             this.mapper = mapper;
@@ -307,7 +311,7 @@ namespace RestX.BLL.Services
             orderEntity.CalculateTotalAmount();
 
             await Repo.CreateAsync(orderEntity, userId);
-            tableService.ChangeTableStatus(order.TableId, TableStatus.Reserved);
+            await tableService.ChangeTableStatus(order.TableId, TableStatus.Reserved);
 
             return orderEntity.Id;
         }
@@ -394,7 +398,7 @@ namespace RestX.BLL.Services
             orderEntity.SubTotal = subTotal;
             orderEntity.CalculateTotalAmount();
 
-            Repo.Update(orderEntity);
+            Repo.Update(orderEntity, userId);
             await Repo.SaveAsync();
 
             return orderEntity.Id;
@@ -443,11 +447,14 @@ namespace RestX.BLL.Services
             Repo.Delete<Models.Orders.Order>(id);
             await Repo.SaveAsync();
         }
-        public async Task<bool> UpdateStatusAsync(Guid orderId, int statusId, string? userId)
+
+        public async Task<bool> UpdateStatus(Guid orderId, int statusId, string userId)
         {
             var order = await Repo.GetByIdAsync<Models.Orders.Order>(orderId);
             if (order == null)
                 return false;
+
+            var oldStatus = order.OrderStatusId;
 
             if (userId != String.Empty)
             {
@@ -460,11 +467,41 @@ namespace RestX.BLL.Services
             else if (statusId == (int)OrderStatus.Completed)
                 order.CompletedAt = DateTime.UtcNow;
 
-            Repo.Update(order);
+            if (oldStatus != OrderStatus.Confirmed && statusId == (int)OrderStatus.Confirmed)
+            {
+                var orderDetails = await Repo.GetAsync<Models.Orders.OrderDetail>(
+                    filter: od => od.OrderId == orderId,
+                    includeProperties: "Dish"
+                );
+
+                foreach (var detail in orderDetails)
+                {
+                    var hasRecipe = await Repo.GetExistsAsync<DishRecipe>(r => r.DishId == detail.DishId);
+                    if (hasRecipe)
+                    {
+                        await ingredientService.DeductFromRecipe(detail.DishId, detail.Quantity);
+                    }
+                }
+            }
+
+            Repo.Update(order, userId);
             await Repo.SaveAsync();
 
             return true;
         }
 
+        public async Task<bool> UpdateOrderDetailStatus(Guid orderDetailId, int statusId, string userId)
+        {
+            var orderDetail = await Repo.GetByIdAsync<Models.Orders.OrderDetail>(orderDetailId);
+            if (orderDetail == null)
+                return false;
+
+            orderDetail.ItemStatusId = statusId;
+
+            Repo.Update(orderDetail, userId);
+            await Repo.SaveAsync();
+
+            return true;
+        }
     }
 }

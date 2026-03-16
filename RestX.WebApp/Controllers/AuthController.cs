@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using RestX.BLL.DataTranferObjects.Authentication;
+using RestX.BLL.Exceptionhandling;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Auth;
 using RestX.Models.Identity;
@@ -42,6 +43,10 @@ namespace RestX.WebApp.Controllers
                 }
                 return Ok(result);
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (Exception ex)
             {
                 this.ExceptionHandler.RaiseException(ex);
@@ -65,6 +70,10 @@ namespace RestX.WebApp.Controllers
                     return BadRequest(result);
                 }
                 return Ok(result);
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
             }
             catch (Exception ex)
             {
@@ -95,6 +104,10 @@ namespace RestX.WebApp.Controllers
                 }
                 return Ok(result);
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (Exception ex)
             {
                 this.ExceptionHandler.RaiseException(ex);
@@ -117,6 +130,10 @@ namespace RestX.WebApp.Controllers
                     return BadRequest(result);
                 }
                 return Ok(result);
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
             }
             catch (Exception ex)
             {
@@ -141,6 +158,10 @@ namespace RestX.WebApp.Controllers
                 }
                 return Ok(result);
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (Exception ex)
             {
                 this.ExceptionHandler.RaiseException(ex);
@@ -164,12 +185,17 @@ namespace RestX.WebApp.Controllers
                 }
                 return Ok(result);
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (Exception ex)
             {
                 this.ExceptionHandler.RaiseException(ex);
                 return BadRequest(AuthResponse.FailureResponse("An internal error occurred"));
             }
         }
+
         private Guid? GetCurrentUserId()
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -179,6 +205,7 @@ namespace RestX.WebApp.Controllers
             }
             return Guid.TryParse(userIdClaim, out var userId) ? userId : null;
         }
+
         [HttpPost("customer/check-phone")]
         [AllowAnonymous]
         public async Task<IActionResult> CheckPhoneNumber([FromBody] CheckPhoneRequest request)
@@ -192,12 +219,17 @@ namespace RestX.WebApp.Controllers
                 var result = await authService.CheckPhoneNumberAsync(request.PhoneNumber);
                 return Ok(result);
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (Exception ex)
             {
                 this.ExceptionHandler.RaiseException(ex);
                 return BadRequest(AuthResponse.FailureResponse("An internal error occurred"));
             }
         }
+
         [HttpPost("customer/phone-login")]
         [AllowAnonymous]
         public async Task<IActionResult> CustomerPhoneLogin([FromBody] CustomerPhoneLoginRequest request)
@@ -221,6 +253,7 @@ namespace RestX.WebApp.Controllers
                 return BadRequest(AuthResponse.FailureResponse("An internal error occurred"));
             }
         }
+
         [HttpPost("customer/phone-register")]
         [AllowAnonymous]
         public async Task<IActionResult> CustomerPhoneRegister([FromBody] CustomerPhoneRegisterRequest request)
@@ -237,6 +270,10 @@ namespace RestX.WebApp.Controllers
                     return BadRequest(result);
                 }
                 return Ok(result);
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
             }
             catch (Exception ex)
             {

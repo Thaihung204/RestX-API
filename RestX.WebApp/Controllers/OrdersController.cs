@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using RestX.BLL.DataTranferObjects.Orders;
+using RestX.BLL.Exceptionhandling;
 using RestX.BLL.Interfaces;
 using RestX.Models.Identity;
 using RestX.Models.Tenants;
@@ -35,12 +36,16 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpGet]
-        [Authorize(Roles = "Admin,Kitchen Staff,Waiter,Customer")]
+        [Authorize(Roles = "System Admin,Admin,Kitchen Staff,Waiter,Customer")]
         public async Task<ActionResult<OrderSearchResult>> GetAllOrders([FromQuery] OrderSearch model)
         {
             try
             {
                 return Ok(await orderService.GetAllOrders(model));
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
             }
             catch (Exception ex)
             {
@@ -50,7 +55,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpGet("{id:guid}")]
-        [Authorize(Roles = "Admin,Kitchen Staff,Waiter,Customer")]
+        [Authorize(Roles = "System Admin,Admin,Kitchen Staff,Waiter,Customer")]
         public async Task<ActionResult<Order>> GetOrderById([Required] Guid id)
         {
             try
@@ -61,6 +66,10 @@ namespace RestX.WebApp.Controllers
 
                 return Ok(order);
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (Exception ex)
             {
                 ExceptionHandler.RaiseException(ex);
@@ -69,7 +78,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpPost]
-        [Authorize(Roles = "Admin,Kitchen Staff,Waiter,Customer")]
+        [Authorize(Roles = "System Admin,Admin,Kitchen Staff,Waiter,Customer")]
         public async Task<ActionResult<Guid>> CreateOrder([FromBody] Order order)
         {
             try
@@ -77,7 +86,7 @@ namespace RestX.WebApp.Controllers
                 var currentUser = await GetCurrentUserAsync();
                 var userId = string.Empty;
                 if (currentUser?.Id != null)
-                    userId = currentUser.Id.ToString();
+                    userId = currentUser.MemberId.ToString();
                 else userId = order.CustomerId.ToString();
 
                 var id = await orderService.CreateOrder(order, userId);
@@ -89,6 +98,10 @@ namespace RestX.WebApp.Controllers
 
                 return Ok(id);
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (Exception ex)
             {
                 ExceptionHandler.RaiseException(ex);
@@ -97,7 +110,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpPut("{id:guid}")]
-        [Authorize(Roles = "Admin,Waiter")]
+        [Authorize(Roles = "System Admin,Admin,Waiter")]
         public async Task<ActionResult<Guid>> UpdateOrder([Required] Guid id, [FromBody] Order order)
         {
             try
@@ -105,7 +118,7 @@ namespace RestX.WebApp.Controllers
                 var currentUser = await GetCurrentUserAsync();
                 var userId = string.Empty;
                 if (currentUser?.Id != null)
-                    userId = currentUser.Id.ToString();
+                    userId = currentUser.MemberId.ToString();
                 else userId = order.CustomerId.ToString();
 
                     var updatedId = await orderService.UpdateOrder(id, order, userId);
@@ -117,6 +130,10 @@ namespace RestX.WebApp.Controllers
 
                 return Ok(updatedId);
             }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
             catch (Exception ex)
             {
                 ExceptionHandler.RaiseException(ex);
@@ -125,7 +142,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpDelete("{id:guid}")]
-        [Authorize(Roles = "Admin,Waiter")]
+        [Authorize(Roles = "System Admin,Admin,Waiter")]
         public async Task<IActionResult> DeleteOrder([Required] Guid id)
         {
             try
@@ -133,6 +150,10 @@ namespace RestX.WebApp.Controllers
                 await orderService.DeleteOrder(id);
                 await BroadcastToTenant(SignalrServer.OrderDeleted, new { id });
                 return Ok();
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
             }
             catch (Exception ex)
             {
@@ -142,18 +163,15 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpPut("{id:guid}/status")]
-        [Authorize(Roles = "Admin,Waiter,Kitchen")]
+        [Authorize(Roles = "System Admin,Admin,Waiter,Kitchen Staff")]
         public async Task<ActionResult<bool>> UpdateOrderStatus([Required] Guid id, [FromBody] int statusId)
         {
             try
             {
-                var userId = String.Empty;
-                if (statusId == 1) {
-                    var currentUser = await GetCurrentUserAsync();
-                    userId = currentUser?.Id.ToString() ?? string.Empty;
-                }
+                var currentUser = await GetCurrentUserAsync();
+                var userId = currentUser?.MemberId.ToString() ?? string.Empty;
 
-                var result = await orderService.UpdateStatusAsync(id, statusId, userId);
+                var result = await orderService.UpdateStatus(id, statusId, userId);
                 if (!result)
                     return NotFound(new { success = false, message = "Order not found" });
 
@@ -162,6 +180,39 @@ namespace RestX.WebApp.Controllers
                 await BroadcastToTenant(SignalrServer.OrderUpdated, new { id, order = updatedOrder });
 
                 return Ok(result);
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
+        [HttpPut("{orderId:guid}/order-details-status/{detailId:guid}")]
+        [Authorize(Roles = "System Admin,Admin,Waiter,Kitchen Staff")]
+        public async Task<ActionResult<bool>> UpdateOrderDetailStatus([Required] Guid orderId, [Required] Guid detailId, [FromBody] int statusId)
+        {
+            try
+            {
+                var currentUser = await GetCurrentUserAsync();
+                var userId = currentUser?.MemberId.ToString() ?? string.Empty;
+
+                var result = await orderService.UpdateOrderDetailStatus(detailId, statusId, userId);
+                if (!result)
+                    return NotFound(new { success = false, message = "Order detail not found" });
+
+                var updatedOrder = await orderService.GetOrderById(orderId);
+                await BroadcastToTenant(SignalrServer.OrderUpdated, new { id = orderId, order = updatedOrder });
+
+                return Ok(result);
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
             }
             catch (Exception ex)
             {

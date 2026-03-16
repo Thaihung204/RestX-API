@@ -1,7 +1,8 @@
 ﻿using AutoMapper;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using RestX.BLL.Exceptionhandling;
 using RestX.BLL.Helpers;
 using RestX.BLL.Interfaces;
 using RestX.Models.Identity;
@@ -15,20 +16,30 @@ namespace RestX.WebApp.Controllers;
 [Authorize(AuthenticationSchemes = "Bearer")]
 public class FormController : BaseController
 {
+    private readonly IFormListHelper formListHelper;
+
     public FormController(
+            IFormListHelper formListHelper,
             IMapper mapper,
             UserManager<ApplicationUser> userManager,
             IExceptionHandler exceptionHandler,
-            IEnumerable<ActiveTenant> tenant) : base(mapper, userManager, exceptionHandler, tenant) { }
+            IEnumerable<ActiveTenant> tenant) : base(mapper, userManager, exceptionHandler, tenant)
+    {
+        this.formListHelper = formListHelper;
+    }
 
     [HttpGet("get-lists/{name}")]
     [AllowAnonymous]
-    public IActionResult GetLists([FromRoute] string name)
+    public async Task<IActionResult> GetLists([FromRoute] string name)
     {
         try
         {
-            var data = FormListHelper.GetListByName(name);
+            var data = await formListHelper.GetListByName(name);
             return Ok(new { success = true, data });
+        }
+        catch (AppException ex)
+        {
+            return this.BadRequest(ex.Message);
         }
         catch (Exception ex)
         {

@@ -2,7 +2,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using RestX.BLL.DataTranferObjects.Common;
 using RestX.BLL.Interfaces.Auth;
-using RestX.Models.Identity;
+using RestX.Models.Admin;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
@@ -10,20 +10,20 @@ using System.Text;
 
 namespace RestX.BLL.Services.Auth
 {
-    public class TokenService : ITokenService
+    public class AdminTokenService : IAdminTokenService
     {
         private readonly JwtSettings jwtSettings;
 
-        public TokenService(IOptions<JwtSettings> jwtSettings)
+        public AdminTokenService(IOptions<JwtSettings> jwtSettings)
         {
             this.jwtSettings = jwtSettings.Value;
         }
 
-        public string GenerateAccessToken(ApplicationUser user, IList<string> roles, string hostname)
+        public string GenerateAccessToken(Admin admin, IList<string> roles)
         {
-            var claims = BuildClaims(user, roles, hostname);
+            var claims = BuildClaims(admin, roles);
             var key = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(jwtSettings.Secret));
-             var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+            var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
             var token = new JwtSecurityToken(
                 issuer: jwtSettings.Issuer,
@@ -50,15 +50,14 @@ namespace RestX.BLL.Services.Auth
         public DateTime GetRefreshTokenExpiry()
             => DateTime.UtcNow.AddDays(jwtSettings.RefreshTokenExpiryDays);
 
-        private static List<Claim> BuildClaims(ApplicationUser user, IList<string> roles, string hostname)
+        private static List<Claim> BuildClaims(Admin admin, IList<string> roles)
         {
             var claims = new List<Claim>
             {
-                new(ClaimTypes.NameIdentifier, user.Id.ToString()),
-                new(ClaimTypes.Email, user.Email ?? string.Empty),
-                new(ClaimTypes.Name, user.UserName ?? string.Empty),
-                new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-                new("tenant", hostname)
+                new(ClaimTypes.NameIdentifier, admin.Id),
+                new(ClaimTypes.Email, admin.Email ?? string.Empty),
+                new(ClaimTypes.Name, admin.UserName ?? string.Empty),
+                new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
             };
 
             claims.AddRange(roles.Select(role => new Claim(ClaimTypes.Role, role)));

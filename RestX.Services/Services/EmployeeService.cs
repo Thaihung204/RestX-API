@@ -53,6 +53,11 @@ namespace RestX.BLL.Services
             var (countQuery, countParams) = queryBuilder.BuildCountQuery("COUNT(DISTINCT e.Id)");
             int totalCount = await Repo.ExecuteSqlCommandAsync<int>(countQuery, countParams);
 
+            int totalActive = await Repo.ExecuteSqlCommandAsync<int>(
+                "SELECT COUNT(*) FROM Employees WHERE IsActive = 1");
+            int totalInactive = await Repo.ExecuteSqlCommandAsync<int>(
+                "SELECT COUNT(*) FROM Employees WHERE IsActive = 0");
+
             var selectColumns = @"DISTINCT e.Id, e.Code, u.UserName AS FullName, u.Email,
                                   e.Position, e.IsActive, e.HireDate, e.CreatedDate, u.AvatarUrl";
             var (dataQuery, dataParams) = queryBuilder.BuildDataQuery(
@@ -62,7 +67,11 @@ namespace RestX.BLL.Services
                 filter.PageSize);
 
             var items = await Repo.ExecuteSqlSelectAsync<EmployeeListItem>(dataQuery, dataParams);
-            return new PaginatedResult<EmployeeListItem>(items, totalCount, filter.PageNumber, filter.PageSize);
+            return new PaginatedResult<EmployeeListItem>(items, totalCount, filter.PageNumber, filter.PageSize)
+            {
+                TotalActive = totalActive,
+                TotalInactive = totalInactive
+            };
         }
 
         public async Task<EmployeeResponse?> GetEmployeeById(Guid id)

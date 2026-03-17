@@ -59,13 +59,16 @@ namespace RestX.BLL.Services
                 if (ingredient == null)
                     return Guid.Empty;
                 ingredient.Name = ingredientItem.Name;
-                ingredient.Code = ingredientItem.Code;
                 ingredient.Unit = ingredientItem.Unit;
                 ingredient.MinStockLevel = ingredientItem.MinStockLevel;
                 ingredient.MaxStockLevel = ingredientItem.MaxStockLevel;
                 ingredient.SupplierId = ingredientItem.SupplierId;
                 ingredient.Type = ingredientItem.Type;
                 ingredient.IsActive = ingredientItem.IsActive;
+                if (ingredient.InventoryStock == null)
+                {
+                    ingredient.InventoryStock = new InventoryStock();
+                }
                 ingredient.InventoryStock.CurrentQuantity = ingredientItem.CurrentQuantity;
                 ingredient.InventoryStock.LastUpdated = DateTime.UtcNow;
                 Repo.Update(ingredient);
@@ -77,7 +80,7 @@ namespace RestX.BLL.Services
             ingredient = new Ingredient
             {
                 Name = ingredientItem.Name,
-                Code = ingredientItem.Code,
+                Code = await GenerateNextIngredientCodeAsync(),
                 Unit = ingredientItem.Unit,
                 MinStockLevel = ingredientItem.MinStockLevel,
                 MaxStockLevel = ingredientItem.MaxStockLevel,
@@ -92,6 +95,22 @@ namespace RestX.BLL.Services
             };
             await Repo.CreateAsync(ingredient);
             return ingredient.Id;
+        }
+
+        private async Task<string> GenerateNextIngredientCodeAsync()
+        {
+            int number = await Repo.GetCountAsync<Ingredient>() + 1;
+            string code = $"ING{number:D3}";
+
+            bool exists = await Repo.GetExistsAsync<Ingredient>(x => x.Code == code);
+            while (exists)
+            {
+                number++;
+                code = $"ING{number:D3}";
+                exists = await Repo.GetExistsAsync<Ingredient>(x => x.Code == code);
+            }
+
+            return code;
         }
 
         public async Task UpdateIngredientStatus(Guid id, decimal currentQuantity)

@@ -1,3 +1,4 @@
+using AutoMapper;
 using Hangfire;
 using Hangfire.SqlServer;
 using Microsoft.AspNetCore.Authentication.JwtBearer;

@@ -66,7 +66,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpGet]
-        [Authorize(Roles = "Admin,System Admin,Waiter")]
+        [Authorize(Roles = "Admin,System Admin,Staff")]
         public async Task<IActionResult> GetReservations([FromQuery] ReservationFilterParams filter)
         {
             try
@@ -132,7 +132,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpGet("{id:guid}")]
-        [Authorize(Roles = "Admin,System Admin,Waiter,Customer")]
+        [Authorize(Roles = "Admin,System Admin,Staff,Customer")]
         public async Task<IActionResult> GetReservationById(Guid id)
         {
             try
@@ -155,7 +155,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpPut("{id:guid}")]
-        [Authorize(Roles = "Admin,System Admin,Waiter,Customer")]
+        [Authorize(Roles = "Admin,System Admin,Staff,Customer")]
         public async Task<IActionResult> UpdateReservation(Guid id, [FromBody] UpdateReservationRequest request)
         {
             try
@@ -190,7 +190,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpPut("{id:guid}/status")]
-        [Authorize(Roles = "Admin,System Admin,Waiter")]
+        [Authorize(Roles = "Admin,System Admin,Staff")]
         public async Task<IActionResult> ChangeStatus(Guid id, [FromBody] ChangeReservationStatusRequest request)
         {
             try
@@ -223,7 +223,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpPost("{code}/checkin")]
-        [Authorize(Roles = "Admin,System Admin,Waiter")]
+        [Authorize(Roles = "Admin,System Admin,Staff")]
         public async Task<IActionResult> CheckIn(string code)
         {
             try
@@ -252,7 +252,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpDelete("{id:guid}")]
-        [Authorize(Roles = "Admin,System Admin,Waiter,Customer")]
+        [Authorize(Roles = "Admin,System Admin,Staff,Customer")]
         public async Task<IActionResult> CancelReservation(Guid id)
         {
             try

@@ -36,7 +36,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpGet]
-        [Authorize(Roles = "System Admin,Admin,Kitchen Staff,Waiter,Customer")]
+        [Authorize(Roles = "System Admin,Admin,Staff,Customer")]
         public async Task<ActionResult<OrderSearchResult>> GetAllOrders([FromQuery] OrderSearch model)
         {
             try
@@ -55,7 +55,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpGet("{id:guid}")]
-        [Authorize(Roles = "System Admin,Admin,Kitchen Staff,Waiter,Customer")]
+        [Authorize(Roles = "System Admin,Admin,Staff,Customer")]
         public async Task<ActionResult<Order>> GetOrderById([Required] Guid id)
         {
             try
@@ -78,7 +78,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpPost]
-        [Authorize(Roles = "System Admin,Admin,Kitchen Staff,Waiter,Customer")]
+        [Authorize(Roles = "System Admin,Admin,Staff,Customer")]
         public async Task<ActionResult<Guid>> CreateOrder([FromBody] Order order)
         {
             try
@@ -110,7 +110,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpPut("{id:guid}")]
-        [Authorize(Roles = "System Admin,Admin,Waiter")]
+        [Authorize(Roles = "System Admin,Admin,Staff")]
         public async Task<ActionResult<Guid>> UpdateOrder([Required] Guid id, [FromBody] Order order)
         {
             try
@@ -142,7 +142,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpDelete("{id:guid}")]
-        [Authorize(Roles = "System Admin,Admin,Waiter")]
+        [Authorize(Roles = "System Admin,Admin,Staff")]
         public async Task<IActionResult> DeleteOrder([Required] Guid id)
         {
             try
@@ -163,7 +163,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpPut("{id:guid}/status")]
-        [Authorize(Roles = "System Admin,Admin,Waiter,Kitchen Staff")]
+        [Authorize(Roles = "System Admin,Admin,Staff")]
         public async Task<ActionResult<bool>> UpdateOrderStatus([Required] Guid id, [FromBody] int statusId)
         {
             try
@@ -193,7 +193,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpPut("{orderId:guid}/order-details-status/{detailId:guid}")]
-        [Authorize(Roles = "System Admin,Admin,Waiter,Kitchen Staff")]
+        [Authorize(Roles = "System Admin,Admin,Staff")]
         public async Task<ActionResult<bool>> UpdateOrderDetailStatus([Required] Guid orderId, [Required] Guid detailId, [FromBody] int statusId)
         {
             try

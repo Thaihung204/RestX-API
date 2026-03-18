@@ -33,7 +33,7 @@ namespace RestX.BLL.Services
                 Email = request.Email,
                 PhoneNumber = request.PhoneNumber,
                 EmailConfirmed = true,
-                LastModified = DateTime.UtcNow,
+                LastModified = DateTime.UtcNow.AddHours(7),
                 MemberId = request.MemberId,
                 RefreshToken = string.Empty
             };
@@ -61,7 +61,7 @@ namespace RestX.BLL.Services
             if (!string.IsNullOrWhiteSpace(request.PhoneNumber))
                 user.PhoneNumber = request.PhoneNumber;
 
-            user.LastModified = DateTime.UtcNow;
+            user.LastModified = DateTime.UtcNow.AddHours(7);
 
             var result = await userManager.UpdateAsync(user);
             if (!result.Succeeded)
@@ -74,7 +74,7 @@ namespace RestX.BLL.Services
         {
             user.LockoutEnabled = true;
             user.LockoutEnd = DateTimeOffset.MaxValue;
-            user.LastModified = DateTime.UtcNow;
+            user.LastModified = DateTime.UtcNow.AddHours(7);
 
             var result = await userManager.UpdateAsync(user);
             if (!result.Succeeded)
@@ -107,7 +107,7 @@ namespace RestX.BLL.Services
             var user = await userManager.FindByIdAsync(userId.ToString())
                 ?? throw new InvalidOperationException("User not found");
             user.AvatarUrl = uploadResult.Url;
-            user.LastModified = DateTime.UtcNow;
+            user.LastModified = DateTime.UtcNow.AddHours(7);
             var result = await userManager.UpdateAsync(user);
             if (!result.Succeeded)
                 throw new InvalidOperationException($"Failed to update avatar: {FormatIdentityErrors(result)}");

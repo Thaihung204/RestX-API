@@ -198,7 +198,7 @@ namespace RestX.BLL.Services
                 tenant.Hostname = model.Hostname;
 
                 tenant.ExpiredAt = model.ExpiredAt == default
-                    ? DateTime.UtcNow.AddYears(1)
+                    ? DateTime.UtcNow.AddHours(7).AddYears(1)
                     : model.ExpiredAt;
 
                 tenant.BusinessName = model.BusinessName;
@@ -311,7 +311,7 @@ namespace RestX.BLL.Services
 
                 // Expiry
                 ExpiredAt = model.ExpiredAt == default
-                    ? DateTime.UtcNow.AddYears(1)
+                    ? DateTime.UtcNow.AddHours(7).AddYears(1)
                     : model.ExpiredAt,
 
                 // Business

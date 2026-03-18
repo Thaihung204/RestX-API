@@ -96,7 +96,7 @@ namespace RestX.BLL.Services
                 CashReceive = request.CashReceive,
                 Cashback = cashback,
                 PaymentStatusId = paidStatusId,
-                PaymentDate = DateTime.UtcNow
+                PaymentDate = DateTime.UtcNow.AddHours(7)
             };
 
             await Repo.CreateAsync(payment, createdBy);
@@ -164,7 +164,7 @@ namespace RestX.BLL.Services
                 PayOSOrderCode = orderCode,
                 CheckoutUrl = link.CheckoutUrl,
                 PaymentStatusId = pendingStatus,
-                PaymentDate = DateTime.UtcNow
+                PaymentDate = DateTime.UtcNow.AddHours(7)
             };
 
             await Repo.CreateAsync(payment, createdBy);
@@ -282,7 +282,7 @@ namespace RestX.BLL.Services
 
         private static long GenerateOrderCode()
         {
-            var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            var timestamp = DateTimeOffset.UtcNow.AddHours(7).ToUnixTimeSeconds();
             var suffix = Random.Shared.Next(100, 999);
             return long.Parse($"{timestamp}{suffix}");
         }

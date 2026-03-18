@@ -14,7 +14,7 @@ using System.Text.Json.Serialization;
 
 namespace RestX.BLL.Services
 {
-    public class AIMenuService : BaseService, IAIMenuService
+    public class AIService : BaseService, IAIService
     {
         private readonly IDishService _dishService;
         private readonly IOrderService _orderService;
@@ -31,7 +31,7 @@ namespace RestX.BLL.Services
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
         };
 
-        public AIMenuService(
+        public AIService(
             IDishService dishService,
             IOrderService orderService,
             ICustomerService customerService,

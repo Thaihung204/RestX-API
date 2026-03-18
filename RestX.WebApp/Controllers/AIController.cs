@@ -14,13 +14,13 @@ namespace RestX.WebApp.Controllers
 {
     [Route("api/ai")]
     [ApiController]
-    public class AIMenuController : BaseController
+    public class AIController : BaseController
     {
         private const string SessionCookieName = "restx_ai_session";
-        private readonly IAIMenuService _aiMenuService;
+        private readonly IAIService _aiMenuService;
 
-        public AIMenuController(
-            IAIMenuService aiMenuService,
+        public AIController(
+            IAIService aiMenuService,
             IMapper mapper,
             UserManager<ApplicationUser> userManager,
             IExceptionHandler exceptionHandler,

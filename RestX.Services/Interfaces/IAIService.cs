@@ -3,7 +3,7 @@ using RestX.BLL.DataTranferObjects.AI;
 
 namespace RestX.BLL.Interfaces
 {
-    public interface IAIMenuService
+    public interface IAIService
     {
         Task<string> ResolveSession(string? cookieSessionId, string? userId);
         Task<AIChatResponse> Chat(AIChatRequest request);

@@ -22,7 +22,7 @@ namespace RestX.BLL.Helpers
     public static class UtilitiesHelper
     {
         public const string AdminRoles = "";
-        public const string TProfileEmailDomain = "@restx.food";
+        public const string RestXEmailDomain = "@restx.food";
 
         // Default Settings
         public const string DefaultFromEmailAddress = "admin@restx.food";

@@ -145,6 +145,8 @@ builder.Services.AddScoped<ICloudinaryService, CloudinaryService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<IAdminTokenService, AdminTokenService>();
 builder.Services.AddScoped<IAdminAuthService, AdminAuthService>();
+builder.Services.AddScoped<IRepoHelper, RepoHelper>();
+builder.Services.AddScoped<ITriggerService, TriggerService>();
 
 builder.Services.AddAutoMapper(typeof(AutoMapperProfile));
 var app = builder.Build();

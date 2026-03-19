@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Identity;
+﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using RestX.Models.Admin;
@@ -17,6 +18,7 @@ using RestX.Models.Promotions;
 using RestX.Models.Reservations;
 using RestX.Models.Tables;
 using RestX.Models.Tenants;
+using RestX.Models.Triggers;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -28,16 +30,20 @@ namespace RestX.DAL.Context
     public partial class TenantDbContext :  IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>
     {
         private readonly ActiveTenant tenant;
+        private IHttpContextAccessor context;
 
-        public TenantDbContext()
-        {
-        }
         public TenantDbContext(ActiveTenant tenant)
         {
             this.tenant = tenant;
         }
         public TenantDbContext(DbContextOptions<TenantDbContext> options)
             : base(options)
+        {
+        }
+
+        public TenantDbContext(
+            ActiveTenant activeTenant,
+            IEnumerable<IHttpContextAccessor> context)
         {
         }
 
@@ -125,12 +131,20 @@ namespace RestX.DAL.Context
         public virtual DbSet<StockTransaction> StockTransactions { get; set; }
         #endregion
 
+        #region DbSets - Trigger
+        public virtual DbSet<Trigger> Triggers { get; set; }
+        public virtual DbSet<TriggerAction> TriggerActions { get; set; }
+        public virtual DbSet<TriggerCriteria> TriggerCriteria { get; set; }
+        public virtual DbSet<TriggerObject> TriggerObjects { get; set; }
+        public virtual DbSet<TriggerGroup> TriggerGroups { get; set; }
+        #endregion
+
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
             if (!optionsBuilder.IsConfigured)
             {
                 var connectionString = tenant == null
-                    ? "Server=restx-sqlserver,1433;Database=demo_tenant;User Id=sa;Password=Passw0r1!;Encrypt=False;TrustServerCertificate=True;"
+                    ? "Server=localhost,1433;Database=demo_tenant;User Id=sa;Password=Passw0r1!;Encrypt=False;TrustServerCertificate=True;"
                     : tenant.ConnectionString;
                 optionsBuilder.UseSqlServer(connectionString);
                 //Trigger

@@ -28,6 +28,7 @@ using RestX.Models.Common;
 using RestX.BLL.DataTranferObjects.Reservation;
 using RestX.BLL.DataTranferObjects.Combo;
 using RestX.Models.Reservations;
+using RestX.Models.Triggers;
 
 namespace RestX.BLL.Helpers
 {
@@ -185,6 +186,8 @@ namespace RestX.BLL.Helpers
 
             CreateMap<MealCombo, ComboSummary>().ReverseMap();
             CreateMap<ComboDetail, ComboDetailItem>().ReverseMap();
+            CreateMap<TriggerObject, DataTransferObjects.Triggers.TriggerObject>()
+                .ReverseMap();
         }
     }
 }

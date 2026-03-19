@@ -196,6 +196,13 @@ namespace RestX.WebApp
             isDevlopement = isDevlopement || (Configuration.GetSection("AppSettings")["EmailProvider"] ?? "") == "Mailtrap";
             DIHelper.Setup(services, isDevlopement);
 
+            var aiApiKey = Configuration.GetSection("AISuggestion")["ApiKey"] ?? string.Empty;
+            services.AddHttpClient("OpenAI", client =>
+            {
+                client.BaseAddress = new Uri("https://api.groq.com/");
+                client.DefaultRequestHeaders.Add("Authorization", $"Bearer {aiApiKey}");
+            });
+
             services.AddCors(options =>
             {
                 options.AddPolicy("CustomCorsPolicy", builder =>
@@ -327,6 +334,11 @@ namespace RestX.WebApp
             app.UseAuthorization();
             app.UseMiddleware<TelemetryExtender>();
             app.ApplyMigrations();
+            RecurringJob.AddOrUpdate<IAIService>(
+                "cleanup-ai-sessions",
+                s => s.CleanupExpiredSessions(),
+                Cron.Hourly);
+
             app.UseEndpoints(endpoints =>
             {
                 endpoints.MapControllers();

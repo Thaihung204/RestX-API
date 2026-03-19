@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using RestX.Models.Admin;
+using RestX.Models.AI;
 using RestX.Models.Common;
 using RestX.Models.Customers;
 using RestX.Models.Feedbacks;
@@ -39,6 +40,11 @@ namespace RestX.DAL.Context
             : base(options)
         {
         }
+
+        #region DbSets - AI Chat
+        public virtual DbSet<AIChatSession> AIChatSessions { get; set; }
+        public virtual DbSet<AIChatMessage> AIChatMessages { get; set; }
+        #endregion
 
         #region DbSets - Status System
         public virtual DbSet<StatusType> StatusTypes { get; set; }
@@ -137,6 +143,7 @@ namespace RestX.DAL.Context
             base.OnModelCreating(modelBuilder);
 
             // Apply all configurations
+            ConfigureAIChat(modelBuilder);
             ConfigureStatusSystem(modelBuilder);
             ConfigureIdentity(modelBuilder);
             ConfigureHR(modelBuilder);
@@ -157,6 +164,33 @@ namespace RestX.DAL.Context
         partial void OnModelCreatingPartial(ModelBuilder modelBuilder);
 
         #region Configuration Methods
+
+        private void ConfigureAIChat(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<AIChatSession>(entity =>
+            {
+                entity.ToTable("AIChatSessions");
+                entity.HasKey(e => e.Id);
+                entity.HasIndex(e => e.SessionId).IsUnique();
+
+                entity.Property(e => e.SessionId).HasMaxLength(100).IsRequired();
+            });
+
+            modelBuilder.Entity<AIChatMessage>(entity =>
+            {
+                entity.ToTable("AIChatMessages");
+                entity.HasKey(e => e.Id);
+                entity.HasIndex(e => e.AIChatSessionId);
+
+                entity.Property(e => e.Role).HasMaxLength(20).IsRequired();
+                entity.Property(e => e.Content).HasColumnType("nvarchar(max)").IsRequired();
+
+                entity.HasOne(e => e.Session)
+                    .WithMany(s => s.Messages)
+                    .HasForeignKey(e => e.AIChatSessionId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+        }
 
         private void ConfigureStatusSystem(ModelBuilder modelBuilder)
         {

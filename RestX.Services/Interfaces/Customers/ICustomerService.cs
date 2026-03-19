@@ -10,5 +10,6 @@ namespace RestX.BLL.Interfaces.Customers
         Task<CustomerResponse> CreateCustomer(CreateCustomer dto);
         Task<CustomerResponse?> UpdateCustomer(Guid id, UpdateCustomer dto);
         Task<bool> DeleteCustomer(Guid id);
+        Task<Guid?> GetCustomerIdByApplicationUserIdAsync(Guid applicationUserId);
     }
 }

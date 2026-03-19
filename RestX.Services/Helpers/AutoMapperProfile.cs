@@ -26,6 +26,7 @@ using RestX.BLL.DataTranferObjects.Payments;
 using RestX.BLL.DataTranferObjects.Status;
 using RestX.Models.Common;
 using RestX.BLL.DataTranferObjects.Reservation;
+using RestX.BLL.DataTranferObjects.Combo;
 using RestX.Models.Reservations;
 
 namespace RestX.BLL.Helpers
@@ -181,6 +182,9 @@ namespace RestX.BLL.Helpers
                 .ForMember(dest => dest.UpdatedAt, opt => opt.MapFrom(src => src.ModifiedDate));
 
             CreateMap<DishRecipe, DishRecipeItem>().ReverseMap();
+
+            CreateMap<MealCombo, ComboSummary>().ReverseMap();
+            CreateMap<ComboDetail, ComboDetailItem>().ReverseMap();
         }
     }
 }

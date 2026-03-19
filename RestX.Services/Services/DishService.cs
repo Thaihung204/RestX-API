@@ -2,7 +2,9 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using RestX.BLL.DataTranferObjects.Combo;
 using RestX.BLL.DataTranferObjects.Dish;
+using RestX.BLL.Exceptionhandling;
 using RestX.BLL.Extensions;
 using RestX.BLL.Interfaces;
 using RestX.Models.Enum;
@@ -469,6 +471,261 @@ namespace RestX.BLL.Services
 
             await Repo.SaveAsync();
             return dishId;
+        }
+
+        // Combo methods
+        public async Task<List<ComboSummary>> GetAllCombos()
+        {
+            string cacheKey = $"{CurrentTenant.Hostname}:Combos";
+
+            List<ComboSummary>? cachedCombos = await RedisService.GetAsync<List<ComboSummary>>(cacheKey);
+            if (cachedCombos != null)
+            {
+                return cachedCombos;
+            }
+
+            List<MealCombo> combos = (await Repo.GetAllAsync<MealCombo>(
+                orderBy: q => q.OrderByDescending(c => c.CreatedDate),
+                includeProperties: "ComboDetails.Dish"
+            )).ToList();
+
+            List<ComboSummary> result = combos
+                .Select(MapToComboSummary)
+                .ToList();
+
+            await RedisService.SetAsync(cacheKey, result, TimeSpan.FromMinutes(30));
+            return result;
+        }
+
+        public async Task<List<ComboSummary>> GetActiveCombos()
+        {
+            string cacheKey = $"{CurrentTenant.Hostname}:Combos";
+
+            List<ComboSummary>? cachedCombos = await RedisService.GetAsync<List<ComboSummary>>(cacheKey);
+            if (cachedCombos != null)
+            {
+                return cachedCombos;
+            }
+
+            IEnumerable<MealCombo> combos = await Repo.GetAsync<MealCombo>(
+                filter: c => c.IsActive,
+                includeProperties: "ComboDetails.Dish"
+            );
+
+            List<ComboSummary> result = combos.Select(MapToComboSummary).ToList();
+
+            await RedisService.SetAsync(cacheKey, result, TimeSpan.FromMinutes(30));
+            return result;
+        }
+
+        public async Task<ComboSummary> GetComboById(Guid id)
+        {
+            MealCombo combo = await Repo.GetOneAsync<MealCombo>(
+                filter: c => c.Id == id,
+                includeProperties: "ComboDetails.Dish"
+            );
+
+            if (combo == null)
+            {
+                throw new AppException("Combo not found");
+            }
+
+            return MapToComboSummary(combo);
+        }
+
+        public async Task<Guid> UpsertCombo(ComboSummary comboSummary)
+        {
+            MealCombo combo;
+
+            if (comboSummary.Id == Guid.Empty)
+            {
+                string comboCode = await GenerateNextComboCodeAsync();
+
+                string comboImageUrl = string.Empty;
+                if (comboSummary.File != null)
+                {
+                    using Stream stream = comboSummary.File.OpenReadStream();
+
+                    CloudinaryUploadResult uploadResult = await cloudinaryService.UploadAsync(
+                        fileStream: stream,
+                        fileName: comboSummary.File.FileName,
+                        folder: $"{CurrentTenant.Name.Replace(" ", string.Empty)}/combos",
+                        publicId: comboCode,
+                        overwrite: true
+                    );
+                    comboImageUrl = uploadResult.Url;
+                }
+
+                combo = new MealCombo
+                {
+                    Name = comboSummary.Name.Trim(),
+                    Code = comboCode,
+                    Description = comboSummary.Description.Trim(),
+                    Price = comboSummary.Price,
+                    IsActive = comboSummary.IsActive,
+                    ImageUrl = comboImageUrl,
+                    BaseCost = await CalculateComboBaseCostAsync(comboSummary),
+                    ComboDetails = (comboSummary.Details ?? new List<ComboDetailItem>())
+                        .Select(d => new ComboDetail
+                        {
+                            DishId = d.DishId,
+                            Quantity = d.Quantity > 0 ? d.Quantity : 1
+                        })
+                        .ToList()
+                };
+
+                await Repo.CreateAsync(combo);
+            }
+            else
+            {
+                combo = await Repo.GetOneAsync<MealCombo>(
+                    filter: x => x.Id == comboSummary.Id,
+                    includeProperties: "ComboDetails"
+                );
+
+                if (combo == null)
+                {
+                    throw new AppException("Combo not found");
+                }
+
+                string comboImageUrl = combo.ImageUrl ?? string.Empty;
+
+                if (comboSummary.File != null)
+                {
+                    string tenantFolder = CurrentTenant.Name.Replace(" ", string.Empty);
+                    string cloudinaryPublicId = $"{tenantFolder}/combos/{combo.Code}";
+
+                    await cloudinaryService.DeleteAsync(cloudinaryPublicId);
+
+                    using Stream stream = comboSummary.File.OpenReadStream();
+
+                    CloudinaryUploadResult uploadResult = await cloudinaryService.UploadAsync(
+                        fileStream: stream,
+                        fileName: comboSummary.File.FileName,
+                        folder: $"{tenantFolder}/combos",
+                        publicId: combo.Code,
+                        overwrite: true
+                    );
+
+                    comboImageUrl = uploadResult.Url;
+                }
+
+                combo.Name = comboSummary.Name.Trim();
+                combo.Description = comboSummary.Description.Trim();
+                combo.Price = comboSummary.Price;
+                combo.IsActive = comboSummary.IsActive;
+                combo.ImageUrl = comboImageUrl;
+                combo.BaseCost = await CalculateComboBaseCostAsync(comboSummary);
+
+                if (combo.ComboDetails != null && combo.ComboDetails.Any())
+                {
+                    foreach (ComboDetail oldDetail in combo.ComboDetails.ToList())
+                    {
+                        Repo.Delete(oldDetail);
+                    }
+                }
+
+                combo.ComboDetails = (comboSummary.Details ?? new List<ComboDetailItem>())
+                    .Select(d => new ComboDetail
+                    {
+                        DishId = d.DishId,
+                        Quantity = d.Quantity > 0 ? d.Quantity : 1
+                    })
+                    .ToList();
+
+                Repo.Update(combo);
+            }
+
+            await Repo.SaveAsync();
+
+            await RedisService.RemoveAsync($"{CurrentTenant.Hostname}:Combos");
+            await RedisService.RemoveAsync($"{CurrentTenant.Hostname}:Menu");
+
+            return combo.Id;
+        }
+
+        public async Task<bool> DeleteCombo(Guid id)
+        {
+            MealCombo combo = await Repo.GetOneAsync<MealCombo>(filter: c => c.Id == id);
+
+            if (combo == null)
+            {
+                return false;
+            }
+
+            combo.IsActive = false;
+            Repo.Update(combo);
+            await Repo.SaveAsync();
+
+            await RedisService.RemoveAsync($"{CurrentTenant.Hostname}:Combos");
+            await RedisService.RemoveAsync($"{CurrentTenant.Hostname}:Menu");
+
+            return true;
+        }
+
+        private async Task<string> GenerateNextComboCodeAsync()
+        {
+            int number = await Repo.GetCountAsync<MealCombo>() + 1;
+            string code = $"CB{number:D2}";
+
+            bool exists = await Repo.GetExistsAsync<MealCombo>(x => x.Code == code);
+            while (exists)
+            {
+                number++;
+                code = $"CB{number:D2}";
+                exists = await Repo.GetExistsAsync<MealCombo>(x => x.Code == code);
+            }
+
+            return code;
+        }
+
+        private async Task<decimal> CalculateComboBaseCostAsync(ComboSummary comboSummary)
+        {
+            List<Guid> dishIds = (comboSummary.Details ?? new List<ComboDetailItem>())
+                .Select(x => x.DishId)
+                .Distinct()
+                .ToList();
+
+            if (!dishIds.Any())
+            {
+                return 0;
+            }
+
+            IEnumerable<Dish> dishes = await Repo.GetAsync<Dish>(filter: d => dishIds.Contains(d.Id));
+            Dictionary<Guid, Dish> dishLookup = dishes.ToDictionary(x => x.Id, x => x);
+
+            decimal baseCost = 0m;
+
+            foreach (ComboDetailItem detail in comboSummary.Details)
+            {
+                if (!dishLookup.TryGetValue(detail.DishId, out Dish? dish))
+                {
+                    throw new AppException($"Dish '{detail.DishId}' not found");
+                }
+
+                int quantity = detail.Quantity > 0 ? detail.Quantity : 1;
+                baseCost += dish.Price * quantity;
+            }
+
+            return baseCost;
+        }
+
+        private ComboSummary MapToComboSummary(MealCombo combo)
+        {
+            ComboSummary summary = mapper.Map<ComboSummary>(combo);
+
+            summary.Details = combo.ComboDetails?
+                .Select(d => new ComboDetailItem
+                {
+                    Id = d.Id,
+                    DishId = d.DishId,
+                    DishName = d.Dish?.Name,
+                    DishPrice = d.Dish?.Price,
+                    Quantity = d.Quantity
+                })
+                .ToList() ?? new List<ComboDetailItem>();
+
+            return summary;
         }
     }
 }

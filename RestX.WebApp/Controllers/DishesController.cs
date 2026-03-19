@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using RestX.BLL.DataTranferObjects.Combo;
 using RestX.BLL.DataTranferObjects.Dish;
 using RestX.BLL.Exceptionhandling;
 using RestX.BLL.Interfaces;
@@ -243,6 +244,134 @@ namespace RestX.WebApp.Controllers
             {
                 var id = await dishService.SetRecipes(dishId, items);
                 return Ok(id);
+            }
+            catch (Exception ex)
+            {
+                this.ExceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
+        // ==================== COMBO ENDPOINTS ====================
+
+        [HttpGet("combos")]
+        [Authorize(Roles = "Admin,System Admin,Waiter")]
+        public async Task<ActionResult> GetAllCombos()
+        {
+            try
+            {
+                List<ComboSummary> combos = await dishService.GetAllCombos();
+                return Ok(combos);
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                this.ExceptionHandler.RaiseException(ex);
+                return this.BadRequest("An internal error occurred");
+            }
+        }
+
+        [HttpGet("combos/{id:guid}")]
+        [Authorize(Roles = "Admin,System Admin")]
+        public async Task<ActionResult> GetComboById([Required] Guid id)
+        {
+            try
+            {
+                ComboSummary combo = await dishService.GetComboById(id);
+                return Ok(combo);
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                this.ExceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
+        [HttpPost("combos")]
+        [Authorize(Roles = "Admin,System Admin")]
+        public async Task<ActionResult> AddCombo([FromForm] ComboSummary combo)
+        {
+            try
+            {
+                Guid id = await dishService.UpsertCombo(combo);
+                return Ok(id);
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                this.ExceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
+        [HttpPut("combos/{id:guid}")]
+        [Authorize(Roles = "Admin,System Admin")]
+        public async Task<IActionResult> EditCombo([Required] Guid id, [FromForm] ComboSummary combo)
+        {
+            try
+            {
+                combo.Id = id;
+                Guid result = await dishService.UpsertCombo(combo);
+                return Ok(result);
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                this.ExceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
+        [HttpDelete("combos/{id:guid}")]
+        [Authorize(Roles = "Admin,System Admin")]
+        public async Task<IActionResult> DeleteCombo([Required] Guid id)
+        {
+            try
+            {
+                bool result = await dishService.DeleteCombo(id);
+                if (!result)
+                {
+                    return NotFound("Combo not found");
+                }
+
+                return Ok(new { message = "Combo deleted successfully" });
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                this.ExceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
+        [HttpGet("combos/active")]
+        [AllowAnonymous]
+        public async Task<ActionResult> GetActiveCombos()
+        {
+            try
+            {
+                List<ComboSummary> combos = await dishService.GetActiveCombos();
+                return Ok(combos);
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
             }
             catch (Exception ex)
             {

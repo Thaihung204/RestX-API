@@ -46,7 +46,6 @@ namespace RestX.BLL.Helpers
             services.AddScoped<IReceiptService, ReceiptService>();
             services.AddScoped<IReservationService, ReservationService>();
             services.AddScoped<IFormListHelper, FormListHelper>();
-            services.AddScoped<IComboService, ComboService>();
         }
     }
 }

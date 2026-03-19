@@ -48,7 +48,7 @@ namespace RestX.BLL.Services
                 return null;
 
             Tenant? tenant = null;
-            var cacheKey = $"Tenant:{data.ToLower()}";
+            var cacheKey = $"{data.ToLower():Tenant}";
 
             var cachedTenant = await RedisService.GetStringAsync(cacheKey);
             if (!string.IsNullOrEmpty(cachedTenant))
@@ -70,7 +70,7 @@ namespace RestX.BLL.Services
                 if (tenant != null)
                 {
                     await RedisService.SetStringAsync(
-                        $"Tenant:{tenant.Hostname}",
+                        $"{tenant.Hostname}:Tenant",
                         JsonConvert.SerializeObject(tenant)
                     );
                 }
@@ -96,7 +96,7 @@ namespace RestX.BLL.Services
 
                 try
                 {
-                    var oldHostnameCacheKey = $"Tenant:{model.Hostname?.ToLower()}";
+                    var oldHostnameCacheKey = $"{model.Hostname?.ToLower():Tenant}";
                     logger.LogInformation("Removing Redis key: {Key}", oldHostnameCacheKey);
 
                     await RedisService.RemoveAsync(oldHostnameCacheKey);
@@ -198,7 +198,7 @@ namespace RestX.BLL.Services
                 tenant.Hostname = model.Hostname;
 
                 tenant.ExpiredAt = model.ExpiredAt == default
-                    ? DateTime.UtcNow.AddYears(1)
+                    ? DateTime.UtcNow.AddHours(7).AddYears(1)
                     : model.ExpiredAt;
 
                 tenant.BusinessName = model.BusinessName;
@@ -229,9 +229,9 @@ namespace RestX.BLL.Services
             return tenant;
         }
 
-        public async Task UploadAndCreateTenant(TenantItem model)
+        public async Task<string> UploadAndCreateTenant(TenantItem model)
         {
-            var folderPrefix = model.Name?.Replace(" ", "") ?? "unknown";
+            string folderPrefix = model.Name?.Replace(" ", "") ?? "unknown";
 
             if (model.LogoFile != null)
             {
@@ -254,11 +254,11 @@ namespace RestX.BLL.Services
                 model.BackgroundFile = null;
             }
 
-            BackgroundJob.Enqueue<ITenantService>(s => s.CreateTenant(model));
+            string jobId = BackgroundJob.Enqueue<ITenantService>(s => s.CreateTenant(model));
 
-            logger.LogInformation("Tenant creation job enqueued for: {Name}", model.Name);
+            logger.LogInformation("Tenant creation job enqueued for: {Name} | JobId: {JobId}", model.Name, jobId);
+            return jobId;
         }
-
         public async Task CreateTenant(TenantItem model)
         {
             logger.LogInformation("===== CreateTenantAsync START | Name: {Name} =====", model.Name);
@@ -311,7 +311,7 @@ namespace RestX.BLL.Services
 
                 // Expiry
                 ExpiredAt = model.ExpiredAt == default
-                    ? DateTime.UtcNow.AddYears(1)
+                    ? DateTime.UtcNow.AddHours(7).AddYears(1)
                     : model.ExpiredAt,
 
                 // Business
@@ -487,7 +487,7 @@ namespace RestX.BLL.Services
             await DropTenantDatabaseAsync(tenant.ConnectionString);
             adminRepo.Delete<Tenant>(tenant.Id);
             await adminRepo.SaveAsync();
-            await RedisService.RemoveAsync($"Tenant:{tenant.Hostname.ToLower()}");
+            await RedisService.RemoveAsync($"{tenant.Hostname.ToLower():Tenant}");
         }
 
         private static async Task DropTenantDatabaseAsync(string tenantConnectionString)
@@ -563,26 +563,22 @@ namespace RestX.BLL.Services
             return entity.Id;
         }
 
-        public async Task<Guid> AcceptTenantRequest(Guid tenantRequestsId)
+        public async Task<string> AcceptTenantRequest(Guid tenantRequestsId)
         {
-            var tenantRequest = await Repo.GetByIdAsync<Models.Tenants.TenantRequest>(tenantRequestsId);
+            Models.Tenants.TenantRequest tenantRequest = await Repo.GetByIdAsync<Models.Tenants.TenantRequest>(tenantRequestsId);
             if (tenantRequest == null)
-                return Guid.Empty;
+                return string.Empty;
 
             tenantRequest.tenantRequestStatus = TenantRequestStatus.Accepted;
             Repo.Update(tenantRequest);
             await Repo.SaveAsync();
 
-            var tenantItem = mapper.Map<TenantItem>(tenantRequest);
+            TenantItem tenantItem = mapper.Map<TenantItem>(tenantRequest);
             tenantItem.Id = null;
 
-            await UploadAndCreateTenant(tenantItem);
-
-            // Retrieve the created tenant by hostname and return its Id
-            var tenant = await adminRepo.GetOneAsync<Tenant>(t => t.Hostname == tenantItem.Hostname);
-            return tenant?.Id ?? Guid.Empty;
+            string jobId = await UploadAndCreateTenant(tenantItem);
+            return jobId;
         }
-
         public async Task<Guid> DeclineTenantRequest(Guid tenantRequestsId)
         {
             var request = await Repo.GetByIdAsync<Models.Tenants.TenantRequest>(tenantRequestsId);

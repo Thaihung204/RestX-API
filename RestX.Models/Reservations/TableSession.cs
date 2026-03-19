@@ -15,7 +15,7 @@ namespace RestX.Models.Reservations
         public Guid? ReservationId { get; set; }
         public Guid? CurrentOrderId { get; set; }
 
-        public DateTime StartedAt { get; set; } = DateTime.UtcNow;
+        public DateTime StartedAt { get; set; } = DateTime.UtcNow.AddHours(7);
 
         public DateTime? EndedAt { get; set; }
 

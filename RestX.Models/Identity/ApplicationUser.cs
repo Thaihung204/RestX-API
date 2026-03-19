@@ -14,7 +14,7 @@ namespace RestX.Models.Identity
         [ForeignKey("MemberId")]
         public virtual Employee? Member { get; set; }
         public DateTime? LastLoginTime { get; set; }
-        public DateTime LastModified { get; set; } = DateTime.UtcNow;
+        public DateTime LastModified { get; set; } = DateTime.UtcNow.AddHours(7);
         public string RefreshToken { get; set; }
         public DateTime? RefreshTokenExpiryTime { get; set; }
         public bool PushNotificationEnabled { get; set; } = true;

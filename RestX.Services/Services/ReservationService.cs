@@ -25,7 +25,7 @@ namespace RestX.BLL.Services
         private const int ReservationBufferMinutes = 120;
 
         private static readonly TimeSpan VietnamOffset = TimeSpan.FromHours(7);
-        private static DateTime VnNow => DateTime.UtcNow.Add(VietnamOffset);
+        private static DateTime VnNow => DateTime.UtcNow.AddHours(7).Add(VietnamOffset);
 
         private const string ReservationIncludes = "ReservationTables.Table.Floor,Customer.ApplicationUser,ReservationStatus";
         private const string TablesIncludes = "ReservationTables.Table";

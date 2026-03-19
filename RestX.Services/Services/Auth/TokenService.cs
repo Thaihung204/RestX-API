@@ -45,10 +45,10 @@ namespace RestX.BLL.Services.Auth
         }
 
         public DateTime GetAccessTokenExpiry()
-            => DateTime.UtcNow.AddMinutes(jwtSettings.AccessTokenExpiryMinutes);
+            => DateTime.UtcNow.AddHours(7).AddMinutes(jwtSettings.AccessTokenExpiryMinutes);
 
         public DateTime GetRefreshTokenExpiry()
-            => DateTime.UtcNow.AddDays(jwtSettings.RefreshTokenExpiryDays);
+            => DateTime.UtcNow.AddHours(7).AddDays(jwtSettings.RefreshTokenExpiryDays);
 
         private static List<Claim> BuildClaims(ApplicationUser user, IList<string> roles, string hostname)
         {

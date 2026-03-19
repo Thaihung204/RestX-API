@@ -78,7 +78,7 @@ namespace RestX.BLL.Services.Auth
             var result = await userManager.ChangePasswordAsync(user, request.CurrentPassword, request.NewPassword);
             if (!result.Succeeded)
                 return AuthResponse.FailureResponse($"Failed to change password: {FormatIdentityErrors(result)}");
-            user.LastModified = DateTime.UtcNow;
+            user.LastModified = DateTime.UtcNow.AddHours(7);
             await userManager.UpdateAsync(user);
             return AuthResponse.SuccessResponse("Password changed successfully");
         }
@@ -122,7 +122,7 @@ namespace RestX.BLL.Services.Auth
                     ? AuthResponse.FailureResponse("The reset link has expired or is invalid. Please request a new one.")
                     : AuthResponse.FailureResponse($"Failed to reset password: {errors}");
             }
-            user.LastModified = DateTime.UtcNow;
+            user.LastModified = DateTime.UtcNow.AddHours(7);
             await userManager.UpdateAsync(user);
             return AuthResponse.SuccessResponse("Password reset successfully");
         }
@@ -130,7 +130,7 @@ namespace RestX.BLL.Services.Auth
         public async Task<AuthResponse> RefreshTokenAsync(string refreshToken)
         {
             var user = FindUserByRefreshToken(refreshToken);
-            if (user == null || user.RefreshTokenExpiryTime <= DateTime.UtcNow)
+            if (user == null || user.RefreshTokenExpiryTime <= DateTime.UtcNow.AddHours(7))
                 return AuthResponse.FailureResponse("Invalid or expired refresh token");
             return await GenerateAuthResponseAsync(user, "Token refreshed successfully");
         }
@@ -199,7 +199,7 @@ namespace RestX.BLL.Services.Auth
         {
             user.RefreshToken = refreshToken;
             user.RefreshTokenExpiryTime = tokenService.GetRefreshTokenExpiry();
-            user.LastLoginTime = DateTime.UtcNow;
+            user.LastLoginTime = DateTime.UtcNow.AddHours(7);
             await userManager.UpdateAsync(user);
         }
 
@@ -227,8 +227,8 @@ namespace RestX.BLL.Services.Auth
                 MembershipLevel = "BRONZE",
                 LoyaltyPoints = 0,
                 IsActive = true,
-                CreatedDate = DateTime.UtcNow,
-                ModifiedDate = DateTime.UtcNow
+                CreatedDate = DateTime.UtcNow.AddHours(7),
+                ModifiedDate = DateTime.UtcNow.AddHours(7)
             };
             try
             {
@@ -262,7 +262,7 @@ namespace RestX.BLL.Services.Auth
                 PhoneNumber = phoneNumber,
                 PhoneNumberConfirmed = true,
                 EmailConfirmed = false,
-                LastModified = DateTime.UtcNow,
+                LastModified = DateTime.UtcNow.AddHours(7),
                 RefreshToken = string.Empty,
                 SecurityStamp = Guid.NewGuid().ToString()
             };

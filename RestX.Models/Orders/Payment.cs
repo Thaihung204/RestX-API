@@ -37,7 +37,7 @@ namespace RestX.Models.Orders
         [Range(0, 999999999.99)]
         public decimal CashReceive { get; set; } = 0;
 
-        public DateTime PaymentDate { get; set; } = DateTime.UtcNow;
+        public DateTime PaymentDate { get; set; } = DateTime.UtcNow.AddHours(7);
 
         public int PaymentStatusId { get; set; }
 

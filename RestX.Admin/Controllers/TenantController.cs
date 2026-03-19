@@ -72,8 +72,7 @@ namespace RestX.Admin.Controllers
         {
             try
             {
-                await tenantService.UploadAndCreateTenant(tenant);
-                return Accepted(new { message = "Tenant creation has been queued." });
+                return Ok(await tenantService.UploadAndCreateTenant(tenant));
             }
             catch (Exception ex)
             {
@@ -140,7 +139,7 @@ namespace RestX.Admin.Controllers
         }
 
         [HttpPost("requests/{id:guid}/accept")]
-        public async Task<ActionResult<Guid>> AcceptTenantRequest([Required] Guid id)
+        public async Task<IActionResult> AcceptTenantRequest([Required] Guid id)
         {
             try
             {
@@ -152,7 +151,6 @@ namespace RestX.Admin.Controllers
                 return BadRequest("An internal error occurred");
             }
         }
-
         [HttpPost("requests/{id:guid}/decline")]
         public async Task<ActionResult<Guid>> DeclineTenantRequest([Required] Guid id)
         {

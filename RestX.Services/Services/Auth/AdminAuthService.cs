@@ -119,7 +119,7 @@ namespace RestX.BLL.Services.Auth
         public async Task<AuthResponse> RefreshTokenAsync(string refreshToken)
         {
             var admin = userManager.Users.FirstOrDefault(a => a.RefreshToken == refreshToken);
-            if (admin == null || admin.RefreshTokenExpiryTime <= DateTime.UtcNow)
+            if (admin == null || admin.RefreshTokenExpiryTime <= DateTime.UtcNow.AddHours(7))
                 return AuthResponse.FailureResponse("Invalid or expired refresh token");
 
             return await GenerateAuthResponseAsync(admin, "Token refreshed successfully");
@@ -134,7 +134,7 @@ namespace RestX.BLL.Services.Auth
 
             admin.RefreshToken = refreshToken;
             admin.RefreshTokenExpiryTime = tokenService.GetRefreshTokenExpiry();
-            admin.LastLoginTime = DateTime.UtcNow;
+            admin.LastLoginTime = DateTime.UtcNow.AddHours(7);
             await userManager.UpdateAsync(admin);
 
             var adminInfo = new AdminInfo

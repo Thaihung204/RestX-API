@@ -185,6 +185,7 @@ namespace RestX.BLL.Helpers
 
             CreateMap<MealCombo, ComboSummary>().ReverseMap();
             CreateMap<ComboDetail, ComboDetailItem>().ReverseMap();
+            CreateMap<Models.Promotions.Promotion, BLL.DataTranferObjects.Promotion.Promotion>().ReverseMap();
         }
     }
 }

@@ -12,8 +12,7 @@ namespace RestX.DAL.DataSeeders
         {
             "System Admin",
             "Admin",
-            "Kitchen Staff",
-            "Waiter",
+            "Staff",
             "Customer"
         };
         public RoleSeeder(TenantDbContext context)

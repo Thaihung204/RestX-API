@@ -47,7 +47,7 @@ namespace RestX.WebApp.Controllers
             }
         }
         [HttpGet("{id}")]
-        [Authorize(Roles = "Admin,System Admin,Kitchen Staff,Waiter")]
+        [Authorize(Roles = "Admin,System Admin,Staff")]
         public async Task<IActionResult> GetEmployeeById([Required] Guid id)
         {
             try

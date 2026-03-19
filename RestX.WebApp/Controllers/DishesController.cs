@@ -31,7 +31,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpGet]
-        [Authorize(Roles = "Admin,System Admin,Waiter")]
+        [Authorize(Roles = "Admin,System Admin,Staff")]
         public async Task<ActionResult<IEnumerable<Dish>>> GetAllDishes([FromQuery] DishSearch searchModel)
         {
             try

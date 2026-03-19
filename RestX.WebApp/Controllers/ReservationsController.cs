@@ -262,6 +262,8 @@ namespace RestX.WebApp.Controllers
                         await BroadcastToTenant(SignalrServer.TableStatusChanged, new
                         {
                             tableId = tableInfo.Id,
+                            tableCode = tableInfo.Code,
+                            floorId = tableInfo.FloorId,
                             status = (int)TableStatus.Occupied,
                             statusName = TableStatus.Occupied.ToString()
                         });
@@ -301,6 +303,8 @@ namespace RestX.WebApp.Controllers
                         await BroadcastToTenant(SignalrServer.TableStatusChanged, new
                         {
                             tableId = tableInfo.Id,
+                            tableCode = tableInfo.Code,
+                            floorId = tableInfo.FloorId,
                             status = (int)TableStatus.Available,
                             statusName = TableStatus.Available.ToString()
                         });

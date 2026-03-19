@@ -12,9 +12,9 @@ namespace RestX.WebApp.Helpers
         public const string TableLayoutUpdated = "tables.layout_updated";
 
         public async Task JoinTenantGroup(string tenantId)
-            => await Groups.AddToGroupAsync(Context.ConnectionId, $"tenant_{tenantId}");
+            => await Groups.AddToGroupAsync(Context.ConnectionId, $"tenant_{tenantId.ToLower()}");
 
         public async Task LeaveTenantGroup(string tenantId)
-            => await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"tenant_{tenantId}");
+            => await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"tenant_{tenantId.ToLower()}");
     }
 }

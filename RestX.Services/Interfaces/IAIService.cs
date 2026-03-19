@@ -10,7 +10,7 @@ namespace RestX.BLL.Interfaces
         Task ChatStream(AIChatRequest request, HttpResponse httpResponse);
         Task<Guid> ConfirmOrder(string sessionId, string userId, AIOrderDraft draft);
         Task ClearSession(string sessionId);
-        Task<ChatHistoryResponse?> GetHistory(string sessionId);
+        Task<ChatHistoryResponse?> GetHistory(string? sessionId, string? userId = null);
         Task CleanupExpiredSessions();
     }
 }

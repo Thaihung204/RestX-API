@@ -128,12 +128,14 @@ namespace RestX.WebApp.Controllers
         public async Task<ActionResult<ChatHistoryResponse>> GetHistory()
         {
             var sessionId = Request.Cookies[SessionCookieName];
-            if (string.IsNullOrEmpty(sessionId))
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            if (string.IsNullOrEmpty(sessionId) && string.IsNullOrEmpty(userId))
                 return Ok(new ChatHistoryResponse());
 
             try
             {
-                var history = await _aiMenuService.GetHistory(sessionId);
+                var history = await _aiMenuService.GetHistory(sessionId, userId);
                 return Ok(history ?? new ChatHistoryResponse());
             }
             catch (AppException ex)

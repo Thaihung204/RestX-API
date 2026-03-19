@@ -20,6 +20,9 @@ namespace RestX.BLL.Helpers
     {
         public static void Setup(IServiceCollection services, bool isDevelopment = false)
         {
+
+            services.AddScoped<IRepoHelper, RepoHelper>();
+            services.AddScoped<ITriggerService, TriggerService>();
             services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
             services.AddScoped<ICustomerService, CustomerService>();
             services.AddScoped<IEmployeeService, EmployeeService>();

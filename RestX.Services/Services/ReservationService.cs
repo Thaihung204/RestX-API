@@ -386,10 +386,10 @@ namespace RestX.BLL.Services
 
         private async Task<Guid?> GetCustomerId(Guid? applicationUserId)
         {
-            if (!applicationUserId.HasValue)
+            if (applicationUserId == null)
                 return null;
             var customer = await Repo.GetOneAsync<Customer>(
-                filter: c => c.ApplicationUserId == applicationUserId.Value);
+                filter: c => c.ApplicationUserId.Equals(applicationUserId));
             return customer?.Id;
         }
 

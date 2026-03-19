@@ -153,6 +153,87 @@ namespace RestX.DAL.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("RestX.Models.AI.AIChatMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AIChatSessionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("ModifiedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AIChatSessionId");
+
+                    b.ToTable("AIChatMessages", (string)null);
+                });
+
+            modelBuilder.Entity("RestX.Models.AI.AIChatSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CustomerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("ModifiedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("SessionId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<Guid?>("TableId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SessionId")
+                        .IsUnique();
+
+                    b.ToTable("AIChatSessions", (string)null);
+                });
+
             modelBuilder.Entity("RestX.Models.Common.StatusType", b =>
                 {
                     b.Property<int>("Id")
@@ -180,6 +261,9 @@ namespace RestX.DAL.Migrations
                     b.Property<DateTime?>("ModifiedDate")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("PropertiesJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("Code")
@@ -202,7 +286,6 @@ namespace RestX.DAL.Migrations
                         .HasColumnType("nvarchar(50)");
 
                     b.Property<string>("ColorCode")
-                        .IsRequired()
                         .HasMaxLength(7)
                         .HasColumnType("nvarchar(7)");
 
@@ -227,6 +310,9 @@ namespace RestX.DAL.Migrations
                         .IsRequired()
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("PropertiesJson")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("StatusTypeId")
                         .HasColumnType("int");
@@ -261,7 +347,6 @@ namespace RestX.DAL.Migrations
                         .HasColumnType("int");
 
                     b.Property<string>("MembershipLevel")
-                        .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
@@ -271,6 +356,9 @@ namespace RestX.DAL.Migrations
 
                     b.Property<DateTime?>("ModifiedDate")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("PropertiesJson")
+                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
 
@@ -315,6 +403,9 @@ namespace RestX.DAL.Migrations
 
                     b.Property<Guid>("OrderId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("PropertiesJson")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("Rating")
                         .HasColumnType("int");
@@ -363,6 +454,9 @@ namespace RestX.DAL.Migrations
                     b.Property<DateTime?>("ModifiedDate")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("PropertiesJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("FeedbackId");
@@ -409,6 +503,9 @@ namespace RestX.DAL.Migrations
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("PropertiesJson")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<decimal>("Salary")
                         .HasColumnType("decimal(18,2)");
@@ -460,6 +557,9 @@ namespace RestX.DAL.Migrations
 
                     b.Property<DateTime?>("ModifiedDate")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("PropertiesJson")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<TimeSpan>("StartTime")
                         .HasColumnType("time");
@@ -539,7 +639,6 @@ namespace RestX.DAL.Migrations
                         .HasColumnType("bit");
 
                     b.Property<string>("RefreshToken")
-                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTime?>("RefreshTokenExpiryTime")
@@ -614,6 +713,9 @@ namespace RestX.DAL.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
 
+                    b.Property<string>("PropertiesJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<int>("Status")
                         .HasColumnType("int");
 
@@ -678,6 +780,9 @@ namespace RestX.DAL.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
 
+                    b.Property<string>("PropertiesJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("Code")
@@ -718,6 +823,9 @@ namespace RestX.DAL.Migrations
                     b.Property<DateTime?>("ModifiedDate")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("PropertiesJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("IngredientId")
@@ -749,6 +857,9 @@ namespace RestX.DAL.Migrations
                     b.Property<DateTime?>("ModifiedDate")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("PropertiesJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<decimal>("Quantity")
                         .HasColumnType("decimal(10,3)");
 
@@ -760,7 +871,6 @@ namespace RestX.DAL.Migrations
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("TransactionType")
-                        .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
@@ -814,6 +924,9 @@ namespace RestX.DAL.Migrations
                         .HasMaxLength(15)
                         .HasColumnType("nvarchar(15)");
 
+                    b.Property<string>("PropertiesJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.HasKey("Id");
 
                     b.ToTable("Suppliers", (string)null);
@@ -844,7 +957,6 @@ namespace RestX.DAL.Migrations
                         .HasColumnType("bit");
 
                     b.Property<string>("LogoColor")
-                        .IsRequired()
                         .HasMaxLength(10)
                         .HasColumnType("nvarchar(10)");
 
@@ -865,6 +977,9 @@ namespace RestX.DAL.Migrations
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("PropertiesJson")
+                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
 
@@ -906,8 +1021,10 @@ namespace RestX.DAL.Migrations
                     b.Property<int>("Points")
                         .HasColumnType("int");
 
+                    b.Property<string>("PropertiesJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("Type")
-                        .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
@@ -960,6 +1077,9 @@ namespace RestX.DAL.Migrations
                     b.Property<Guid?>("ParentId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("PropertiesJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ParentId");
@@ -992,6 +1112,9 @@ namespace RestX.DAL.Migrations
 
                     b.Property<DateTime?>("ModifiedDate")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("PropertiesJson")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("Quantity")
                         .HasColumnType("int");
@@ -1056,6 +1179,9 @@ namespace RestX.DAL.Migrations
                     b.Property<decimal>("Price")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<string>("PropertiesJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<int>("Quantity")
                         .HasColumnType("int");
 
@@ -1109,6 +1235,9 @@ namespace RestX.DAL.Migrations
                     b.Property<DateTime?>("ModifiedDate")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("PropertiesJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("DishId");
@@ -1141,6 +1270,9 @@ namespace RestX.DAL.Migrations
 
                     b.Property<DateTime?>("ModifiedDate")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("PropertiesJson")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<decimal>("Quantity")
                         .HasColumnType("decimal(10,3)");
@@ -1202,6 +1334,9 @@ namespace RestX.DAL.Migrations
                     b.Property<decimal>("Price")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<string>("PropertiesJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("Code")
@@ -1249,14 +1384,15 @@ namespace RestX.DAL.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<string>("NotificationType")
-                        .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
                     b.Property<string>("Priority")
-                        .IsRequired()
                         .HasMaxLength(10)
                         .HasColumnType("nvarchar(10)");
+
+                    b.Property<string>("PropertiesJson")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("RecipientId")
                         .HasMaxLength(450)
@@ -1269,7 +1405,7 @@ namespace RestX.DAL.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Notifications");
+                    b.ToTable("Notifications", (string)null);
                 });
 
             modelBuilder.Entity("RestX.Models.Orders.Order", b =>
@@ -1312,6 +1448,9 @@ namespace RestX.DAL.Migrations
 
                     b.Property<int>("PaymentStatusId")
                         .HasColumnType("int");
+
+                    b.Property<string>("PropertiesJson")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Reference")
                         .IsRequired()
@@ -1380,6 +1519,9 @@ namespace RestX.DAL.Migrations
                     b.Property<Guid>("OrderId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("PropertiesJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<int>("Quantity")
                         .HasColumnType("int");
 
@@ -1416,6 +1558,9 @@ namespace RestX.DAL.Migrations
 
                     b.Property<Guid>("OrderId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("PropertiesJson")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<Guid>("TableId")
                         .HasColumnType("uniqueidentifier");
@@ -1483,6 +1628,9 @@ namespace RestX.DAL.Migrations
                     b.Property<Guid?>("ProcessedBy")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("PropertiesJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<DateTime?>("RefundDate")
                         .HasColumnType("datetime2");
 
@@ -1531,7 +1679,6 @@ namespace RestX.DAL.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<string>("DiscountType")
-                        .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
@@ -1558,6 +1705,9 @@ namespace RestX.DAL.Migrations
                         .IsRequired()
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("PropertiesJson")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("UsageLimit")
                         .HasColumnType("int");
@@ -1611,6 +1761,9 @@ namespace RestX.DAL.Migrations
                     b.Property<Guid>("PromotionId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("PropertiesJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CategoryId");
@@ -1652,6 +1805,9 @@ namespace RestX.DAL.Migrations
 
                     b.Property<Guid>("PromotionId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("PropertiesJson")
+                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
 
@@ -1701,6 +1857,9 @@ namespace RestX.DAL.Migrations
                     b.Property<int>("NumberOfGuests")
                         .HasColumnType("int");
 
+                    b.Property<string>("PropertiesJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<int>("ReservationStatusId")
                         .HasColumnType("int");
 
@@ -1745,6 +1904,9 @@ namespace RestX.DAL.Migrations
 
                     b.Property<DateTime?>("ModifiedDate")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("PropertiesJson")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<Guid>("ReservationId")
                         .HasColumnType("uniqueidentifier");
@@ -1791,6 +1953,9 @@ namespace RestX.DAL.Migrations
                     b.Property<DateTime?>("ModifiedDate")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("PropertiesJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<Guid?>("ReservationId")
                         .HasColumnType("uniqueidentifier");
 
@@ -1828,7 +1993,6 @@ namespace RestX.DAL.Migrations
                         .HasColumnType("decimal(8,2)");
 
                     b.Property<string>("ImageUrl")
-                        .IsRequired()
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
@@ -1846,6 +2010,9 @@ namespace RestX.DAL.Migrations
                         .IsRequired()
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("PropertiesJson")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<decimal>("Width")
                         .HasColumnType("decimal(8,2)");
@@ -1902,6 +2069,9 @@ namespace RestX.DAL.Migrations
                     b.Property<decimal>("PositionY")
                         .HasColumnType("decimal(8,2)");
 
+                    b.Property<string>("PropertiesJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("QRCodeUrl")
                         .HasColumnType("nvarchar(max)");
 
@@ -1954,7 +2124,6 @@ namespace RestX.DAL.Migrations
                         .HasColumnType("bit");
 
                     b.Property<string>("BackgroundColor")
-                        .IsRequired()
                         .HasMaxLength(7)
                         .HasColumnType("nvarchar(7)");
 
@@ -1988,7 +2157,6 @@ namespace RestX.DAL.Migrations
                         .HasColumnType("decimal(4,2)");
 
                     b.Property<string>("ModelFormat")
-                        .IsRequired()
                         .HasMaxLength(10)
                         .HasColumnType("nvarchar(10)");
 
@@ -2004,6 +2172,9 @@ namespace RestX.DAL.Migrations
                     b.Property<DateTime?>("ModifiedDate")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("PropertiesJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<Guid>("TableId")
                         .HasColumnType("uniqueidentifier");
 
@@ -2013,6 +2184,222 @@ namespace RestX.DAL.Migrations
                         .IsUnique();
 
                     b.ToTable("Table3DModels", (string)null);
+                });
+
+            modelBuilder.Entity("RestX.Models.Triggers.Trigger", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool?>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("ModifiedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Name")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PropertiesJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("TriggerObjectId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TriggerObjectId");
+
+                    b.ToTable("Triggers", (string)null);
+                });
+
+            modelBuilder.Entity("RestX.Models.Triggers.TriggerAction", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Action")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("ModifiedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PropertiesJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("TriggerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TriggerId");
+
+                    b.ToTable("TriggerActions", (string)null);
+                });
+
+            modelBuilder.Entity("RestX.Models.Triggers.TriggerCriteria", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ComputedDescription")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("LogicType")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("ModifiedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PropertiesJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PropertyName")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PropertyValue")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("TriggerCriteriaGroupId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("TriggerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TriggerCriteriaGroupId");
+
+                    b.HasIndex("TriggerId");
+
+                    b.ToTable("TriggerCriteria", (string)null);
+                });
+
+            modelBuilder.Entity("RestX.Models.Triggers.TriggerGroup", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("LogicType")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("ModifiedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Name")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PropertiesJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("TriggerGroups", (string)null);
+                });
+
+            modelBuilder.Entity("RestX.Models.Triggers.TriggerObject", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("FullAssemblyName")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("ModifiedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Name")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ObjectName")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PropertiesJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("TriggerObjects", (string)null);
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>
@@ -2064,6 +2451,17 @@ namespace RestX.DAL.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("RestX.Models.AI.AIChatMessage", b =>
+                {
+                    b.HasOne("RestX.Models.AI.AIChatSession", "Session")
+                        .WithMany("Messages")
+                        .HasForeignKey("AIChatSessionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Session");
                 });
 
             modelBuilder.Entity("RestX.Models.Common.StatusValue", b =>
@@ -2511,6 +2909,50 @@ namespace RestX.DAL.Migrations
                     b.Navigation("Table");
                 });
 
+            modelBuilder.Entity("RestX.Models.Triggers.Trigger", b =>
+                {
+                    b.HasOne("RestX.Models.Triggers.TriggerObject", "Object")
+                        .WithMany()
+                        .HasForeignKey("TriggerObjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Object");
+                });
+
+            modelBuilder.Entity("RestX.Models.Triggers.TriggerAction", b =>
+                {
+                    b.HasOne("RestX.Models.Triggers.Trigger", "Trigger")
+                        .WithMany("Actions")
+                        .HasForeignKey("TriggerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Trigger");
+                });
+
+            modelBuilder.Entity("RestX.Models.Triggers.TriggerCriteria", b =>
+                {
+                    b.HasOne("RestX.Models.Triggers.TriggerGroup", "Group")
+                        .WithMany("Criteria")
+                        .HasForeignKey("TriggerCriteriaGroupId");
+
+                    b.HasOne("RestX.Models.Triggers.Trigger", "Trigger")
+                        .WithMany("Criteria")
+                        .HasForeignKey("TriggerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Group");
+
+                    b.Navigation("Trigger");
+                });
+
+            modelBuilder.Entity("RestX.Models.AI.AIChatSession", b =>
+                {
+                    b.Navigation("Messages");
+                });
+
             modelBuilder.Entity("RestX.Models.Common.StatusType", b =>
                 {
                     b.Navigation("StatusValues");
@@ -2534,8 +2976,7 @@ namespace RestX.DAL.Migrations
 
             modelBuilder.Entity("RestX.Models.HR.Employee", b =>
                 {
-                    b.Navigation("ApplicationUser")
-                        .IsRequired();
+                    b.Navigation("ApplicationUser");
 
                     b.Navigation("EmployeeSchedules");
 
@@ -2639,6 +3080,18 @@ namespace RestX.DAL.Migrations
                     b.Navigation("Table3DModel");
 
                     b.Navigation("TableSessions");
+                });
+
+            modelBuilder.Entity("RestX.Models.Triggers.Trigger", b =>
+                {
+                    b.Navigation("Actions");
+
+                    b.Navigation("Criteria");
+                });
+
+            modelBuilder.Entity("RestX.Models.Triggers.TriggerGroup", b =>
+                {
+                    b.Navigation("Criteria");
                 });
 #pragma warning restore 612, 618
         }

@@ -1,4 +1,6 @@
-﻿namespace RestX.Models.Interfaces
+﻿using System.Dynamic;
+
+namespace RestX.Models.Interfaces
 {
     public interface IEntity : IModifiableEntity
     {
@@ -14,7 +16,7 @@
 
         //byte[] Version { get; set; }
 
-        //string PropertiesJson { get; set; }
+        string PropertiesJson { get; set; }
 
         //ExpandoObject CustomProperties { get; set; }
     }

@@ -144,6 +144,12 @@ namespace RestX.BLL.Services
             return true;
         }
 
+        public async Task<Guid?> GetCustomerIdByApplicationUserIdAsync(Guid applicationUserId)
+        {
+            var customer = await Repo.GetFirstAsync<Customer>(c => c.ApplicationUserId == applicationUserId);
+            return customer?.Id;
+        }
+
         #region Private Methods
         private static string GetSortClause(string? sortBy, bool desc)
         {

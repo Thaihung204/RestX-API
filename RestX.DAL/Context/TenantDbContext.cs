@@ -1,7 +1,9 @@
-﻿using Microsoft.AspNetCore.Identity;
+﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using RestX.Models.Admin;
+using RestX.Models.AI;
 using RestX.Models.Common;
 using RestX.Models.Customers;
 using RestX.Models.Feedbacks;
@@ -16,6 +18,7 @@ using RestX.Models.Promotions;
 using RestX.Models.Reservations;
 using RestX.Models.Tables;
 using RestX.Models.Tenants;
+using RestX.Models.Triggers;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -27,10 +30,8 @@ namespace RestX.DAL.Context
     public partial class TenantDbContext :  IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>
     {
         private readonly ActiveTenant tenant;
+        private IHttpContextAccessor context;
 
-        public TenantDbContext()
-        {
-        }
         public TenantDbContext(ActiveTenant tenant)
         {
             this.tenant = tenant;
@@ -39,6 +40,17 @@ namespace RestX.DAL.Context
             : base(options)
         {
         }
+
+        public TenantDbContext(
+            ActiveTenant activeTenant,
+            IEnumerable<IHttpContextAccessor> context)
+        {
+        }
+
+        #region DbSets - AI Chat
+        public virtual DbSet<AIChatSession> AIChatSessions { get; set; }
+        public virtual DbSet<AIChatMessage> AIChatMessages { get; set; }
+        #endregion
 
         #region DbSets - Status System
         public virtual DbSet<StatusType> StatusTypes { get; set; }
@@ -119,12 +131,20 @@ namespace RestX.DAL.Context
         public virtual DbSet<StockTransaction> StockTransactions { get; set; }
         #endregion
 
+        #region DbSets - Trigger
+        public virtual DbSet<Trigger> Triggers { get; set; }
+        public virtual DbSet<TriggerAction> TriggerActions { get; set; }
+        public virtual DbSet<TriggerCriteria> TriggerCriteria { get; set; }
+        public virtual DbSet<TriggerObject> TriggerObjects { get; set; }
+        public virtual DbSet<TriggerGroup> TriggerGroups { get; set; }
+        #endregion
+
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
             if (!optionsBuilder.IsConfigured)
             {
                 var connectionString = tenant == null
-                    ? "Server=restx-sqlserver,1433;Database=demo_tenant;User Id=sa;Password=Passw0r1!;Encrypt=False;TrustServerCertificate=True;"
+                    ? "Server=localhost,1433;Database=demo_tenant;User Id=sa;Password=Passw0r1!;Encrypt=False;TrustServerCertificate=True;"
                     : tenant.ConnectionString;
                 optionsBuilder.UseSqlServer(connectionString);
                 //Trigger
@@ -137,6 +157,7 @@ namespace RestX.DAL.Context
             base.OnModelCreating(modelBuilder);
 
             // Apply all configurations
+            ConfigureAIChat(modelBuilder);
             ConfigureStatusSystem(modelBuilder);
             ConfigureIdentity(modelBuilder);
             ConfigureHR(modelBuilder);
@@ -157,6 +178,33 @@ namespace RestX.DAL.Context
         partial void OnModelCreatingPartial(ModelBuilder modelBuilder);
 
         #region Configuration Methods
+
+        private void ConfigureAIChat(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<AIChatSession>(entity =>
+            {
+                entity.ToTable("AIChatSessions");
+                entity.HasKey(e => e.Id);
+                entity.HasIndex(e => e.SessionId).IsUnique();
+
+                entity.Property(e => e.SessionId).HasMaxLength(100).IsRequired();
+            });
+
+            modelBuilder.Entity<AIChatMessage>(entity =>
+            {
+                entity.ToTable("AIChatMessages");
+                entity.HasKey(e => e.Id);
+                entity.HasIndex(e => e.AIChatSessionId);
+
+                entity.Property(e => e.Role).HasMaxLength(20).IsRequired();
+                entity.Property(e => e.Content).HasColumnType("nvarchar(max)").IsRequired();
+
+                entity.HasOne(e => e.Session)
+                    .WithMany(s => s.Messages)
+                    .HasForeignKey(e => e.AIChatSessionId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+        }
 
         private void ConfigureStatusSystem(ModelBuilder modelBuilder)
         {

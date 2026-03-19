@@ -151,12 +151,23 @@ namespace RestX.BLL.Services
                 await Repo.SaveAsync();
         }
 
-        public async Task<ChatHistoryResponse?> GetHistory(string sessionId)
+        public async Task<ChatHistoryResponse?> GetHistory(string? sessionId, string? userId = null)
         {
-            var session = await Repo.GetOneAsync<AIChatSession>(s => s.SessionId == sessionId, "Messages");
+            AIChatSession? session = null;
+
+            if (!string.IsNullOrEmpty(userId) && Guid.TryParse(userId, out var appUserId))
+            {
+                var customerId = await _customerService.GetCustomerIdByApplicationUserIdAsync(appUserId);
+                if (customerId.HasValue)
+                    session = await Repo.GetOneAsync<AIChatSession>(s => s.CustomerId == customerId.Value, "Messages");
+            }
+
+            if (session == null && !string.IsNullOrEmpty(sessionId))
+                session = await Repo.GetOneAsync<AIChatSession>(s => s.SessionId == sessionId, "Messages");
+
             if (session == null) return null;
 
-            var items = session.Messages.Select(m =>
+            var items = session.Messages.OrderBy(m => m.CreatedDate).Select(m =>
             {
                 var item = new ChatHistoryItem
                 {

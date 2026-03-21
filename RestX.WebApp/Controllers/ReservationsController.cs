@@ -2,6 +2,7 @@ using AutoMapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using RestX.BLL.DataTranferObjects.Common;
 using RestX.BLL.DataTranferObjects.Reservation;
 using RestX.BLL.Exceptionhandling;
@@ -23,10 +24,12 @@ namespace RestX.WebApp.Controllers
     {
         private readonly IReservationService reservationService;
         private readonly ITableService tableService;
+        private readonly IHubContext<SignalrServer> hub;
 
         public ReservationsController(
             IReservationService reservationService,
             ITableService tableService,
+            IHubContext<SignalrServer> hub,
             IMapper mapper,
             UserManager<ApplicationUser> userManager,
             IExceptionHandler exceptionHandler,
@@ -34,6 +37,7 @@ namespace RestX.WebApp.Controllers
         {
             this.reservationService = reservationService;
             this.tableService = tableService;
+            this.hub = hub;
         }
 
         [HttpPost]
@@ -211,7 +215,7 @@ namespace RestX.WebApp.Controllers
                     {
                         var updatedTable = await tableService.GetTableById(tableInfo.Id);
                         if (updatedTable != null)
-                            await BroadcastToTenant(SignalrServer.TableStatusChanged, new
+                            await hub.BroadcastToTenant(CurrentTenant.Id, SignalrServer.TableStatusChanged, new
                             {
                                 tableId = updatedTable.Id,
                                 tableCode = updatedTable.Code,
@@ -259,7 +263,7 @@ namespace RestX.WebApp.Controllers
 
                 if (reservation != null)
                     foreach (var tableInfo in reservation.Tables)
-                        await BroadcastToTenant(SignalrServer.TableStatusChanged, new
+                        await hub.BroadcastToTenant(CurrentTenant.Id, SignalrServer.TableStatusChanged, new
                         {
                             tableId = tableInfo.Id,
                             tableCode = tableInfo.Code,
@@ -300,7 +304,7 @@ namespace RestX.WebApp.Controllers
 
                 if (reservation != null)
                     foreach (var tableInfo in reservation.Tables)
-                        await BroadcastToTenant(SignalrServer.TableStatusChanged, new
+                        await hub.BroadcastToTenant(CurrentTenant.Id, SignalrServer.TableStatusChanged, new
                         {
                             tableId = tableInfo.Id,
                             tableCode = tableInfo.Code,

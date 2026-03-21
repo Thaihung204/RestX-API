@@ -2,6 +2,7 @@ using AutoMapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using RestX.BLL.DataTranferObjects.Floor;
 using RestX.BLL.Exceptionhandling;
 using RestX.BLL.Interfaces;
@@ -9,8 +10,8 @@ using RestX.BLL.Interfaces.Tables;
 using RestX.Models.Identity;
 using RestX.Models.Tenants;
 using RestX.WebApp.Controllers.BaseControllers;
-using System.ComponentModel.DataAnnotations;
 using RestX.WebApp.Helpers;
+using System.ComponentModel.DataAnnotations;
 
 namespace RestX.WebApp.Controllers
 {
@@ -20,15 +21,18 @@ namespace RestX.WebApp.Controllers
     public class FloorsController : BaseController
     {
         private readonly IFloorService floorService;
+        private readonly IHubContext<SignalrServer> hub;
 
         public FloorsController(
             IFloorService floorService,
+            IHubContext<SignalrServer> hub,
             IMapper mapper,
             UserManager<ApplicationUser> userManager,
             IExceptionHandler exceptionHandler,
             IEnumerable<ActiveTenant> tenant) : base(mapper, userManager, exceptionHandler, tenant)
         {
             this.floorService = floorService;
+            this.hub = hub;
         }
 
         [HttpGet]
@@ -159,7 +163,7 @@ namespace RestX.WebApp.Controllers
                 if (!success)
                     return NotFound(new { success = false, message = "Floor layout not found" });
 
-                await BroadcastToTenant(SignalrServer.TableLayoutUpdated, new { floorId });
+                await hub.BroadcastToTenant(CurrentTenant.Id, SignalrServer.TableLayoutUpdated, new { floorId });
                 return Ok(new { success = true, message = "Layout saved successfully" });
             }
             catch (AppException ex)

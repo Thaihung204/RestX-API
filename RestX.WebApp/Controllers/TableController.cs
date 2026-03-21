@@ -2,6 +2,7 @@ using AutoMapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using RestX.BLL.DataTranferObjects.Table;
 using RestX.BLL.Exceptionhandling;
 using RestX.BLL.Interfaces;
@@ -21,15 +22,18 @@ namespace RestX.WebApp.Controllers
     public class TablesController : BaseController
     {
         private readonly ITableService tableService;
+        private readonly IHubContext<SignalrServer> hub;
 
         public TablesController(
             ITableService tableService,
+            IHubContext<SignalrServer> hub,
             IMapper mapper,
             UserManager<ApplicationUser> userManager,
             IExceptionHandler exceptionHandler,
             IEnumerable<ActiveTenant> tenant) : base(mapper, userManager, exceptionHandler, tenant)
         {
             this.tableService = tableService;
+            this.hub = hub;
         }
 
         [HttpGet]
@@ -134,7 +138,7 @@ namespace RestX.WebApp.Controllers
             try
             {
                 var result = await tableService.ChangeTableStatus(id, status);
-                await BroadcastToTenant(SignalrServer.TableStatusChanged, new
+                await hub.BroadcastToTenant(CurrentTenant.Id, SignalrServer.TableStatusChanged, new
                 {
                     tableId = result.Id,
                     tableCode = result.Code,

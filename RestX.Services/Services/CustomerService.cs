@@ -40,12 +40,12 @@ namespace RestX.BLL.Services
                 .AddIntCondition("c.LoyaltyPoints >= @MinLoyaltyPoints", "MinLoyaltyPoints", filter.MinLoyaltyPoints)
                 .AddIntCondition("c.LoyaltyPoints <= @MaxLoyaltyPoints", "MaxLoyaltyPoints", filter.MaxLoyaltyPoints)
                 .AddSearchCondition(
-                    new[] { "u.UserName", "u.Email", "u.PhoneNumber", "c.MembershipLevel" },
+                    new[] { "u.FullName", "u.Email", "u.PhoneNumber", "c.MembershipLevel" },
                     "Search",
                     filter.Search);
             var (countQuery, countParams) = queryBuilder.BuildCountQuery("COUNT(DISTINCT c.Id)");
             int totalCount = await Repo.ExecuteSqlCommandAsync<int>(countQuery, countParams);
-            var selectColumns = @"DISTINCT c.Id, u.UserName AS FullName, u.Email, u.PhoneNumber,
+            var selectColumns = @"DISTINCT c.Id, u.FullName, u.Email, u.PhoneNumber,
                                   c.MembershipLevel, c.LoyaltyPoints, c.IsActive, c.CreatedDate, u.AvatarUrl";
             var (dataQuery, dataParams) = queryBuilder.BuildDataQuery(
                 selectColumns,
@@ -156,7 +156,7 @@ namespace RestX.BLL.Services
             var direction = desc ? "DESC" : "ASC";
             return (sortBy?.ToLower()) switch
             {
-                "fullname" => $" ORDER BY u.UserName {direction}",
+                "fullname" => $" ORDER BY u.FullName {direction}",
                 "email" => $" ORDER BY u.Email {direction}",
                 "membershiplevel" => $" ORDER BY c.MembershipLevel {direction}",
                 "loyaltypoints" => $" ORDER BY c.LoyaltyPoints {direction}",
@@ -216,7 +216,7 @@ namespace RestX.BLL.Services
                 ModifiedDate = customer.ModifiedDate,
                 UserId = user?.Id ?? Guid.Empty,
                 Email = user?.Email ?? string.Empty,
-                FullName = user?.UserName ?? string.Empty,
+                FullName = user?.FullName ?? string.Empty,
                 PhoneNumber = user?.PhoneNumber,
                 AvatarUrl = user?.AvatarUrl,
                 TotalOrders = stats.TotalOrders,

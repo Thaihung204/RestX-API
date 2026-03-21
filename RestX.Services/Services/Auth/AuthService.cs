@@ -145,7 +145,7 @@ namespace RestX.BLL.Services.Auth
             return new CheckPhoneResponse
             {
                 Exists = true,
-                CustomerName = user.UserName,
+                CustomerName = user.FullName,
                 CustomerId = customer?.Id
             };
         }
@@ -257,8 +257,9 @@ namespace RestX.BLL.Services.Auth
             => new()
             {
                 Id = Guid.NewGuid(),
-                UserName = fullName,
-                NormalizedUserName = fullName.ToUpper(),
+                UserName = phoneNumber,
+                NormalizedUserName = phoneNumber,
+                FullName = fullName,
                 PhoneNumber = phoneNumber,
                 PhoneNumberConfirmed = true,
                 EmailConfirmed = false,

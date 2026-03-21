@@ -26,10 +26,15 @@ namespace RestX.BLL.Services
 
         public async Task<ApplicationUser> CreateUserAsync(CreateUserRequest request)
         {
+            var userName = !string.IsNullOrWhiteSpace(request.Email)
+                ? request.Email
+                : request.PhoneNumber ?? Guid.NewGuid().ToString("N")[..16];
+
             var user = new ApplicationUser
             {
                 Id = Guid.NewGuid(),
-                UserName = request.FullName,
+                UserName = userName,
+                FullName = request.FullName,
                 Email = request.Email,
                 PhoneNumber = request.PhoneNumber,
                 EmailConfirmed = true,
@@ -56,7 +61,7 @@ namespace RestX.BLL.Services
                 ?? throw new InvalidOperationException("User not found");
 
             if (!string.IsNullOrWhiteSpace(request.FullName))
-                user.UserName = request.FullName;
+                user.FullName = request.FullName;
 
             if (!string.IsNullOrWhiteSpace(request.PhoneNumber))
                 user.PhoneNumber = request.PhoneNumber;

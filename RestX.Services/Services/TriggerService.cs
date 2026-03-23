@@ -19,6 +19,7 @@ namespace RestX.BLL.Services
     using RestX.DAL.Context;
     using RestX.Models.Attributes;
     using RestX.Models.Enum;
+    using RestX.Models.Orders;
     using RestX.Models.Tenants;
     using RestX.Models.Triggers;
     using System;
@@ -106,6 +107,8 @@ namespace RestX.BLL.Services
         public async Task<DataTransferObjects.Triggers.Trigger> GetTriggerById(Guid triggerId)
         {
             var trigger = await this.Repo.GetFirstAsync<Trigger>(t => t.Id == triggerId, includeProperties: "Object,Criteria.Group");
+            if (trigger == null) throw new AppException($"No trigger found");
+
             var mappedTrigger = this.mapper.Map<Trigger, DataTransferObjects.Triggers.Trigger>(trigger);
 
             mappedTrigger.Groups = mappedTrigger.Criteria.Where(c => c.TriggerCriteriaGroupId > 0).DistinctBy(c => c.TriggerCriteriaGroupId).Select(g => new DataTransferObjects.Triggers.TriggerGroup
@@ -120,7 +123,7 @@ namespace RestX.BLL.Services
 
         public async Task DeleteTrigger(Guid triggerId, string userId)
         {
-            var trigger = await this.Repo.GetFirstAsync<Trigger>(t => t.Id == triggerId, includeProperties: "Actions.ScheduledCriteria,Criteria");
+            var trigger = await this.Repo.GetFirstAsync<Trigger>(t => t.Id == triggerId, includeProperties: "Actions,Criteria");
             if (trigger == null)
             {
                 throw new AppException($"No trigger found with id '{triggerId}'");
@@ -224,7 +227,7 @@ namespace RestX.BLL.Services
             // Update the criteria
             foreach (var criteria in triggerCriteria)
             {
-                if (criteria.TriggerCriteriaGroupId != -1)
+                if (criteria.TriggerCriteriaGroupId.HasValue && criteria.TriggerCriteriaGroupId.Value != -1)
                 {
                     criteria.TriggerCriteriaGroupId = newGroupIdMapping[criteria.TriggerCriteriaGroupId.Value];
                 }
@@ -324,7 +327,12 @@ namespace RestX.BLL.Services
 
                     if (action.Type == TriggerActionType.ChangeOrderDetailStatus)
                     {
-                        ChangeOrderDetailStatus properties = JsonConvert.DeserializeObject<ChangeOrderDetailStatus>(JsonConvert.SerializeObject(action.CustomProperties));
+                        int newItemStatusId = ((System.Text.Json.JsonElement)((IDictionary<string, object>)action.CustomProperties)["newItemStatusId"]).GetInt32();
+                        ChangeOrderDetailStatus properties = new ChangeOrderDetailStatus
+                        {
+                            NewItemStatusId = newItemStatusId
+                        };
+
                         existingAction.PropertiesJson = JsonConvert.SerializeObject(properties);
                     }
                     this.Repo.Update(existingAction, userId);
@@ -341,8 +349,13 @@ namespace RestX.BLL.Services
 
                     if (action.Type == TriggerActionType.ChangeOrderDetailStatus)
                     {
-                        ChangeOrderDetailStatus properties = JsonConvert.DeserializeObject<ChangeOrderDetailStatus>(JsonConvert.SerializeObject(action.CustomProperties)); // action.CustomProperties.ToObject<CreateEnquiryHistoryProperties>();
-                        //newAction.PropertiesJson = JsonConvert.SerializeObject(properties);
+                        int newItemStatusId = ((System.Text.Json.JsonElement)((IDictionary<string, object>)action.CustomProperties)["newItemStatusId"]).GetInt32();
+                        ChangeOrderDetailStatus properties = new ChangeOrderDetailStatus
+                        {
+                            NewItemStatusId = newItemStatusId
+                        };
+
+                        newAction.PropertiesJson = JsonConvert.SerializeObject(properties);
                     }
                     await this.Repo.CreateAsync(newAction, userId);
                 }
@@ -352,7 +365,7 @@ namespace RestX.BLL.Services
         #region Trigger workings
 
         public async Task CheckForTriggers(Guid tenantId,List<TriggerCheckData> changes)
-        {
+    {
             string objectName = null; object id = null;
             try
             {
@@ -620,13 +633,23 @@ namespace RestX.BLL.Services
 
         private async Task ProcessAction(TriggerCheckData item, IRepository repo, ICollection<TriggerAction> actions, ActiveTenant tenant)
         {
-            foreach (var triggerAction in actions)
+            foreach (TriggerAction triggerAction in actions)
             {
                 // Check if this is scheduled first, the scheduled action handles all the task types internally 
                 if (triggerAction.Type == TriggerActionType.ChangeOrderDetailStatus)
                 {
-                    //await emailTask.ProcessTask(item, triggerAction, true);
+                    Guid orderId = Guid.Parse(item.CurrentValues["Id"]);
+                    ChangeOrderDetailStatus actionData = JsonConvert.DeserializeObject<ChangeOrderDetailStatus>(triggerAction.PropertiesJson);
+
+                    List<OrderDetail> orderDetails = repo.Get<OrderDetail>(o => o.OrderId == orderId).ToList();
+                    foreach (OrderDetail orderDetail in orderDetails)
+                    {
+                        orderDetail.ItemStatusId = actionData.NewItemStatusId;
+                    }
+
+                    await repo.SaveAsync();
                 }
+
                 //...
             }
         }

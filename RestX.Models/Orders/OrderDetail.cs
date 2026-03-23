@@ -20,7 +20,7 @@ namespace RestX.Models.Orders
 
         [MaxLength(500)]
         public string? Note { get; set; }
-
+        [TriggerProperty]
         public int ItemStatusId { get; set; }
 
         public virtual Order Order { get; set; } = null!;

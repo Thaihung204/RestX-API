@@ -1,34 +1,30 @@
 ﻿using AutoMapper;
 using RestX.BLL.DataTranferObjects.Authentication;
 using RestX.BLL.DataTranferObjects.Category;
+using RestX.BLL.DataTranferObjects.Combo;
 using RestX.BLL.DataTranferObjects.Customer;
 using RestX.BLL.DataTranferObjects.Dish;
 using RestX.BLL.DataTranferObjects.Employee;
 using RestX.BLL.DataTranferObjects.Inventory;
-using RestX.BLL.DataTranferObjects.Orders;
+using RestX.BLL.DataTranferObjects.Payments;
+using RestX.BLL.DataTranferObjects.Reservation;
+using RestX.BLL.DataTranferObjects.Status;
 using RestX.BLL.DataTranferObjects.Table;
 using RestX.BLL.DataTranferObjects.Tenants;
+using RestX.Models.Common;
 using RestX.Models.Customers;
 using RestX.Models.Enum;
 using RestX.Models.HR;
 using RestX.Models.Identity;
 using RestX.Models.Inventory;
 using RestX.Models.Menu;
-using RestX.Models.Orders;
+using RestX.Models.Reservations;
 using RestX.Models.Tables;
 using RestX.Models.Tenants;
+using RestX.Models.Triggers;
 using System.Globalization;
 using FloorEntity = RestX.Models.Tables.Floor;
-using RestX.BLL.DataTranferObjects.Inventory;
-using RestX.Models.Inventory;
 using LoyaltyPointBandEntity = RestX.Models.Loyalty.LoyaltyPointBand;
-using RestX.BLL.DataTranferObjects.Payments;
-using RestX.BLL.DataTranferObjects.Status;
-using RestX.Models.Common;
-using RestX.BLL.DataTranferObjects.Reservation;
-using RestX.BLL.DataTranferObjects.Combo;
-using RestX.Models.Reservations;
-using RestX.Models.Triggers;
 
 namespace RestX.BLL.Helpers
 {
@@ -183,11 +179,16 @@ namespace RestX.BLL.Helpers
                 .ForMember(dest => dest.UpdatedAt, opt => opt.MapFrom(src => src.ModifiedDate));
 
             CreateMap<DishRecipe, DishRecipeItem>().ReverseMap();
-
             CreateMap<MealCombo, ComboSummary>().ReverseMap();
             CreateMap<ComboDetail, ComboDetailItem>().ReverseMap();
-            CreateMap<TriggerObject, DataTransferObjects.Triggers.TriggerObject>()
-                .ReverseMap();
+
+            CreateMap<TriggerObject, DataTransferObjects.Triggers.TriggerObject>().ReverseMap();
+            CreateMap<RestX.Models.Triggers.Trigger, RestX.BLL.DataTransferObjects.Triggers.Trigger>().ReverseMap();
+            CreateMap<RestX.Models.Triggers.TriggerAction, RestX.BLL.DataTransferObjects.Triggers.TriggerAction>()
+                .ForMember(dest => dest.CustomProperties, opt => opt.Ignore())
+                .ForMember(dest => dest.Groups, opt => opt.Ignore()).ReverseMap();
+            CreateMap<RestX.Models.Triggers.TriggerCriteria, RestX.BLL.DataTransferObjects.Triggers.TriggerCriteria>().ReverseMap();
+            CreateMap<RestX.Models.Triggers.TriggerGroup, RestX.BLL.DataTransferObjects.Triggers.TriggerGroup>();
         }
     }
 }

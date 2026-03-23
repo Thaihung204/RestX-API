@@ -18,6 +18,6 @@ namespace RestX.Models.Interfaces
 
         string PropertiesJson { get; set; }
 
-        //ExpandoObject CustomProperties { get; set; }
+        ExpandoObject CustomProperties { get; set; }
     }
 }

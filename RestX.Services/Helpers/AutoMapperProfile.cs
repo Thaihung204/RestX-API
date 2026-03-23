@@ -152,6 +152,7 @@ namespace RestX.BLL.Helpers
                 .ForMember(dest => dest.Id, opt => opt.MapFrom(src => src.Table.Id))
                 .ForMember(dest => dest.Code, opt => opt.MapFrom(src => src.Table.Code))
                 .ForMember(dest => dest.Capacity, opt => opt.MapFrom(src => src.Table.SeatingCapacity))
+                .ForMember(dest => dest.FloorId, opt => opt.MapFrom(src => src.Table.FloorId))
                 .ForMember(dest => dest.FloorName, opt => opt.MapFrom(src =>
                     src.Table.Floor != null ? src.Table.Floor.Name : string.Empty));
 
@@ -181,6 +182,7 @@ namespace RestX.BLL.Helpers
             CreateMap<DishRecipe, DishRecipeItem>().ReverseMap();
             CreateMap<MealCombo, ComboSummary>().ReverseMap();
             CreateMap<ComboDetail, ComboDetailItem>().ReverseMap();
+            CreateMap<Models.Promotions.Promotion, BLL.DataTranferObjects.Promotion.Promotion>().ReverseMap();
 
             CreateMap<TriggerObject, DataTransferObjects.Triggers.TriggerObject>().ReverseMap();
             CreateMap<RestX.Models.Triggers.Trigger, RestX.BLL.DataTransferObjects.Triggers.Trigger>().ReverseMap();

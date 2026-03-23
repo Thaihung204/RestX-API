@@ -64,6 +64,7 @@ namespace RestX.BLL.DataTranferObjects.Reservation
         public Guid Id { get; set; }
         public string Code { get; set; } = string.Empty;
         public int Capacity { get; set; }
+        public Guid FloorId { get; set; }
         public string FloorName { get; set; } = string.Empty;
     }
 

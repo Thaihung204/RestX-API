@@ -2,6 +2,7 @@ using AutoMapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using RestX.BLL.DataTranferObjects.Table;
 using RestX.BLL.Exceptionhandling;
 using RestX.BLL.Interfaces;
@@ -10,6 +11,7 @@ using RestX.Models.Enum;
 using RestX.Models.Identity;
 using RestX.Models.Tenants;
 using RestX.WebApp.Controllers.BaseControllers;
+using RestX.WebApp.Helpers;
 using System.ComponentModel.DataAnnotations;
 
 namespace RestX.WebApp.Controllers
@@ -20,15 +22,18 @@ namespace RestX.WebApp.Controllers
     public class TablesController : BaseController
     {
         private readonly ITableService tableService;
+        private readonly IHubContext<SignalrServer> hub;
 
         public TablesController(
             ITableService tableService,
+            IHubContext<SignalrServer> hub,
             IMapper mapper,
             UserManager<ApplicationUser> userManager,
             IExceptionHandler exceptionHandler,
             IEnumerable<ActiveTenant> tenant) : base(mapper, userManager, exceptionHandler, tenant)
         {
             this.tableService = tableService;
+            this.hub = hub;
         }
 
         [HttpGet]
@@ -132,7 +137,16 @@ namespace RestX.WebApp.Controllers
         {
             try
             {
-                return Ok(await tableService.ChangeTableStatus(id, status));
+                var result = await tableService.ChangeTableStatus(id, status);
+                await hub.BroadcastToTenant(CurrentTenant.Id, SignalrServer.TableStatusChanged, new
+                {
+                    tableId = result.Id,
+                    tableCode = result.Code,
+                    floorId = result.FloorId,
+                    status = (int)result.TableStatusId,
+                    statusName = result.TableStatusId.ToString()
+                });
+                return Ok(result);
             }
             catch (AppException ex)
             {
@@ -144,5 +158,6 @@ namespace RestX.WebApp.Controllers
                 return BadRequest("An internal error occurred");
             }
         }
+
     }
 }

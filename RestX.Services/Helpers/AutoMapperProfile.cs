@@ -38,14 +38,14 @@ namespace RestX.BLL.Helpers
         public AutoMapperProfile()
         {
             CreateMap<ApplicationUser, UserInfo>()
-                .ForMember(dest => dest.FullName, opt => opt.MapFrom(src => src.UserName ?? string.Empty))
+                .ForMember(dest => dest.FullName, opt => opt.MapFrom(src => src.FullName))
                 .ForMember(dest => dest.Email, opt => opt.MapFrom(src => src.Email ?? string.Empty))
                 .ForMember(dest => dest.CustomerId, opt => opt.Ignore())
                 .ForMember(dest => dest.Roles, opt => opt.Ignore());
             CreateMap<Customer, CustomerResponse>()
                 .ForMember(dest => dest.UserId, opt => opt.MapFrom(src => src.ApplicationUser.Id))
                 .ForMember(dest => dest.Email, opt => opt.MapFrom(src => src.ApplicationUser.Email ?? string.Empty))
-                .ForMember(dest => dest.FullName, opt => opt.MapFrom(src => src.ApplicationUser.UserName ?? string.Empty))
+                .ForMember(dest => dest.FullName, opt => opt.MapFrom(src => src.ApplicationUser.FullName ?? string.Empty))
                 .ForMember(dest => dest.PhoneNumber, opt => opt.MapFrom(src => src.ApplicationUser.PhoneNumber))
                 .ForMember(dest => dest.AvatarUrl, opt => opt.MapFrom(src => src.ApplicationUser.AvatarUrl))
                 .ForMember(dest => dest.TotalOrders, opt => opt.Ignore())
@@ -161,7 +161,7 @@ namespace RestX.BLL.Helpers
                     src.Table.Floor != null ? src.Table.Floor.Name : string.Empty));
 
             CreateMap<Reservation, ReservationContactInfo>()
-                .ForMember(dest => dest.Name, opt => opt.MapFrom(src => src.Customer.ApplicationUser.UserName ?? string.Empty))
+                .ForMember(dest => dest.Name, opt => opt.MapFrom(src => src.Customer.ApplicationUser.FullName ?? string.Empty))
                 .ForMember(dest => dest.Phone, opt => opt.MapFrom(src => src.Customer.ApplicationUser.PhoneNumber))
                 .ForMember(dest => dest.Email, opt => opt.MapFrom(src => src.Customer.ApplicationUser.Email))
                 .ForMember(dest => dest.MembershipLevel, opt => opt.MapFrom(src => src.Customer.MembershipLevel))
@@ -170,7 +170,7 @@ namespace RestX.BLL.Helpers
             CreateMap<Reservation, ReservationListItem>()
                 .ForMember(dest => dest.Tables, opt => opt.MapFrom(src => src.ReservationTables))
                 .ForMember(dest => dest.ReservationDateTime, opt => opt.MapFrom(src => src.Time))
-                .ForMember(dest => dest.ContactName, opt => opt.MapFrom(src => src.Customer.ApplicationUser.UserName ?? string.Empty))
+                .ForMember(dest => dest.ContactName, opt => opt.MapFrom(src => src.Customer.ApplicationUser.FullName ?? string.Empty))
                 .ForMember(dest => dest.ContactPhone, opt => opt.MapFrom(src => src.Customer.ApplicationUser.PhoneNumber))
                 .ForMember(dest => dest.Status, opt => opt.MapFrom(src => src.ReservationStatus))
                 .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(src => src.CreatedDate));

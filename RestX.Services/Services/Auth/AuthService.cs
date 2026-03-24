@@ -58,7 +58,7 @@ namespace RestX.BLL.Services.Auth
                     ? AuthResponse.FailureResponse("Account is locked. Please try again later.")
                     : AuthResponse.FailureResponse("Invalid email or password");
             }
-            return await GenerateAuthResponseAsync(user, "Login successful");
+            return await GenerateAuthResponseAsync(user, "Login successful", staffModeOnly: true);
         }
 
         public async Task<AuthResponse> LogoutAsync(Guid userId)
@@ -142,11 +142,13 @@ namespace RestX.BLL.Services.Auth
             if (user == null)
                 return new CheckPhoneResponse { Exists = false };
             var customer = await Repo.GetFirstAsync<Customer>(c => c.ApplicationUserId == user.Id);
+            if (customer == null)
+                return new CheckPhoneResponse { Exists = false };
             return new CheckPhoneResponse
             {
                 Exists = true,
-                CustomerName = user.UserName,
-                CustomerId = customer?.Id
+                CustomerName = user.FullName,
+                CustomerId = customer.Id
             };
         }
 
@@ -159,32 +161,51 @@ namespace RestX.BLL.Services.Auth
             var customer = await Repo.GetFirstAsync<Customer>(c => c.ApplicationUserId == user.Id);
             if (customer == null || !customer.IsActive)
                 return AuthResponse.FailureResponse("Customer account is inactive or not found");
-            return await GenerateAuthResponseAsync(user, "Login successful", customer.Id);
+            return await GenerateAuthResponseAsync(user, "Login successful", customer.Id, customerModeOnly: true);
         }
 
         public async Task<AuthResponse> CustomerPhoneRegisterAsync(CustomerPhoneRegisterRequest request)
         {
             var normalizedPhone = NormalizePhoneNumber(request.PhoneNumber);
-            if (FindUserByPhoneNumber(normalizedPhone) != null)
-                return AuthResponse.FailureResponse("Phone number already registered");
+            var existingUser = FindUserByPhoneNumber(normalizedPhone);
+            if (existingUser != null)
+            {
+                var existingCustomer = await Repo.GetFirstAsync<Customer>(c => c.ApplicationUserId == existingUser.Id);
+                if (existingCustomer != null)
+                    return AuthResponse.FailureResponse("Phone number already registered as a customer");
+                await EnsureRoleAndAssignAsync(existingUser, CustomerRole);
+                var newCustomer = await CreateCustomerAsync(existingUser.Id);
+                return await GenerateAuthResponseAsync(existingUser, "Customer account linked successfully", newCustomer.Id, customerModeOnly: true);
+            }
             var user = CreatePhoneUser(request.FullName, normalizedPhone);
             var result = await userManager.CreateAsync(user);
             if (!result.Succeeded)
                 return AuthResponse.FailureResponse($"Failed to create user: {FormatIdentityErrors(result)}");
             await EnsureRoleAndAssignAsync(user, CustomerRole);
             var customer = await CreateCustomerAsync(user.Id);
-            return await GenerateAuthResponseAsync(user, "Registration and login successful", customer.Id);
+            return await GenerateAuthResponseAsync(user, "Registration and login successful", customer.Id, customerModeOnly: true);
         }
 
         #region Private Methods
-        private async Task<AuthResponse> GenerateAuthResponseAsync(ApplicationUser user, string message, Guid? customerId = null)
+        private async Task<AuthResponse> GenerateAuthResponseAsync(
+            ApplicationUser user,
+            string message,
+            Guid? customerId = null,
+            bool customerModeOnly = false,
+            bool staffModeOnly = false)
         {
             var roles = await userManager.GetRolesAsync(user);
-            var accessToken = tokenService.GenerateAccessToken(user, roles, CurrentTenant?.Hostname ?? string.Empty);
+            IList<string> tokenRoles = roles;
+            if (customerModeOnly)
+                tokenRoles = roles.Where(r => r == CustomerRole).ToList();
+            else if (staffModeOnly)
+                tokenRoles = roles.Where(r => r != CustomerRole).ToList();
+
+            var accessToken = tokenService.GenerateAccessToken(user, tokenRoles, CurrentTenant?.Hostname ?? string.Empty);
             var refreshToken = tokenService.GenerateRefreshToken();
             await UpdateUserTokensAsync(user, refreshToken);
             var userInfo = mapper.Map<UserInfo>(user);
-            userInfo.Roles = roles.ToList();
+            userInfo.Roles = tokenRoles.ToList();
             userInfo.CustomerId = customerId;
             return AuthResponse.SuccessResponse(message, new LoginResponse
             {
@@ -257,8 +278,9 @@ namespace RestX.BLL.Services.Auth
             => new()
             {
                 Id = Guid.NewGuid(),
-                UserName = fullName,
-                NormalizedUserName = fullName.ToUpper(),
+                UserName = phoneNumber,
+                NormalizedUserName = phoneNumber,
+                FullName = fullName,
                 PhoneNumber = phoneNumber,
                 PhoneNumberConfirmed = true,
                 EmailConfirmed = false,

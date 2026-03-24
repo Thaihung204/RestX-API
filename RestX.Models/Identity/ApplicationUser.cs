@@ -20,5 +20,7 @@ namespace RestX.Models.Identity
         public bool PushNotificationEnabled { get; set; } = true;
         [MaxLength(500)]
         public string? AvatarUrl { get; set; }
+        [MaxLength(256)]
+        public string FullName { get; set; } = string.Empty;
     }
 }

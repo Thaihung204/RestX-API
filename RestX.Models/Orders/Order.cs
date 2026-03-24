@@ -1,4 +1,5 @@
-﻿using RestX.Models.BaseModel;
+﻿using RestX.Models.Attributes;
+using RestX.Models.BaseModel;
 using RestX.Models.Common;
 using RestX.Models.Customers;
 using RestX.Models.Enum;
@@ -22,6 +23,7 @@ namespace RestX.Models.Orders
 
         public Guid? CustomerId { get; set; }
         public Guid? ReservationId { get; set; }
+        [TriggerProperty(DisplayName = "Status")]
         public OrderStatus OrderStatusId { get; set; }
         public PaymentStatus PaymentStatusId { get; set; }
 

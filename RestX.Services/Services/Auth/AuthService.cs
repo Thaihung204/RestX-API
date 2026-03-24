@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using RestX.BLL.DataTranferObjects.Authentication;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Auth;
+using RestX.BLL.Interfaces.Customers;
 using RestX.Models.Customers;
 using RestX.Models.Identity;
 using RestX.Models.Tenants;
@@ -21,6 +22,7 @@ namespace RestX.BLL.Services.Auth
         private readonly IEmailService emailService;
         private readonly IMapper mapper;
         private readonly ILogger<AuthService> logger;
+        private readonly ICustomerService customerService;
         private const string CustomerRole = "Customer";
 
         public AuthService(
@@ -34,6 +36,7 @@ namespace RestX.BLL.Services.Auth
             IRedisService redisService,
             IMapper mapper,
             ILogger<AuthService> logger,
+            ICustomerService customerService,
             IEnumerable<ActiveTenant> tenant = null!) : base(repo, redisService, tenant)
         {
             this.userManager = userManager;
@@ -44,6 +47,7 @@ namespace RestX.BLL.Services.Auth
             this.emailService = emailService;
             this.mapper = mapper;
             this.logger = logger;
+            this.customerService = customerService;
         }
 
         public async Task<AuthResponse> LoginAsync(LoginRequest request)
@@ -174,7 +178,7 @@ namespace RestX.BLL.Services.Auth
                 if (existingCustomer != null)
                     return AuthResponse.FailureResponse("Phone number already registered as a customer");
                 await EnsureRoleAndAssignAsync(existingUser, CustomerRole);
-                var newCustomer = await CreateCustomerAsync(existingUser.Id);
+                var newCustomer = await customerService.CreateCustomerRecord(existingUser.Id);
                 return await GenerateAuthResponseAsync(existingUser, "Customer account linked successfully", newCustomer.Id, customerModeOnly: true);
             }
             var user = CreatePhoneUser(request.FullName, normalizedPhone);
@@ -182,7 +186,16 @@ namespace RestX.BLL.Services.Auth
             if (!result.Succeeded)
                 return AuthResponse.FailureResponse($"Failed to create user: {FormatIdentityErrors(result)}");
             await EnsureRoleAndAssignAsync(user, CustomerRole);
-            var customer = await CreateCustomerAsync(user.Id);
+            Customer customer;
+            try
+            {
+                customer = await customerService.CreateCustomerRecord(user.Id);
+            }
+            catch
+            {
+                await userManager.DeleteAsync(user);
+                throw;
+            }
             return await GenerateAuthResponseAsync(user, "Registration and login successful", customer.Id, customerModeOnly: true);
         }
 
@@ -239,31 +252,6 @@ namespace RestX.BLL.Services.Auth
             await userManager.AddToRoleAsync(user, roleName);
         }
 
-        private async Task<Customer> CreateCustomerAsync(Guid userId)
-        {
-            var customer = new Customer
-            {
-                Id = Guid.NewGuid(),
-                ApplicationUserId = userId,
-                MembershipLevel = "BRONZE",
-                LoyaltyPoints = 0,
-                IsActive = true,
-                CreatedDate = DateTime.UtcNow.AddHours(7),
-                ModifiedDate = DateTime.UtcNow.AddHours(7)
-            };
-            try
-            {
-                await Repo.CreateAsync(customer);
-                return customer;
-            }
-            catch
-            {
-                var user = await userManager.FindByIdAsync(userId.ToString());
-                if (user != null)
-                    await userManager.DeleteAsync(user);
-                throw;
-            }
-        }
 
         private string GetTenantBaseUrl()
             => $"https://{CurrentTenant?.Hostname ?? "localhost"}";

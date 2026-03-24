@@ -26,7 +26,7 @@ namespace RestX.BLL.DataTranferObjects.Customer
         [MaxLength(15)]
         public string? PhoneNumber { get; set; }
         [MaxLength(20)]
-        public string MembershipLevel { get; set; } = "BRONZE";
+        public string? MembershipLevel { get; set; }
         public int LoyaltyPoints { get; set; } = 0;
         public IFormFile? Avatar { get; set; }
     }

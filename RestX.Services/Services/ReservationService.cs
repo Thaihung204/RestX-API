@@ -380,8 +380,8 @@ namespace RestX.BLL.Services
                 (!filter.TableId.HasValue || r.ReservationTables.Any(rt => rt.TableId == filter.TableId.Value)) &&
                 (string.IsNullOrEmpty(search) ||
                     (r.ConfirmationCode != null && r.ConfirmationCode.ToLower().Contains(search)) ||
-                    (r.Customer.ApplicationUser.UserName != null &&
-                     r.Customer.ApplicationUser.UserName.ToLower().Contains(search)));
+                    (r.Customer.ApplicationUser.FullName != null &&
+                     r.Customer.ApplicationUser.FullName.ToLower().Contains(search)));
         }
 
         private async Task<Guid?> GetCustomerId(Guid? applicationUserId)

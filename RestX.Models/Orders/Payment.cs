@@ -39,6 +39,7 @@ namespace RestX.Models.Orders
 
         public DateTime PaymentDate { get; set; } = DateTime.UtcNow.AddHours(7);
 
+        [RestX.Models.Attributes.TriggerProperty]
         public int PaymentStatusId { get; set; }
 
         [Column(TypeName = "decimal(18,2)")]

@@ -88,12 +88,12 @@ namespace RestX.BLL.Services
                     ObjectId = c.CurrentValues["Id"],
                     ObjectName = c.Entity.GetType().Name,
                     Type = c.State == EntityState.Added ? TriggerCheckType.Added : c.State == EntityState.Modified ? TriggerCheckType.Updated : TriggerCheckType.Deleted,
-                    //OriginalValues = c.OriginalValues.Properties.ToDictionary(
-                    //                propertyName => propertyName.Name,
-                    //                propertyName => c.OriginalValues[propertyName] != null ? GetStringValueOfProperty(c.OriginalValues[propertyName]) : c.OriginalValues[propertyName]?.ToString()),
-                    //CurrentValues = c.CurrentValues.Properties.ToDictionary(
-                    //                propertyName => propertyName.Name,
-                    //                propertyName => c.CurrentValues[propertyName] != null ? GetStringValueOfProperty(c.CurrentValues[propertyName]) : c.CurrentValues[propertyName]?.ToString())
+                    OriginalValues = c.OriginalValues.Properties.ToDictionary(
+                                    propertyName => propertyName.Name,
+                                    propertyName => c.OriginalValues[propertyName] != null ? GetStringValueOfProperty(c.OriginalValues[propertyName]) : c.OriginalValues[propertyName]?.ToString()),
+                    CurrentValues = c.CurrentValues.Properties.ToDictionary(
+                                    propertyName => propertyName.Name,
+                                    propertyName => c.CurrentValues[propertyName] != null ? GetStringValueOfProperty(c.CurrentValues[propertyName]) : c.CurrentValues[propertyName]?.ToString())
                 }).ToList();
 
             // We have to get added items here so populate the Id's
@@ -107,12 +107,12 @@ namespace RestX.BLL.Services
                 ObjectId = c.CurrentValues["Id"],
                 ObjectName = c.Entity.GetType().Name,
                 Type = TriggerCheckType.Added,
-                //OriginalValues = c.OriginalValues.Properties.ToDictionary(
-                //                    propertyName => propertyName.Name,
-                //                    propertyName => c.OriginalValues[propertyName] != null ? GetStringValueOfProperty(c.OriginalValues[propertyName]) : c.OriginalValues[propertyName]?.ToString()),
-                //CurrentValues = c.CurrentValues.Properties.ToDictionary(
-                //                    propertyName => propertyName.Name,
-                //                    propertyName => c.CurrentValues[propertyName] != null ? GetStringValueOfProperty(c.CurrentValues[propertyName]) : c.CurrentValues[propertyName]?.ToString())
+                OriginalValues = c.OriginalValues.Properties.ToDictionary(
+                                    propertyName => propertyName.Name,
+                                    propertyName => c.OriginalValues[propertyName] != null ? GetStringValueOfProperty(c.OriginalValues[propertyName]) : c.OriginalValues[propertyName]?.ToString()),
+                CurrentValues = c.CurrentValues.Properties.ToDictionary(
+                                    propertyName => propertyName.Name,
+                                    propertyName => c.CurrentValues[propertyName] != null ? GetStringValueOfProperty(c.CurrentValues[propertyName]) : c.CurrentValues[propertyName]?.ToString())
             }));
 
             CheckForTriggers(changes);
@@ -126,12 +126,12 @@ namespace RestX.BLL.Services
                     ObjectId = c.CurrentValues["Id"],
                     ObjectName = c.Entity.GetType().Name,
                     Type = c.State == EntityState.Added ? TriggerCheckType.Added : c.State == EntityState.Modified ? TriggerCheckType.Updated : TriggerCheckType.Deleted,
-                    //OriginalValues = c.OriginalValues.Properties.ToDictionary(
-                    //                propertyName => propertyName.Name,
-                    //                propertyName => c.OriginalValues[propertyName] != null ? GetStringValueOfProperty(c.OriginalValues[propertyName]) : c.OriginalValues[propertyName]?.ToString()),
-                    //CurrentValues = c.CurrentValues.Properties.ToDictionary(
-                    //                propertyName => propertyName.Name,
-                    //                propertyName => c.CurrentValues[propertyName] != null ? GetStringValueOfProperty(c.CurrentValues[propertyName]) : c.CurrentValues[propertyName]?.ToString())
+                    OriginalValues = c.OriginalValues.Properties.ToDictionary(
+                                    propertyName => propertyName.Name,
+                                    propertyName => c.OriginalValues[propertyName] != null ? GetStringValueOfProperty(c.OriginalValues[propertyName]) : c.OriginalValues[propertyName]?.ToString()),
+                    CurrentValues = c.CurrentValues.Properties.ToDictionary(
+                                    propertyName => propertyName.Name,
+                                    propertyName => c.CurrentValues[propertyName] != null ? GetStringValueOfProperty(c.CurrentValues[propertyName]) : c.CurrentValues[propertyName]?.ToString())
                 }).ToList();
 
             var added = this.context.ChangeTracker.Entries().Where(e => e.State == EntityState.Added).ToList();
@@ -147,12 +147,12 @@ namespace RestX.BLL.Services
                 ObjectId = c.CurrentValues["Id"],
                 ObjectName = c.Entity.GetType().Name,
                 Type = TriggerCheckType.Added,
-                //OriginalValues = c.OriginalValues.Properties.ToDictionary(
-                //                    propertyName => propertyName.Name,
-                //                    propertyName => c.OriginalValues[propertyName] != null ? GetStringValueOfProperty(c.OriginalValues[propertyName]) : c.OriginalValues[propertyName]?.ToString()),
-                //CurrentValues = c.CurrentValues.Properties.ToDictionary(
-                //                    propertyName => propertyName.Name,
-                //                    propertyName => c.CurrentValues[propertyName] != null ? GetStringValueOfProperty(c.CurrentValues[propertyName]) : c.CurrentValues[propertyName]?.ToString())
+                OriginalValues = c.OriginalValues.Properties.ToDictionary(
+                                    propertyName => propertyName.Name,
+                                    propertyName => c.OriginalValues[propertyName] != null ? GetStringValueOfProperty(c.OriginalValues[propertyName]) : c.OriginalValues[propertyName]?.ToString()),
+                CurrentValues = c.CurrentValues.Properties.ToDictionary(
+                                    propertyName => propertyName.Name,
+                                    propertyName => c.CurrentValues[propertyName] != null ? GetStringValueOfProperty(c.CurrentValues[propertyName]) : c.CurrentValues[propertyName]?.ToString())
             }));
 
             CheckForTriggers(changes);
@@ -333,12 +333,12 @@ namespace RestX.BLL.Services
         /// This method validates the custom properties set against an entity to ensure they are still current
         /// and that they haven't been deleted etc. since the last time this entity was saved.
         /// </summary>
-        /// <param name="entity">
+        /// <param name = "entity" >
         /// The entity.
         /// </param>
         /// <returns>
-        /// The <see cref="ExpandoObject"/>.
-        /// </returns>
+        /// The<see cref = "ExpandoObject" />.
+        /// </ returns >
         //private ExpandoObject ValidateCustomProperties(IEntity entity)
         //{
         //    if (this.context.GetType().Name != "AdminDbContext" && entity.GetType().Name != "TriggerAction")
@@ -365,21 +365,21 @@ namespace RestX.BLL.Services
         //}
 
 
-        //private string GetStringValueOfProperty(object propertyData)
-        //{
-        //    var type = propertyData.GetType();
-        //    if (type == typeof(List<string>))
-        //    {
-        //        return string.Join(",", ((List<string>)propertyData));
-        //    }
+        private string GetStringValueOfProperty(object propertyData)
+        {
+            var type = propertyData.GetType();
+            if (type == typeof(List<string>))
+            {
+                return string.Join(",", ((List<string>)propertyData));
+            }
 
-        //    if (type == typeof(List<Models.Content.ContentItem>))
-        //    {
-        //        return string.Join(",", ((List<Models.Content.ContentItem>)propertyData).Select(c => c.Value));
-        //    }
+            //if (type == typeof(List<Models.Content.ContentItem>))
+            //{
+            //    return string.Join(",", ((List<Models.Content.ContentItem>)propertyData).Select(c => c.Value));
+            //}
 
-        //    return propertyData.ToString();
-        //}
+            return propertyData.ToString();
+        }
 
         //private IEnumerable<CustomProperty> GetCustomProperties(IEntity entity)
         //{

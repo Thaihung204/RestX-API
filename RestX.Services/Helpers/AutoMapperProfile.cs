@@ -1,34 +1,30 @@
 ﻿using AutoMapper;
 using RestX.BLL.DataTranferObjects.Authentication;
 using RestX.BLL.DataTranferObjects.Category;
+using RestX.BLL.DataTranferObjects.Combo;
 using RestX.BLL.DataTranferObjects.Customer;
 using RestX.BLL.DataTranferObjects.Dish;
 using RestX.BLL.DataTranferObjects.Employee;
 using RestX.BLL.DataTranferObjects.Inventory;
-using RestX.BLL.DataTranferObjects.Orders;
+using RestX.BLL.DataTranferObjects.Payments;
+using RestX.BLL.DataTranferObjects.Reservation;
+using RestX.BLL.DataTranferObjects.Status;
 using RestX.BLL.DataTranferObjects.Table;
 using RestX.BLL.DataTranferObjects.Tenants;
+using RestX.Models.Common;
 using RestX.Models.Customers;
 using RestX.Models.Enum;
 using RestX.Models.HR;
 using RestX.Models.Identity;
 using RestX.Models.Inventory;
 using RestX.Models.Menu;
-using RestX.Models.Orders;
+using RestX.Models.Reservations;
 using RestX.Models.Tables;
 using RestX.Models.Tenants;
+using RestX.Models.Triggers;
 using System.Globalization;
 using FloorEntity = RestX.Models.Tables.Floor;
-using RestX.BLL.DataTranferObjects.Inventory;
-using RestX.Models.Inventory;
 using LoyaltyPointBandEntity = RestX.Models.Loyalty.LoyaltyPointBand;
-using RestX.BLL.DataTranferObjects.Payments;
-using RestX.BLL.DataTranferObjects.Status;
-using RestX.Models.Common;
-using RestX.BLL.DataTranferObjects.Reservation;
-using RestX.BLL.DataTranferObjects.Combo;
-using RestX.Models.Reservations;
-using RestX.Models.Triggers;
 
 namespace RestX.BLL.Helpers
 {
@@ -38,14 +34,14 @@ namespace RestX.BLL.Helpers
         public AutoMapperProfile()
         {
             CreateMap<ApplicationUser, UserInfo>()
-                .ForMember(dest => dest.FullName, opt => opt.MapFrom(src => src.UserName ?? string.Empty))
+                .ForMember(dest => dest.FullName, opt => opt.MapFrom(src => src.FullName))
                 .ForMember(dest => dest.Email, opt => opt.MapFrom(src => src.Email ?? string.Empty))
                 .ForMember(dest => dest.CustomerId, opt => opt.Ignore())
                 .ForMember(dest => dest.Roles, opt => opt.Ignore());
             CreateMap<Customer, CustomerResponse>()
                 .ForMember(dest => dest.UserId, opt => opt.MapFrom(src => src.ApplicationUser.Id))
                 .ForMember(dest => dest.Email, opt => opt.MapFrom(src => src.ApplicationUser.Email ?? string.Empty))
-                .ForMember(dest => dest.FullName, opt => opt.MapFrom(src => src.ApplicationUser.UserName ?? string.Empty))
+                .ForMember(dest => dest.FullName, opt => opt.MapFrom(src => src.ApplicationUser.FullName ?? string.Empty))
                 .ForMember(dest => dest.PhoneNumber, opt => opt.MapFrom(src => src.ApplicationUser.PhoneNumber))
                 .ForMember(dest => dest.AvatarUrl, opt => opt.MapFrom(src => src.ApplicationUser.AvatarUrl))
                 .ForMember(dest => dest.TotalOrders, opt => opt.Ignore())
@@ -161,7 +157,7 @@ namespace RestX.BLL.Helpers
                     src.Table.Floor != null ? src.Table.Floor.Name : string.Empty));
 
             CreateMap<Reservation, ReservationContactInfo>()
-                .ForMember(dest => dest.Name, opt => opt.MapFrom(src => src.Customer.ApplicationUser.UserName ?? string.Empty))
+                .ForMember(dest => dest.Name, opt => opt.MapFrom(src => src.Customer.ApplicationUser.FullName ?? string.Empty))
                 .ForMember(dest => dest.Phone, opt => opt.MapFrom(src => src.Customer.ApplicationUser.PhoneNumber))
                 .ForMember(dest => dest.Email, opt => opt.MapFrom(src => src.Customer.ApplicationUser.Email))
                 .ForMember(dest => dest.MembershipLevel, opt => opt.MapFrom(src => src.Customer.MembershipLevel))
@@ -170,7 +166,7 @@ namespace RestX.BLL.Helpers
             CreateMap<Reservation, ReservationListItem>()
                 .ForMember(dest => dest.Tables, opt => opt.MapFrom(src => src.ReservationTables))
                 .ForMember(dest => dest.ReservationDateTime, opt => opt.MapFrom(src => src.Time))
-                .ForMember(dest => dest.ContactName, opt => opt.MapFrom(src => src.Customer.ApplicationUser.UserName ?? string.Empty))
+                .ForMember(dest => dest.ContactName, opt => opt.MapFrom(src => src.Customer.ApplicationUser.FullName ?? string.Empty))
                 .ForMember(dest => dest.ContactPhone, opt => opt.MapFrom(src => src.Customer.ApplicationUser.PhoneNumber))
                 .ForMember(dest => dest.Status, opt => opt.MapFrom(src => src.ReservationStatus))
                 .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(src => src.CreatedDate));
@@ -184,12 +180,17 @@ namespace RestX.BLL.Helpers
                 .ForMember(dest => dest.UpdatedAt, opt => opt.MapFrom(src => src.ModifiedDate));
 
             CreateMap<DishRecipe, DishRecipeItem>().ReverseMap();
-
             CreateMap<MealCombo, ComboSummary>().ReverseMap();
             CreateMap<ComboDetail, ComboDetailItem>().ReverseMap();
             CreateMap<Models.Promotions.Promotion, BLL.DataTranferObjects.Promotion.Promotion>().ReverseMap();
-            CreateMap<TriggerObject, DataTransferObjects.Triggers.TriggerObject>()
-                .ReverseMap();
+
+            CreateMap<TriggerObject, DataTransferObjects.Triggers.TriggerObject>().ReverseMap();
+            CreateMap<RestX.Models.Triggers.Trigger, RestX.BLL.DataTransferObjects.Triggers.Trigger>().ReverseMap();
+            CreateMap<RestX.Models.Triggers.TriggerAction, RestX.BLL.DataTransferObjects.Triggers.TriggerAction>()
+                .ForMember(dest => dest.CustomProperties, opt => opt.Ignore())
+                .ForMember(dest => dest.Groups, opt => opt.Ignore()).ReverseMap();
+            CreateMap<RestX.Models.Triggers.TriggerCriteria, RestX.BLL.DataTransferObjects.Triggers.TriggerCriteria>().ReverseMap();
+            CreateMap<RestX.Models.Triggers.TriggerGroup, RestX.BLL.DataTransferObjects.Triggers.TriggerGroup>();
         }
     }
 }

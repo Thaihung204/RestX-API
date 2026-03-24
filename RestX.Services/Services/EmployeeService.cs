@@ -47,7 +47,7 @@ namespace RestX.BLL.Services
                 .AddDateCondition("e.HireDate >= @HireDateFrom", "HireDateFrom", filter.HireDateFrom)
                 .AddDateCondition("e.HireDate <= @HireDateTo", "HireDateTo", filter.HireDateTo)
                 .AddSearchCondition(
-                    new[] { "e.Code", "e.Position", "u.UserName", "u.Email" },
+                    new[] { "e.Code", "e.Position", "u.FullName", "u.Email" },
                     "Search",
                     filter.Search);
             var (countQuery, countParams) = queryBuilder.BuildCountQuery("COUNT(DISTINCT e.Id)");
@@ -58,7 +58,7 @@ namespace RestX.BLL.Services
             int totalInactive = await Repo.ExecuteSqlCommandAsync<int>(
                 "SELECT COUNT(*) FROM Employees WHERE IsActive = 0");
 
-            var selectColumns = @"DISTINCT e.Id, e.Code, u.UserName AS FullName, u.Email,
+            var selectColumns = @"DISTINCT e.Id, e.Code, u.FullName, u.Email,
                                   e.Position, e.IsActive, e.HireDate, e.CreatedDate, u.AvatarUrl";
             var (dataQuery, dataParams) = queryBuilder.BuildDataQuery(
                 selectColumns,
@@ -174,7 +174,7 @@ namespace RestX.BLL.Services
             return (sortBy?.ToLower()) switch
             {
                 "code" => $" ORDER BY e.Code {direction}",
-                "fullname" => $" ORDER BY u.UserName {direction}",
+                "fullname" => $" ORDER BY u.FullName {direction}",
                 "email" => $" ORDER BY u.Email {direction}",
                 "position" => $" ORDER BY e.Position {direction}",
                 "hiredate" => $" ORDER BY e.HireDate {direction}",
@@ -276,7 +276,7 @@ namespace RestX.BLL.Services
                 ModifiedDate = employee.ModifiedDate,
                 UserId = user?.Id ?? Guid.Empty,
                 Email = user?.Email ?? string.Empty,
-                FullName = user?.UserName ?? string.Empty,
+                FullName = user?.FullName ?? string.Empty,
                 PhoneNumber = user?.PhoneNumber,
                 AvatarUrl = user?.AvatarUrl,
                 Roles = roles.ToList()

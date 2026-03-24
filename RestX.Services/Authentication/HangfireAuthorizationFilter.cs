@@ -15,7 +15,13 @@ namespace RestX.BLL.Authentication
         public bool Authorize(DashboardContext context)
         {
             var httpContext = _httpContextAccessor.HttpContext;
-            return httpContext?.User?.IsInRole("Super Admin") ?? false;
+            return httpContext?.User?.Identity?.IsAuthenticated ?? false;
         }
+
+        //public bool Authorize(DashboardContext context)
+        //{
+        //    var httpContext = context.GetHttpContext();
+        //    return httpContext?.User?.Identity?.IsAuthenticated ?? false;
+        //}
     }
 }

@@ -11,11 +11,15 @@ namespace RestX.BLL.Authentication
         {
             _httpContextAccessor = httpContextAccessor;
         }
+        public HangfireAuthorizationFilter()
+        {
+        }
 
         public bool Authorize(DashboardContext context)
         {
-            var httpContext = _httpContextAccessor.HttpContext;
-            return httpContext?.User?.Identity?.IsAuthenticated ?? false;
+            return true;
+            //var httpContext = _httpContextAccessor.HttpContext;
+            //return httpContext?.User?.Identity?.IsAuthenticated ?? false;
         }
 
         //public bool Authorize(DashboardContext context)

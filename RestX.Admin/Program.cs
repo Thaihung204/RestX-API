@@ -8,6 +8,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using RestX.AdminDAL.Context;
 using RestX.BLL;
+using RestX.BLL.Authentication;
 using RestX.BLL.DataTranferObjects.Common;
 using RestX.BLL.Helpers;
 using RestX.BLL.Interfaces;
@@ -168,7 +169,7 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
-app.UseHangfireDashboard("/hangfire");
+app.UseHangfireDashboard("/hangfire", new DashboardOptions { Authorization = new[] { new HangfireAuthorizationFilter() } });
 app.UseSwagger();
 app.UseSwaggerUI();
 

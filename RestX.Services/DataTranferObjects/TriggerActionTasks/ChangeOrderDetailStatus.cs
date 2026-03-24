@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -8,8 +9,6 @@ namespace RestX.BLL.DataTranferObjects.TriggerActionTasks
 {
     public class ChangeOrderDetailStatus
     {
-        public int Type { get; set; }
-        public string Subject { get; set; }
-        public string Text { get; set; }
+        public int NewItemStatusId { get; set; }
     }
 }

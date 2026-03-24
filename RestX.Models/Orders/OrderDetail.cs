@@ -1,12 +1,8 @@
-﻿using RestX.Models.BaseModel;
+﻿using RestX.Models.Attributes;
+using RestX.Models.BaseModel;
 using RestX.Models.Common;
 using RestX.Models.Menu;
-using System;
-using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace RestX.Models.Orders
 {
@@ -20,7 +16,7 @@ namespace RestX.Models.Orders
 
         [MaxLength(500)]
         public string? Note { get; set; }
-
+        [TriggerProperty(DisplayName = "Status")]
         public int ItemStatusId { get; set; }
 
         public virtual Order Order { get; set; } = null!;

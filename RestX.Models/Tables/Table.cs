@@ -1,4 +1,5 @@
-﻿using RestX.Models.BaseModel;
+﻿using RestX.Models.Attributes;
+using RestX.Models.BaseModel;
 using RestX.Models.Enum;
 using RestX.Models.Orders;
 using RestX.Models.Reservations;
@@ -60,6 +61,7 @@ namespace RestX.Models.Tables
         [Url]
         public string? DefaultViewUrl { get; set; }
 
+        [TriggerProperty(DisplayName = "Status")]
         public TableStatus TableStatusId { get; set; }
 
         public string? QRCodeUrl { get; set; }

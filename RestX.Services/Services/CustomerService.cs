@@ -8,6 +8,7 @@ using RestX.BLL.Interfaces.Auth;
 using RestX.BLL.Interfaces.Customers;
 using RestX.Models.Customers;
 using RestX.Models.Identity;
+using RestX.Models.Loyalty;
 using RestX.Models.Tenants;
 
 namespace RestX.BLL.Services
@@ -79,12 +80,13 @@ namespace RestX.BLL.Services
                 Role = CustomerRole,
                 GenerateRandomPassword = false
             });
+            var lowestBand = await GetLowestBandAsync();
             var customer = new Customer
             {
                 Id = Guid.NewGuid(),
                 ApplicationUserId = user.Id,
-                MembershipLevel = dto.MembershipLevel,
-                LoyaltyPoints = dto.LoyaltyPoints,
+                MembershipLevel = lowestBand?.Name ?? string.Empty,
+                LoyaltyPoints = lowestBand?.Min ?? 0,
                 IsActive = true
             };
             try
@@ -224,5 +226,29 @@ namespace RestX.BLL.Services
             };
         }
         #endregion
+
+        public async Task<Customer> CreateCustomerRecord(Guid userId)
+        {
+            var lowestBand = await GetLowestBandAsync();
+            var customer = new Customer
+            {
+                Id = Guid.NewGuid(),
+                ApplicationUserId = userId,
+                MembershipLevel = lowestBand?.Name ?? string.Empty,
+                LoyaltyPoints = lowestBand?.Min ?? 0,
+                IsActive = true,
+                CreatedDate = DateTime.UtcNow.AddHours(7),
+                ModifiedDate = DateTime.UtcNow.AddHours(7)
+            };
+            await Repo.CreateAsync(customer);
+            return customer;
+        }
+
+        private async Task<LoyaltyPointBand?> GetLowestBandAsync()
+        {
+            return await Repo.GetFirstAsync<LoyaltyPointBand>(
+                filter: b => b.IsActive,
+                orderBy: q => q.OrderBy(b => b.Min));
+        }
     }
 }

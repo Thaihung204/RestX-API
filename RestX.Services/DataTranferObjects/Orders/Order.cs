@@ -17,7 +17,8 @@ namespace RestX.BLL.DataTranferObjects.Orders
         public Guid? ReservationId { get; set; }
 
         public OrderStatus OrderStatusId { get; set; } = OrderStatus.Pending;
-        public PaymentStatus PaymentStatusId { get; set; } = PaymentStatus.Unpaid;
+        public PaymentStatus PaymentStatus { get; set; } = PaymentStatus.Unpaid;
+        public string PaymentStatusName => PaymentStatus.ToString();
 
         [Range(0, 999999999.99)]
         public decimal? SubTotal { get; set; }

@@ -5,7 +5,6 @@ using RestX.BLL.DataTranferObjects.Common;
 using RestX.BLL.DataTranferObjects.Payments;
 using RestX.BLL.Helpers;
 using RestX.BLL.Interfaces;
-using RestX.BLL.Interfaces.Status;
 using RestX.Models.Customers;
 using RestX.Models.Enum;
 using RestX.Models.Loyalty;
@@ -17,39 +16,32 @@ namespace RestX.BLL.Services
     public class PaymentService : BaseService, IPaymentService
     {
         private readonly IPaymentSettingService paymentSettingService;
-        private readonly IStatusValueService statusValueService;
         private readonly IMapper mapper;
 
         public PaymentService(
             IRepository repo,
             IRedisService redisService,
             IPaymentSettingService paymentSettingService,
-            IStatusValueService statusValueService,
             IMapper mapper,
             IEnumerable<ActiveTenant> tenant = null
         ) : base(repo, redisService, tenant)
         {
             this.paymentSettingService = paymentSettingService;
-            this.statusValueService = statusValueService;
             this.mapper = mapper;
         }
 
         public async Task<IEnumerable<PaymentDetail>> GetAllPayments(DateTime? from, DateTime? to, string? method, string? statusCode)
         {
-            int? statusId = null;
-            if (!string.IsNullOrEmpty(statusCode))
-            {
-                var statuses = await statusValueService.GetStatuses(PaymentConstants.StatusType.Payment);
-                statusId = statuses.FirstOrDefault(s => string.Equals(s.Code, statusCode, StringComparison.OrdinalIgnoreCase))?.Id;
-            }
+            PaymentStatus? statusFilter = null;
+            if (!string.IsNullOrEmpty(statusCode) && System.Enum.TryParse<PaymentStatus>(statusCode, true, out var parsed))
+                statusFilter = parsed;
 
             var payments = await Repo.GetAsync<Payment>(
                 filter: p =>
                     (from == null || p.PaymentDate >= from) &&
                     (to == null || p.PaymentDate <= to) &&
                     (method == null || p.PaymentMethodId.ToLower() == method.ToLower()) &&
-                    (statusId == null || p.PaymentStatusId == statusId),
-                includeProperties: "PaymentStatus",
+                    (statusFilter == null || p.Status == statusFilter),
                 orderBy: q => q.OrderByDescending(p => p.PaymentDate));
 
             return mapper.Map<IEnumerable<PaymentDetail>>(payments);
@@ -59,7 +51,6 @@ namespace RestX.BLL.Services
         {
             var payments = await Repo.GetAsync<Payment>(
                 filter: p => p.OrderId == orderId,
-                includeProperties: "PaymentStatus",
                 orderBy: q => q.OrderByDescending(p => p.PaymentDate));
 
             return mapper.Map<IEnumerable<PaymentDetail>>(payments);
@@ -67,10 +58,7 @@ namespace RestX.BLL.Services
 
         public async Task<PaymentDetail?> GetPaymentById(Guid id)
         {
-            var payment = await Repo.GetOneAsync<Payment>(
-                filter: p => p.Id == id,
-                includeProperties: "PaymentStatus");
-
+            var payment = await Repo.GetOneAsync<Payment>(filter: p => p.Id == id);
             return payment == null ? null : mapper.Map<PaymentDetail>(payment);
         }
 
@@ -79,14 +67,15 @@ namespace RestX.BLL.Services
             var order = await Repo.GetOneAsync<Order>(filter: o => o.Id == orderId)
                 ?? throw new KeyNotFoundException("Order not found");
 
-            if (order.PaymentStatusId == PaymentStatus.Paid)
+            var alreadyPaid = await Repo.GetExistsAsync<Payment>(
+                p => p.OrderId == orderId && p.Status == PaymentStatus.Paid);
+            if (alreadyPaid)
                 throw new InvalidOperationException("Order is already paid");
 
             if (request.CashReceive < order.TotalAmount)
                 throw new InvalidOperationException($"Cash received ({request.CashReceive}) is less than order total ({order.TotalAmount})");
 
             var cashback = request.CashReceive - order.TotalAmount;
-            var paidStatusId = await GetPaymentStatus(PaymentConstants.StatusCode.Paid);
 
             var payment = new Payment
             {
@@ -95,15 +84,11 @@ namespace RestX.BLL.Services
                 Amount = order.TotalAmount,
                 CashReceive = request.CashReceive,
                 Cashback = cashback,
-                PaymentStatusId = paidStatusId,
+                Status = PaymentStatus.Paid,
                 PaymentDate = DateTime.UtcNow.AddHours(7)
             };
 
             await Repo.CreateAsync(payment, createdBy);
-
-            order.PaymentStatusId = PaymentStatus.Paid;
-            Repo.Update(order, createdBy);
-
             await AwardLoyaltyPointsAsync(order);
             await Repo.SaveAsync();
 
@@ -123,7 +108,9 @@ namespace RestX.BLL.Services
                 includeProperties: "OrderDetails.Dish")
                 ?? throw new KeyNotFoundException("Order not found");
 
-            if (order.PaymentStatusId == PaymentStatus.Paid)
+            var alreadyPaid = await Repo.GetExistsAsync<Payment>(
+                p => p.OrderId == orderId && p.Status == PaymentStatus.Paid);
+            if (alreadyPaid)
                 throw new InvalidOperationException("Order is already paid");
 
             var amount = (long)order.TotalAmount;
@@ -154,8 +141,6 @@ namespace RestX.BLL.Services
 
             var link = await gatewayClient.PaymentRequests.CreateAsync(linkRequest);
 
-            var pendingStatus = await GetPaymentStatus(PaymentConstants.StatusCode.Unpaid);
-
             var payment = new Payment
             {
                 OrderId = orderId,
@@ -163,7 +148,7 @@ namespace RestX.BLL.Services
                 Amount = order.TotalAmount,
                 PayOSOrderCode = orderCode,
                 CheckoutUrl = link.CheckoutUrl,
-                PaymentStatusId = pendingStatus,
+                Status = PaymentStatus.Unpaid,
                 PaymentDate = DateTime.UtcNow.AddHours(7)
             };
 
@@ -189,16 +174,13 @@ namespace RestX.BLL.Services
             if (!payment.PayOSOrderCode.HasValue)
                 throw new InvalidOperationException("Payment has no order code");
 
-            var cancelledStatusId = await GetPaymentStatus(PaymentConstants.StatusCode.Cancelled);
-            var unpaidStatusId = await GetPaymentStatus(PaymentConstants.StatusCode.Unpaid);
-
-            if (payment.PaymentStatusId != unpaidStatusId)
+            if (payment.Status != PaymentStatus.Unpaid)
                 throw new InvalidOperationException("Only UNPAID payments can be cancelled");
 
             var (gatewayClient, _) = await GetTenantGateway();
             await gatewayClient.PaymentRequests.CancelAsync(payment.PayOSOrderCode.Value, reason);
 
-            payment.PaymentStatusId = cancelledStatusId;
+            payment.Status = PaymentStatus.Cancelled;
             Repo.Update(payment, modifiedBy);
             await Repo.SaveAsync();
         }
@@ -215,7 +197,7 @@ namespace RestX.BLL.Services
                 filter: p => p.PayOSOrderCode == data.OrderCode)
                 ?? throw new KeyNotFoundException($"Payment not found for orderCode {data.OrderCode}");
 
-            payment.PaymentStatusId = await GetPaymentStatus(PaymentConstants.StatusCode.Paid);
+            payment.Status = PaymentStatus.Paid;
             payment.TransactionId = data.Reference;
             Repo.Update(payment);
 
@@ -223,11 +205,7 @@ namespace RestX.BLL.Services
             {
                 var order = await Repo.GetByIdAsync<Order>(payment.OrderId.Value);
                 if (order != null)
-                {
-                    order.PaymentStatusId = PaymentStatus.Paid;
-                    Repo.Update(order);
                     await AwardLoyaltyPointsAsync(order);
-                }
             }
 
             await Repo.SaveAsync();
@@ -238,14 +216,6 @@ namespace RestX.BLL.Services
             var settings = await paymentSettingService.GetPaymentSettingByTenantId(CurrentTenant.Id)
                 ?? throw new InvalidOperationException("Payment gateway is not configured for this tenant");
             return (new PayOSClient(settings.ClientId, settings.ApiKey, settings.ChecksumKey, null), settings);
-        }
-
-        private async Task<int> GetPaymentStatus(string code)
-        {
-            var statuses = await statusValueService.GetStatuses(PaymentConstants.StatusType.Payment);
-            var status = statuses.FirstOrDefault(s => string.Equals(s.Code, code, StringComparison.OrdinalIgnoreCase))
-                ?? throw new InvalidOperationException($"{PaymentConstants.StatusType.Payment}/{code} not found");
-            return status.Id;
         }
 
         private async Task AwardLoyaltyPointsAsync(Order order)

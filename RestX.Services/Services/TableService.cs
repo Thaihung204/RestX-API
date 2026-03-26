@@ -1,10 +1,12 @@
 using AutoMapper;
+using Microsoft.AspNetCore.Http;
 using QRCoder;
 using RestX.BLL.DataTranferObjects.Table;
 using RestX.BLL.Extensions;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Tables;
 using RestX.Models.Enum;
+using RestX.Models.Menu;
 using RestX.Models.Tables;
 using RestX.Models.Tenants;
 
@@ -13,14 +15,17 @@ namespace RestX.BLL.Services
     public class TableService : BaseService, ITableService
     {
         private readonly IMapper mapper;
+        private readonly ICloudinaryService cloudinaryService;
         public TableService(
             IMapper mapper,
+            ICloudinaryService cloudinaryService,
             IRepository repo,
             IRedisService redisService,
             IEnumerable<ActiveTenant> tenant = null
         ) : base(repo, redisService, tenant)
         {
             this.mapper = mapper;
+            this.cloudinaryService = cloudinaryService;
         }
 
         public async Task<IEnumerable<TableItem>> GetAllTables()
@@ -43,6 +48,35 @@ namespace RestX.BLL.Services
 
         public async Task<TableItem> UpsertTable(Guid? id, TableItem request)
         {
+            string folderName = $"{CurrentTenant.Name.Replace(" ", "")}/tableCube/";
+
+            async Task<string?> UploadImageAsync(IFormFile? file, string face)
+            {
+                if (file == null) return null;
+                using var stream = file.OpenReadStream();
+                var result = await cloudinaryService.UploadAsync(stream, file.FileName, folderName, $"{face}_{id.ToString}");
+                return result.Url;
+            }
+
+            var uploadTasks = new[]
+            {
+                UploadImageAsync(request.CubeFrontImage, "Front"),
+                UploadImageAsync(request.CubeBackImage, "Back"),
+                UploadImageAsync(request.CubeLeftImage, "Left"),
+                UploadImageAsync(request.CubeRightImage, "Right"),
+                UploadImageAsync(request.CubeTopImage, "Top"),
+                UploadImageAsync(request.CubeBottomImage, "Bottom")
+            };
+
+            var uploadedUrls = await Task.WhenAll(uploadTasks);
+
+            if (uploadedUrls[0] != null) request.CubeFrontImageUrl = uploadedUrls[0];
+            if (uploadedUrls[1] != null) request.CubeBackImageUrl = uploadedUrls[1];
+            if (uploadedUrls[2] != null) request.CubeLeftImageUrl = uploadedUrls[2];
+            if (uploadedUrls[3] != null) request.CubeRightImageUrl = uploadedUrls[3];
+            if (uploadedUrls[4] != null) request.CubeTopImageUrl = uploadedUrls[4];
+            if (uploadedUrls[5] != null) request.CubeBottomImageUrl = uploadedUrls[5];
+
             Table table;
 
             if (id.HasValue && id.Value != Guid.Empty)
@@ -50,6 +84,7 @@ namespace RestX.BLL.Services
                 table = await Repo.GetByIdAsync<Table>(id.Value);
                 if (table == null)
                     throw new InvalidOperationException("Table not found");
+
                 table.FloorId = request.FloorId;
                 table.Code = request.Code;
                 table.Type = request.Type;
@@ -65,6 +100,14 @@ namespace RestX.BLL.Services
                 table.DefaultViewUrl = request.DefaultViewUrl;
                 table.TableStatusId = request.TableStatusId;
                 table.IsActive = request.IsActive;
+
+                table.CubeFrontImageUrl = request.CubeFrontImageUrl;
+                table.CubeBackImageUrl = request.CubeBackImageUrl;
+                table.CubeLeftImageUrl = request.CubeLeftImageUrl;
+                table.CubeRightImageUrl = request.CubeRightImageUrl;
+                table.CubeTopImageUrl = request.CubeTopImageUrl;
+                table.CubeBottomImageUrl = request.CubeBottomImageUrl;
+
                 Repo.Update(table);
             }
             else
@@ -74,6 +117,7 @@ namespace RestX.BLL.Services
                 await Repo.CreateAsync(table);
             }
             await Repo.SaveAsync();
+
             if (string.IsNullOrEmpty(table.QRCodeUrl) && CurrentTenant != null)
             {
                 table.QRCodeUrl = GenerateTableQRCode(table.Id, CurrentTenant.Hostname);

@@ -416,3 +416,9 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# Local-only files/folders
+.claude/
+CLAUDE.md
+document-local/
+/RestX.DAL/Context/TenantDbContext.cs

@@ -76,7 +76,7 @@ namespace RestX.WebApp.Controllers
 
         [HttpPut("{id}")]
         [Authorize(Roles = "Admin,System Admin")]
-        public async Task<ActionResult<TableItem>> EditTable([Required] Guid id, [FromBody] TableItem request)
+        public async Task<ActionResult<TableItem>> EditTable([Required] Guid id, [FromForm] TableItem request)
         {
             try
             {

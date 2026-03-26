@@ -50,71 +50,71 @@ namespace RestX.DAL.Context
         {
         }
 
-        private void SharedConstructor(ActiveTenant activeTenant, IEnumerable<IHttpContextAccessor> context)
-        {
-            try
-            {
-                tenant = activeTenant;
-                this.context = context.FirstOrDefault();
+        //private void SharedConstructor(ActiveTenant activeTenant, IEnumerable<IHttpContextAccessor> context)
+        //{
+        //    try
+        //    {
+        //        tenant = activeTenant;
+        //        this.context = context.FirstOrDefault();
 
-                if (tenant == null)
-                {
-                    return;
-                }
+        //        if (tenant == null)
+        //        {
+        //            return;
+        //        }
 
-                if ((this.GetService<IDatabaseCreator>() as RelationalDatabaseCreator).Exists() == false)
-                {
-                    /*
-                     * Database doesn't exist.
-                     * 1)   Force the creation
-                     * 2)   Assign to the SQL Azure Elastic Pool
-                     * 3)   As this is a new database we don't want to apply any migrations as it will be up to date.
-                     *      Because of this we need to manually create the EF migrations table and add the existing migrations 
-                     *      to it to stop them running and errors triggering.
-                     * 4)   Seed data
-                     */
+        //        if ((this.GetService<IDatabaseCreator>() as RelationalDatabaseCreator).Exists() == false)
+        //        {
+        //            /*
+        //             * Database doesn't exist.
+        //             * 1)   Force the creation
+        //             * 2)   Assign to the SQL Azure Elastic Pool
+        //             * 3)   As this is a new database we don't want to apply any migrations as it will be up to date.
+        //             *      Because of this we need to manually create the EF migrations table and add the existing migrations 
+        //             *      to it to stop them running and errors triggering.
+        //             * 4)   Seed data
+        //             */
 
-                    base.Database.SetCommandTimeout(200);
-                    base.Database.EnsureCreated();
+        //            base.Database.SetCommandTimeout(200);
+        //            base.Database.EnsureCreated();
 
-                    var creationSql = @"CREATE TABLE [dbo].[__EFMigrationsHistory](
-                                     [MigrationId] [nvarchar](150) NOT NULL,
-                                     [ProductVersion] [nvarchar](32) NOT NULL,
-                                     CONSTRAINT [PK___EFMigrationsHistory] PRIMARY KEY CLUSTERED 
-                                    (
-                                     [MigrationId] ASC
-                                    )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
-                                    ) ON [PRIMARY]";
-                    base.Database.ExecuteSqlRaw(creationSql);
+        //            var creationSql = @"CREATE TABLE [dbo].[__EFMigrationsHistory](
+        //                             [MigrationId] [nvarchar](150) NOT NULL,
+        //                             [ProductVersion] [nvarchar](32) NOT NULL,
+        //                             CONSTRAINT [PK___EFMigrationsHistory] PRIMARY KEY CLUSTERED 
+        //                            (
+        //                             [MigrationId] ASC
+        //                            )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
+        //                            ) ON [PRIMARY]";
+        //            base.Database.ExecuteSqlRaw(creationSql);
 
-                    var migrations = base.Database.GetPendingMigrations();
-                    foreach (var migration in migrations)
-                    {
-                        var query =
-                            "insert into __EFMigrationsHistory (MigrationId, ProductVersion) Values ({0}, '2.0.1-rtm-125')";
-                        this.Database.ExecuteSqlRaw(query, migration);
-                    }
+        //            var migrations = base.Database.GetPendingMigrations();
+        //            foreach (var migration in migrations)
+        //            {
+        //                var query =
+        //                    "insert into __EFMigrationsHistory (MigrationId, ProductVersion) Values ({0}, '2.0.1-rtm-125')";
+        //                this.Database.ExecuteSqlRaw(query, migration);
+        //            }
 
-                    //var seeder = new TenantDbDataSeed(this, tenantIdFilesToCopyForNewTenant, activeTenant);
-                    //var complete = seeder.SeedData().Result;
-                    //if (!complete)
-                    //{
-                    //    throw new Exception("Unable to seed data.");
-                    //}
-                }
+        //            //var seeder = new TenantDbDataSeed(this, tenantIdFilesToCopyForNewTenant, activeTenant);
+        //            //var complete = seeder.SeedData().Result;
+        //            //if (!complete)
+        //            //{
+        //            //    throw new Exception("Unable to seed data.");
+        //            //}
+        //        }
 
-                base.Database.Migrate();
-            }
-            catch (SqlException ex)
-            {
-                // Re throw to catch in calling code.
-                throw ex;
-            }
-            catch (Exception ex)
-            {
-                throw new Exception($"SQL Context Constructor Exception, Current Tenant: {tenant?.Id}", ex);
-            }
-        }
+        //        base.Database.Migrate();
+        //    }
+        //    catch (SqlException ex)
+        //    {
+        //        // Re throw to catch in calling code.
+        //        throw ex;
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        throw new Exception($"SQL Context Constructor Exception, Current Tenant: {tenant?.Id}", ex);
+        //    }
+        //}
 
         #region DbSets - AI Chat
         public virtual DbSet<AIChatSession> AIChatSessions { get; set; }

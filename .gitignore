@@ -421,3 +421,4 @@ FodyWeavers.xsd
 .claude/
 CLAUDE.md
 document-local/
+/RestX.DAL/Context/TenantDbContext.cs

@@ -447,6 +447,12 @@ namespace RestX.DAL.Context
                 entity.Property(e => e.Rotation).HasColumnType("decimal(5,2)");
                 entity.Property(e => e.ViewDescription).HasMaxLength(500);
                 entity.Property(e => e.DefaultViewUrl).HasMaxLength(500);
+                entity.Property(e => e.CubeFrontImageUrl).HasMaxLength(500);
+                entity.Property(e => e.CubeBackImageUrl).HasMaxLength(500);
+                entity.Property(e => e.CubeLeftImageUrl).HasMaxLength(500);
+                entity.Property(e => e.CubeRightImageUrl).HasMaxLength(500);
+                entity.Property(e => e.CubeTopImageUrl).HasMaxLength(500);
+                entity.Property(e => e.CubeBottomImageUrl).HasMaxLength(500);
                 entity.Property(e => e.QRCodeUrl).HasColumnType("nvarchar(max)");
             });
 

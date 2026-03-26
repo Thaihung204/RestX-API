@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Http;
 using RestX.Models.Enum;
 using System;
 using System.ComponentModel.DataAnnotations;
@@ -38,6 +39,22 @@ namespace RestX.BLL.DataTranferObjects.Table
         [MaxLength(500)]
         [Url]
         public string? DefaultViewUrl { get; set; }
+
+        // --- 6 PROPERTIES CUBE URL ---
+        public string? CubeFrontImageUrl { get; set; }
+        public string? CubeBackImageUrl { get; set; }
+        public string? CubeLeftImageUrl { get; set; }
+        public string? CubeRightImageUrl { get; set; }
+        public string? CubeTopImageUrl { get; set; }
+        public string? CubeBottomImageUrl { get; set; }
+
+        // --- 6 PROPERTIES CUBE FILE UPLOAD ---
+        public IFormFile? CubeFrontImage { get; set; }
+        public IFormFile? CubeBackImage { get; set; }
+        public IFormFile? CubeLeftImage { get; set; }
+        public IFormFile? CubeRightImage { get; set; }
+        public IFormFile? CubeTopImage { get; set; }
+        public IFormFile? CubeBottomImage { get; set; }
         public TableStatus TableStatusId { get; set; }
         public string? TableStatusName { get; set; }
         public string? QRCodeUrl { get; set; }

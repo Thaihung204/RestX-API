@@ -61,6 +61,30 @@ namespace RestX.Models.Tables
         [Url]
         public string? DefaultViewUrl { get; set; }
 
+        [MaxLength(500)]
+        [Url]
+        public string? CubeFrontImageUrl { get; set; }
+
+        [MaxLength(500)]
+        [Url]
+        public string? CubeBackImageUrl { get; set; }
+
+        [MaxLength(500)]
+        [Url]
+        public string? CubeLeftImageUrl { get; set; }
+
+        [MaxLength(500)]
+        [Url]
+        public string? CubeRightImageUrl { get; set; }
+
+        [MaxLength(500)]
+        [Url]
+        public string? CubeTopImageUrl { get; set; }
+
+        [MaxLength(500)]
+        [Url]
+        public string? CubeBottomImageUrl { get; set; }
+
         [TriggerProperty(DisplayName = "Status")]
         public TableStatus TableStatusId { get; set; }
 

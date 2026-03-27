@@ -36,6 +36,8 @@ namespace RestX.Models.Orders
 
         public PaymentStatus Status { get; set; } = PaymentStatus.Unpaid;
 
+        public PaymentPurpose Purpose { get; set; } = PaymentPurpose.Order;
+
         [Column(TypeName = "decimal(18,2)")]
         [Range(0, 999999999.99)]
         public decimal Cashback { get; set; } = 0;

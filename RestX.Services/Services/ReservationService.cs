@@ -600,5 +600,30 @@ namespace RestX.BLL.Services
             => id.ToString("N")[..6].ToUpper();
 
         #endregion
+
+        #region Deposit — TODO: implement
+
+        public Task<DepositStatusResponse> GetDepositStatus(Guid reservationId)
+            => throw new NotImplementedException();
+
+        public Task<string> CreateDepositPaymentLink(Guid reservationId)
+            => throw new NotImplementedException();
+
+        public Task ConfirmCashDeposit(Guid reservationId, string userId)
+            => throw new NotImplementedException();
+
+        public Task ConfirmDepositCallback(long payOSOrderCode)
+            => throw new NotImplementedException();
+
+        public Task<RefundCalculationResponse> CalculateRefund(Guid reservationId, RefundInitiator initiatedBy)
+            => throw new NotImplementedException();
+
+        public Task<RefundCalculationResponse> RefundDeposit(Guid reservationId, RefundInitiator initiatedBy, string userId)
+            => throw new NotImplementedException();
+
+        public Task AutoCancelDepositReservation(Guid reservationId)
+            => throw new NotImplementedException();
+
+        #endregion
     }
 }

@@ -55,6 +55,7 @@ namespace RestX.BLL.DataTranferObjects.Table
         public IFormFile? CubeRightImage { get; set; }
         public IFormFile? CubeTopImage { get; set; }
         public IFormFile? CubeBottomImage { get; set; }
+        public bool ClearCubemap { get; set; } = false;
         public TableStatus TableStatusId { get; set; }
         public string? TableStatusName { get; set; }
         public string? QRCodeUrl { get; set; }

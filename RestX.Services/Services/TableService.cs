@@ -54,28 +54,9 @@ namespace RestX.BLL.Services
             {
                 if (file == null) return null;
                 using var stream = file.OpenReadStream();
-                var result = await cloudinaryService.UploadAsync(stream, file.FileName, folderName, $"{face}_{id.ToString}");
+                var result = await cloudinaryService.UploadAsync(stream, file.FileName, folderName, $"{face}_{id}");
                 return result.Url;
             }
-
-            var uploadTasks = new[]
-            {
-                UploadImageAsync(request.CubeFrontImage, "Front"),
-                UploadImageAsync(request.CubeBackImage, "Back"),
-                UploadImageAsync(request.CubeLeftImage, "Left"),
-                UploadImageAsync(request.CubeRightImage, "Right"),
-                UploadImageAsync(request.CubeTopImage, "Top"),
-                UploadImageAsync(request.CubeBottomImage, "Bottom")
-            };
-
-            var uploadedUrls = await Task.WhenAll(uploadTasks);
-
-            if (uploadedUrls[0] != null) request.CubeFrontImageUrl = uploadedUrls[0];
-            if (uploadedUrls[1] != null) request.CubeBackImageUrl = uploadedUrls[1];
-            if (uploadedUrls[2] != null) request.CubeLeftImageUrl = uploadedUrls[2];
-            if (uploadedUrls[3] != null) request.CubeRightImageUrl = uploadedUrls[3];
-            if (uploadedUrls[4] != null) request.CubeTopImageUrl = uploadedUrls[4];
-            if (uploadedUrls[5] != null) request.CubeBottomImageUrl = uploadedUrls[5];
 
             Table table;
 
@@ -101,12 +82,40 @@ namespace RestX.BLL.Services
                 table.TableStatusId = request.TableStatusId;
                 table.IsActive = request.IsActive;
 
-                table.CubeFrontImageUrl = request.CubeFrontImageUrl;
-                table.CubeBackImageUrl = request.CubeBackImageUrl;
-                table.CubeLeftImageUrl = request.CubeLeftImageUrl;
-                table.CubeRightImageUrl = request.CubeRightImageUrl;
-                table.CubeTopImageUrl = request.CubeTopImageUrl;
-                table.CubeBottomImageUrl = request.CubeBottomImageUrl;
+                if (request.ClearCubemap)
+                {
+                    var faces = new[] { "Front", "Back", "Left", "Right", "Top", "Bottom" };
+                    var deleteTasks = faces.Select(face =>
+                        cloudinaryService.DeleteAsync($"{folderName}{face}_{id}"));
+                    await Task.WhenAll(deleteTasks);
+
+                    table.CubeFrontImageUrl = null;
+                    table.CubeBackImageUrl = null;
+                    table.CubeLeftImageUrl = null;
+                    table.CubeRightImageUrl = null;
+                    table.CubeTopImageUrl = null;
+                    table.CubeBottomImageUrl = null;
+                }
+                else
+                {
+                    var uploadTasks = new[]
+                    {
+                        UploadImageAsync(request.CubeFrontImage, "Front"),
+                        UploadImageAsync(request.CubeBackImage, "Back"),
+                        UploadImageAsync(request.CubeLeftImage, "Left"),
+                        UploadImageAsync(request.CubeRightImage, "Right"),
+                        UploadImageAsync(request.CubeTopImage, "Top"),
+                        UploadImageAsync(request.CubeBottomImage, "Bottom")
+                    };
+                    var uploadedUrls = await Task.WhenAll(uploadTasks);
+
+                    if (uploadedUrls[0] != null) table.CubeFrontImageUrl = uploadedUrls[0];
+                    if (uploadedUrls[1] != null) table.CubeBackImageUrl = uploadedUrls[1];
+                    if (uploadedUrls[2] != null) table.CubeLeftImageUrl = uploadedUrls[2];
+                    if (uploadedUrls[3] != null) table.CubeRightImageUrl = uploadedUrls[3];
+                    if (uploadedUrls[4] != null) table.CubeTopImageUrl = uploadedUrls[4];
+                    if (uploadedUrls[5] != null) table.CubeBottomImageUrl = uploadedUrls[5];
+                }
 
                 Repo.Update(table);
             }

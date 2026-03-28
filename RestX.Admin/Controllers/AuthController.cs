@@ -174,11 +174,10 @@ namespace RestX.Admin.Controllers
 
         private void SetAuthCookies(AdminLoginResponse loginData)
         {
-            var cookieOptions = new CookieOptions { HttpOnly = true, Secure = true, SameSite = SameSiteMode.None };
             Response.Cookies.Append("admin_access_token", loginData.AccessToken,
-                cookieOptions with { Expires = loginData.ExpiresAt });
+                new CookieOptions { HttpOnly = true, Secure = true, SameSite = SameSiteMode.None, Expires = loginData.ExpiresAt });
             Response.Cookies.Append("admin_refresh_token", loginData.RefreshToken,
-                cookieOptions with { Expires = DateTimeOffset.UtcNow.AddDays(jwtSettings.RefreshTokenExpiryDays) });
+                new CookieOptions { HttpOnly = true, Secure = true, SameSite = SameSiteMode.None, Expires = DateTimeOffset.UtcNow.AddDays(jwtSettings.RefreshTokenExpiryDays) });
         }
 
         private void UpdateAccessTokenCookie(AdminLoginResponse loginData)

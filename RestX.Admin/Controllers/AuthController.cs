@@ -188,8 +188,9 @@ namespace RestX.Admin.Controllers
 
         private void ClearAuthCookies()
         {
-            Response.Cookies.Delete("admin_access_token");
-            Response.Cookies.Delete("admin_refresh_token");
+            var cookieOptions = new CookieOptions { HttpOnly = true, Secure = true, SameSite = SameSiteMode.None };
+            Response.Cookies.Delete("admin_access_token", cookieOptions);
+            Response.Cookies.Delete("admin_refresh_token", cookieOptions);
         }
 
         #endregion

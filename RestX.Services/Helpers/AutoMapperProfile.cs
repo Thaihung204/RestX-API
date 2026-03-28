@@ -136,9 +136,9 @@ namespace RestX.BLL.Helpers
                 .ForMember(
                     dest => dest.PaymentStatus,
                     opt => opt.MapFrom(src =>
-                        src.IsPaid || (src.Payments != null && src.Payments.Any(p => p.Status == PaymentStatus.Paid))
-                            ? PaymentStatus.Paid
-                            : PaymentStatus.Unpaid)
+                        src.IsPaid || (src.Payments != null && src.Payments.Any(p => p.Status == PaymentStatus.Success))
+                            ? PaymentStatus.Success
+                            : PaymentStatus.Pending)
                 );
 
             CreateMap<DataTranferObjects.Orders.Order, Models.Orders.Order>()

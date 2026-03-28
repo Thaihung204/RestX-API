@@ -34,7 +34,7 @@ namespace RestX.Models.Orders
 
         public DateTime PaymentDate { get; set; } = DateTime.UtcNow.AddHours(7);
 
-        public PaymentStatus Status { get; set; } = PaymentStatus.Unpaid;
+        public PaymentStatus Status { get; set; } = PaymentStatus.Pending;
 
         [Column(TypeName = "decimal(18,2)")]
         [Range(0, 999999999.99)]

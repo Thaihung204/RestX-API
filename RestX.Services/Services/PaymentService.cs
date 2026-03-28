@@ -68,7 +68,7 @@ namespace RestX.BLL.Services
                 ?? throw new KeyNotFoundException("Order not found");
 
             var alreadyPaid = await Repo.GetExistsAsync<Payment>(
-                p => p.OrderId == orderId && p.Status == PaymentStatus.Paid);
+                p => p.OrderId == orderId && p.Status == PaymentStatus.Success);
             if (alreadyPaid)
                 throw new InvalidOperationException("Order is already paid");
 
@@ -84,7 +84,7 @@ namespace RestX.BLL.Services
                 Amount = order.TotalAmount,
                 CashReceive = request.CashReceive,
                 Cashback = cashback,
-                Status = PaymentStatus.Paid,
+                Status = PaymentStatus.Success,
                 PaymentDate = DateTime.UtcNow.AddHours(7)
             };
 
@@ -109,7 +109,7 @@ namespace RestX.BLL.Services
                 ?? throw new KeyNotFoundException("Order not found");
 
             var alreadyPaid = await Repo.GetExistsAsync<Payment>(
-                p => p.OrderId == orderId && p.Status == PaymentStatus.Paid);
+                p => p.OrderId == orderId && p.Status == PaymentStatus.Success);
             if (alreadyPaid)
                 throw new InvalidOperationException("Order is already paid");
 
@@ -148,7 +148,7 @@ namespace RestX.BLL.Services
                 Amount = order.TotalAmount,
                 PayOSOrderCode = orderCode,
                 CheckoutUrl = link.CheckoutUrl,
-                Status = PaymentStatus.Unpaid,
+                Status = PaymentStatus.Pending,
                 PaymentDate = DateTime.UtcNow.AddHours(7)
             };
 
@@ -174,13 +174,13 @@ namespace RestX.BLL.Services
             if (!payment.PayOSOrderCode.HasValue)
                 throw new InvalidOperationException("Payment has no order code");
 
-            if (payment.Status != PaymentStatus.Unpaid)
-                throw new InvalidOperationException("Only UNPAID payments can be cancelled");
+            if (payment.Status != PaymentStatus.Pending)
+                throw new InvalidOperationException("Only PENDING payments can be cancelled");
 
             var (gatewayClient, _) = await GetTenantGateway();
             await gatewayClient.PaymentRequests.CancelAsync(payment.PayOSOrderCode.Value, reason);
 
-            payment.Status = PaymentStatus.Cancelled;
+            payment.Status = PaymentStatus.Fail;
             Repo.Update(payment, modifiedBy);
             await Repo.SaveAsync();
         }
@@ -197,7 +197,7 @@ namespace RestX.BLL.Services
                 filter: p => p.PayOSOrderCode == data.OrderCode)
                 ?? throw new KeyNotFoundException($"Payment not found for orderCode {data.OrderCode}");
 
-            payment.Status = PaymentStatus.Paid;
+            payment.Status = PaymentStatus.Success;
             payment.TransactionId = data.Reference;
             Repo.Update(payment);
 

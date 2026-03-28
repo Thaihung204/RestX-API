@@ -8,9 +8,8 @@ namespace RestX.Models.Enum
 {
     public enum PaymentStatus
     {
-        Unpaid,
-        Paid,
-        Cancelled,
-        Refunded
+        Pending,
+        Success,
+        Fail
     }
 }

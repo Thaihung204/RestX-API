@@ -21,7 +21,6 @@ namespace RestX.App.Helpers
         public void DeleteCookie(HttpContext context, string key, CookieOptions options)
         {
             options.Domain = context.Request.Host.Host;
-            options.SameSite = SameSiteMode.None;
             ConcreteManager.DeleteCookie(context, key, options);
         }
 

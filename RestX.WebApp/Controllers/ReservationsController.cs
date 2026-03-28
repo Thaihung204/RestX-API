@@ -334,5 +334,172 @@ namespace RestX.WebApp.Controllers
             }
         }
 
+        // ── Deposit ──────────────────────────────────────────────────────────
+
+        [HttpGet("{id:guid}/deposit")]
+        [Authorize(Roles = "Admin,System Admin,Staff,Customer")]
+        public async Task<IActionResult> GetDepositStatus(Guid id)
+        {
+            try
+            {
+                var result = await reservationService.GetDepositStatus(id);
+                return Ok(new { success = true, data = result });
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { success = false, message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest(new { success = false, message = "An internal error occurred" });
+            }
+        }
+
+        [HttpPost("{id:guid}/deposit/pay")]
+        [AllowAnonymous]
+        public async Task<IActionResult> CreateDepositPaymentLink(Guid id)
+        {
+            try
+            {
+                var checkoutUrl = await reservationService.CreateDepositPaymentLink(id);
+                return Ok(new { success = true, data = new { checkoutUrl } });
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { success = false, message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { success = false, message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest(new { success = false, message = "An internal error occurred" });
+            }
+        }
+
+        [HttpPost("{id:guid}/deposit/confirm-cash")]
+        [Authorize(Roles = "Admin,System Admin,Staff")]
+        public async Task<IActionResult> ConfirmCashDeposit(Guid id)
+        {
+            try
+            {
+                var user = await GetCurrentUserAsync();
+                await reservationService.ConfirmCashDeposit(id, user?.Id.ToString());
+                return Ok(new { success = true, message = "Cash deposit confirmed" });
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { success = false, message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { success = false, message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest(new { success = false, message = "An internal error occurred" });
+            }
+        }
+
+        [HttpPost("deposit/callback")]
+        [AllowAnonymous]
+        public async Task<IActionResult> ConfirmDepositCallback([FromBody] long payOSOrderCode)
+        {
+            try
+            {
+                await reservationService.ConfirmDepositCallback(payOSOrderCode);
+                return Ok(new { success = true });
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { success = false, message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest(new { success = false, message = "An internal error occurred" });
+            }
+        }
+
+        [HttpGet("{id:guid}/deposit/refund-preview")]
+        [Authorize(Roles = "Admin,System Admin,Staff,Customer")]
+        public async Task<IActionResult> CalculateRefund(Guid id, [FromQuery] RefundInitiator initiatedBy = RefundInitiator.Customer)
+        {
+            try
+            {
+                var result = await reservationService.CalculateRefund(id, initiatedBy);
+                return Ok(new { success = true, data = result });
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { success = false, message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { success = false, message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest(new { success = false, message = "An internal error occurred" });
+            }
+        }
+
+        [HttpPost("{id:guid}/deposit/refund")]
+        [Authorize(Roles = "Admin,System Admin,Staff,Customer")]
+        public async Task<IActionResult> RefundDeposit(Guid id, [FromBody] RefundRequest request)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                    return BadRequest(new { success = false, message = "Validation failed", errors = ModelState });
+
+                var user = await GetCurrentUserAsync();
+                var result = await reservationService.RefundDeposit(id, request.InitiatedBy, user?.Id.ToString());
+                return Ok(new { success = true, message = "Deposit refund recorded", data = result });
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { success = false, message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { success = false, message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest(new { success = false, message = "An internal error occurred" });
+            }
+        }
+
     }
 }

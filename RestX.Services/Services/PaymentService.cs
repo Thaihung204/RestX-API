@@ -72,19 +72,23 @@ namespace RestX.BLL.Services
             if (alreadyPaid)
                 throw new InvalidOperationException("Order is already paid");
 
-            if (request.CashReceive < order.TotalAmount)
-                throw new InvalidOperationException($"Cash received ({request.CashReceive}) is less than order total ({order.TotalAmount})");
+            var depositPaid = await GetPaidDepositAmount(order.ReservationId);
+            var amountDue = order.TotalAmount - depositPaid;
 
-            var cashback = request.CashReceive - order.TotalAmount;
+            if (request.CashReceive < amountDue)
+                throw new InvalidOperationException($"Cash received ({request.CashReceive}) is less than amount due ({amountDue})");
+
+            var cashback = request.CashReceive - amountDue;
 
             var payment = new Payment
             {
                 OrderId = orderId,
                 PaymentMethodId = PaymentConstants.Method.Cash,
-                Amount = order.TotalAmount,
+                Amount = amountDue,
                 CashReceive = request.CashReceive,
                 Cashback = cashback,
                 Status = PaymentStatus.Paid,
+                Purpose = PaymentPurpose.Order,
                 PaymentDate = DateTime.UtcNow.AddHours(7)
             };
 
@@ -113,7 +117,8 @@ namespace RestX.BLL.Services
             if (alreadyPaid)
                 throw new InvalidOperationException("Order is already paid");
 
-            var amount = (long)order.TotalAmount;
+            var depositPaid = await GetPaidDepositAmount(order.ReservationId);
+            var amount = (long)(order.TotalAmount - depositPaid);
             if (amount <= 0)
                 throw new InvalidOperationException("Order total must be greater than zero");
 
@@ -145,10 +150,11 @@ namespace RestX.BLL.Services
             {
                 OrderId = orderId,
                 PaymentMethodId = PaymentConstants.Method.Bank,
-                Amount = order.TotalAmount,
+                Amount = (decimal)amount,
                 PayOSOrderCode = orderCode,
                 CheckoutUrl = link.CheckoutUrl,
                 Status = PaymentStatus.Unpaid,
+                Purpose = PaymentPurpose.Order,
                 PaymentDate = DateTime.UtcNow.AddHours(7)
             };
 
@@ -248,6 +254,14 @@ namespace RestX.BLL.Services
                 Points = points,
                 Description = $"Earned {points} points from order {order.Reference}"
             });
+        }
+
+        private async Task<decimal> GetPaidDepositAmount(Guid? reservationId)
+        {
+            if (!reservationId.HasValue) return 0;
+            var deposit = await Repo.GetOneAsync<Payment>(
+                p => p.ReservationId == reservationId && p.Purpose == PaymentPurpose.Deposit && p.Status == PaymentStatus.Paid);
+            return deposit?.Amount ?? 0;
         }
 
         private static long GenerateOrderCode()

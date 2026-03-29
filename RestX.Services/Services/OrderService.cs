@@ -216,7 +216,7 @@ namespace RestX.BLL.Services
                 .ToDictionary(g => g.Key, g => g.First());
 
             var paidPayments = await Repo.GetAsync<Payment>(
-                p => p.OrderId.HasValue && orderIds.Contains(p.OrderId.Value) && p.Status == PaymentStatus.Paid);
+                p => p.OrderId.HasValue && orderIds.Contains(p.OrderId.Value) && p.Status == PaymentStatus.Success);
             var paidOrderIds = paidPayments.Select(p => p.OrderId!.Value).ToHashSet();
 
             foreach (var o in orders)
@@ -464,7 +464,7 @@ namespace RestX.BLL.Services
             if (statusId == (int)OrderStatus.Completed)
             {
                 var hasPaidPayment = await Repo.GetExistsAsync<Payment>(
-                    p => p.OrderId == orderId && p.Status == PaymentStatus.Paid);
+                    p => p.OrderId == orderId && p.Status == PaymentStatus.Success);
                 if (!hasPaidPayment)
                     throw new AppException("Cannot complete order: order has not been paid");
             }

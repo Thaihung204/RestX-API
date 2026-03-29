@@ -9,9 +9,9 @@ namespace RestX.BLL.Helpers
 
         public static class StatusCode
         {
-            public const string Paid = "PAID";
-            public const string Unpaid = "UNPAID";
-            public const string Cancelled = "CANCELLED";
+            public const string Success = "SUCCESS";
+            public const string Pending = "PENDING";
+            public const string Fail = "FAIL";
         }
 
         public static class Method

@@ -670,8 +670,8 @@ namespace RestX.BLL.Services
                 ReservationId = reservationId,
                 DepositAmount = reservation.DepositAmount,
                 PaymentDeadline = reservation.PaymentDeadline,
-                IsPaid = depositPayment?.Status == PaymentStatus.Paid,
-                CheckoutUrl = depositPayment?.Status == PaymentStatus.Unpaid ? depositPayment.CheckoutUrl : null,
+                IsPaid = depositPayment?.Status == PaymentStatus.Success,
+                CheckoutUrl = depositPayment?.Status == PaymentStatus.Pending ? depositPayment.CheckoutUrl : null,
                 PaymentStatus = depositPayment?.Status
             };
         }
@@ -689,18 +689,18 @@ namespace RestX.BLL.Services
             }
 
             var alreadyPaid = await Repo.GetExistsAsync<Payment>(
-                p => p.ReservationId == reservationId && p.Purpose == PaymentPurpose.Deposit && p.Status == PaymentStatus.Paid);
+                p => p.ReservationId == reservationId && p.Purpose == PaymentPurpose.Deposit && p.Status == PaymentStatus.Success);
             if (alreadyPaid)
                 throw new InvalidOperationException("Deposit has already been paid");
 
             // Cancel existing unpaid link if any
             var existingUnpaid = await Repo.GetOneAsync<Payment>(
-                p => p.ReservationId == reservationId && p.Purpose == PaymentPurpose.Deposit && p.Status == PaymentStatus.Unpaid);
+                p => p.ReservationId == reservationId && p.Purpose == PaymentPurpose.Deposit && p.Status == PaymentStatus.Pending);
             if (existingUnpaid?.PayOSOrderCode != null)
             {
                 var (gatewayClient, _) = await GetDepositGateway();
                 await gatewayClient.PaymentRequests.CancelAsync(existingUnpaid.PayOSOrderCode.Value, "Recreating deposit link");
-                existingUnpaid.Status = PaymentStatus.Cancelled;
+                existingUnpaid.Status = PaymentStatus.Fail;
                 Repo.Update(existingUnpaid);
                 await Repo.SaveAsync();
             }
@@ -732,7 +732,7 @@ namespace RestX.BLL.Services
                 Amount = reservation.DepositAmount,
                 PayOSOrderCode = orderCode,
                 CheckoutUrl = link.CheckoutUrl,
-                Status = PaymentStatus.Unpaid,
+                Status = PaymentStatus.Pending,
                 Purpose = PaymentPurpose.Deposit,
                 PaymentDate = VnNow
             };
@@ -754,7 +754,7 @@ namespace RestX.BLL.Services
                 throw new InvalidOperationException("Reservation is not in deposit-pending status");
 
             var alreadyPaid = await Repo.GetExistsAsync<Payment>(
-                p => p.ReservationId == reservationId && p.Purpose == PaymentPurpose.Deposit && p.Status == PaymentStatus.Paid);
+                p => p.ReservationId == reservationId && p.Purpose == PaymentPurpose.Deposit && p.Status == PaymentStatus.Success);
             if (alreadyPaid)
                 throw new InvalidOperationException("Deposit has already been paid");
 
@@ -763,7 +763,7 @@ namespace RestX.BLL.Services
                 ReservationId = reservationId,
                 PaymentMethodId = "CASH",
                 Amount = reservation.DepositAmount,
-                Status = PaymentStatus.Paid,
+                Status = PaymentStatus.Success,
                 Purpose = PaymentPurpose.Deposit,
                 PaymentDate = VnNow,
                 ProcessedBy = string.IsNullOrEmpty(userId) ? null : Guid.Parse(userId)
@@ -781,10 +781,10 @@ namespace RestX.BLL.Services
                 p => p.PayOSOrderCode == payOSOrderCode && p.Purpose == PaymentPurpose.Deposit)
                 ?? throw new KeyNotFoundException($"Deposit payment not found for orderCode {payOSOrderCode}");
 
-            if (payment.Status == PaymentStatus.Paid)
+            if (payment.Status == PaymentStatus.Success)
                 return;
 
-            payment.Status = PaymentStatus.Paid;
+            payment.Status = PaymentStatus.Success;
             payment.PaymentDate = VnNow;
             Repo.Update(payment);
 
@@ -792,94 +792,95 @@ namespace RestX.BLL.Services
                 await ConfirmReservation(payment.ReservationId.Value, null);
 
             await Repo.SaveAsync();
+
         }
 
-        public async Task<RefundCalculationResponse> CalculateRefund(Guid reservationId, RefundInitiator initiatedBy)
-        {
-            var reservation = await Repo.GetOneAsync<Reservation>(
-                filter: r => r.Id == reservationId,
-                includeProperties: "ReservationStatus")
-                ?? throw new KeyNotFoundException("Reservation not found");
+        //public async Task<RefundCalculationResponse> CalculateRefund(Guid reservationId, RefundInitiator initiatedBy)
+        //{
+        //    var reservation = await Repo.GetOneAsync<Reservation>(
+        //        filter: r => r.Id == reservationId,
+        //        includeProperties: "ReservationStatus")
+        //        ?? throw new KeyNotFoundException("Reservation not found");
 
-            var statusCode = reservation.ReservationStatus?.Code;
-            if (statusCode == NoShowCode)
-                throw new InvalidOperationException("Deposit is forfeited for no-show reservations");
+        //    var statusCode = reservation.ReservationStatus?.Code;
+        //    if (statusCode == NoShowCode)
+        //        throw new InvalidOperationException("Deposit is forfeited for no-show reservations");
 
-            if (statusCode != CancelledCode && statusCode != ConfirmedCode && statusCode != DepositPendingCode)
-                throw new InvalidOperationException("Refund is only available for cancelled or confirmed reservations");
+        //    if (statusCode != CancelledCode && statusCode != ConfirmedCode && statusCode != DepositPendingCode)
+        //        throw new InvalidOperationException("Refund is only available for cancelled or confirmed reservations");
 
-            if (initiatedBy == RefundInitiator.Restaurant)
-                return new RefundCalculationResponse
-                {
-                    DepositAmount = reservation.DepositAmount,
-                    RefundAmount = reservation.DepositAmount,
-                    RefundPercentage = 100,
-                    Reason = "Nhà hàng hủy — hoàn 100%"
-                };
+        //    if (initiatedBy == RefundInitiator.Restaurant)
+        //        return new RefundCalculationResponse
+        //        {
+        //            DepositAmount = reservation.DepositAmount,
+        //            RefundAmount = reservation.DepositAmount,
+        //            RefundPercentage = 100,
+        //            Reason = "Nhà hàng hủy — hoàn 100%"
+        //        };
 
-            var config = await depositConfigService.GetDepositConfig(CurrentTenant.Id)
-                ?? throw new InvalidOperationException("Deposit config not found");
+        //    var config = await depositConfigService.GetDepositConfig(CurrentTenant.Id)
+        //        ?? throw new InvalidOperationException("Deposit config not found");
 
-            var hoursLeft = (reservation.Time - VnNow).TotalHours;
-            int percentage;
-            string reason;
+        //    var hoursLeft = (reservation.Time - VnNow).TotalHours;
+        //    int percentage;
+        //    string reason;
 
-            if (hoursLeft > config.EarlyRefundHours)
-            {
-                percentage = config.EarlyRefundPercentage;
-                reason = $"Hủy trước {config.EarlyRefundHours}h — hoàn {percentage}%";
-            }
-            else if (hoursLeft > config.LateRefundHours)
-            {
-                percentage = config.LateRefundPercentage;
-                reason = $"Hủy trước {config.LateRefundHours}h — hoàn {percentage}%";
-            }
-            else
-            {
-                throw new InvalidOperationException($"Quá thời hạn hoàn cọc (dưới {config.LateRefundHours}h trước giờ hẹn)");
-            }
+        //    if (hoursLeft > config.EarlyRefundHours)
+        //    {
+        //        percentage = config.EarlyRefundPercentage;
+        //        reason = $"Hủy trước {config.EarlyRefundHours}h — hoàn {percentage}%";
+        //    }
+        //    else if (hoursLeft > config.LateRefundHours)
+        //    {
+        //        percentage = config.LateRefundPercentage;
+        //        reason = $"Hủy trước {config.LateRefundHours}h — hoàn {percentage}%";
+        //    }
+        //    else
+        //    {
+        //        throw new InvalidOperationException($"Quá thời hạn hoàn cọc (dưới {config.LateRefundHours}h trước giờ hẹn)");
+        //    }
 
-            var refundAmount = reservation.DepositAmount * percentage / 100;
-            return new RefundCalculationResponse
-            {
-                DepositAmount = reservation.DepositAmount,
-                RefundAmount = refundAmount,
-                RefundPercentage = percentage,
-                Reason = reason
-            };
-        }
+        //    var refundAmount = reservation.DepositAmount * percentage / 100;
+        //    return new RefundCalculationResponse
+        //    {
+        //        DepositAmount = reservation.DepositAmount,
+        //        RefundAmount = refundAmount,
+        //        RefundPercentage = percentage,
+        //        Reason = reason
+        //    };
+        //}
 
-        public async Task<RefundCalculationResponse> RefundDeposit(Guid reservationId, RefundInitiator initiatedBy, string userId)
-        {
-            var result = await CalculateRefund(reservationId, initiatedBy);
+        //public async Task<RefundCalculationResponse> RefundDeposit(Guid reservationId, RefundInitiator initiatedBy, string userId)
+        //{
+        //    var result = await CalculateRefund(reservationId, initiatedBy);
 
-            var depositPayment = await Repo.GetOneAsync<Payment>(
-                p => p.ReservationId == reservationId && p.Purpose == PaymentPurpose.Deposit && p.Status == PaymentStatus.Paid)
-                ?? throw new InvalidOperationException("No paid deposit found for this reservation");
+        //    var depositPayment = await Repo.GetOneAsync<Payment>(
+        //        p => p.ReservationId == reservationId && p.Purpose == PaymentPurpose.Deposit && p.Status == PaymentStatus.Success)
+        //        ?? throw new InvalidOperationException("No paid deposit found for this reservation");
 
-            var alreadyRefunded = await Repo.GetExistsAsync<Payment>(
-                p => p.ReservationId == reservationId && p.Purpose == PaymentPurpose.DepositRefund);
-            if (alreadyRefunded)
-                throw new InvalidOperationException("Deposit has already been refunded");
+        //    var alreadyRefunded = await Repo.GetExistsAsync<Payment>(
+        //        p => p.ReservationId == reservationId && p.Purpose == PaymentPurpose.DepositRefund);
+        //    if (alreadyRefunded)
+        //        throw new InvalidOperationException("Deposit has already been refunded");
 
-            depositPayment.Status = PaymentStatus.Refunded;
-            depositPayment.RefundDate = VnNow;
-            Repo.Update(depositPayment, userId);
+        //    depositPayment.Status = PaymentStatus.Refunded;
+        //    depositPayment.RefundDate = VnNow;
+        //    Repo.Update(depositPayment, userId);
 
-            await Repo.CreateAsync(new Payment
-            {
-                ReservationId = reservationId,
-                PaymentMethodId = depositPayment.PaymentMethodId,
-                Amount = result.RefundAmount,
-                Status = PaymentStatus.Paid,
-                Purpose = PaymentPurpose.DepositRefund,
-                PaymentDate = VnNow,
-                ProcessedBy = string.IsNullOrEmpty(userId) ? null : Guid.Parse(userId)
-            }, userId);
+        //    await Repo.CreateAsync(new Payment
+        //    {
+        //        ReservationId = reservationId,
+        //        PaymentMethodId = depositPayment.PaymentMethodId,
+        //        Amount = result.RefundAmount,
+        //        Status = PaymentStatus.Success,
+        //        Purpose = PaymentPurpose.DepositRefund,
+        //        PaymentDate = VnNow,
+        //        ProcessedBy = string.IsNullOrEmpty(userId) ? null : Guid.Parse(userId)
+        //    }, userId);
 
-            await Repo.SaveAsync();
-            return result;
-        }
+        //    await Repo.SaveAsync();
+        //    return result;
+        //}
 
         public async Task AutoCancelDepositReservation(Guid reservationId)
         {
@@ -892,7 +893,7 @@ namespace RestX.BLL.Services
                 return;
 
             var hasPaidDeposit = await Repo.GetExistsAsync<Payment>(
-                p => p.ReservationId == reservationId && p.Purpose == PaymentPurpose.Deposit && p.Status == PaymentStatus.Paid);
+                p => p.ReservationId == reservationId && p.Purpose == PaymentPurpose.Deposit && p.Status == PaymentStatus.Success);
             if (hasPaidDeposit)
                 return;
 

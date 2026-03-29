@@ -441,65 +441,65 @@ namespace RestX.WebApp.Controllers
             }
         }
 
-        [HttpGet("{id:guid}/deposit/refund-preview")]
-        [Authorize(Roles = "Admin,System Admin,Staff,Customer")]
-        public async Task<IActionResult> CalculateRefund(Guid id, [FromQuery] RefundInitiator initiatedBy = RefundInitiator.Customer)
-        {
-            try
-            {
-                var result = await reservationService.CalculateRefund(id, initiatedBy);
-                return Ok(new { success = true, data = result });
-            }
-            catch (AppException ex)
-            {
-                return this.BadRequest(ex.Message);
-            }
-            catch (KeyNotFoundException ex)
-            {
-                return NotFound(new { success = false, message = ex.Message });
-            }
-            catch (InvalidOperationException ex)
-            {
-                return Conflict(new { success = false, message = ex.Message });
-            }
-            catch (Exception ex)
-            {
-                ExceptionHandler.RaiseException(ex);
-                return BadRequest(new { success = false, message = "An internal error occurred" });
-            }
-        }
+        //[HttpGet("{id:guid}/deposit/refund-preview")]
+        //[Authorize(Roles = "Admin,System Admin,Staff,Customer")]
+        //public async Task<IActionResult> CalculateRefund(Guid id, [FromQuery] RefundInitiator initiatedBy = RefundInitiator.Customer)
+        //{
+        //    try
+        //    {
+        //        var result = await reservationService.CalculateRefund(id, initiatedBy);
+        //        return Ok(new { success = true, data = result });
+        //    }
+        //    catch (AppException ex)
+        //    {
+        //        return this.BadRequest(ex.Message);
+        //    }
+        //    catch (KeyNotFoundException ex)
+        //    {
+        //        return NotFound(new { success = false, message = ex.Message });
+        //    }
+        //    catch (InvalidOperationException ex)
+        //    {
+        //        return Conflict(new { success = false, message = ex.Message });
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        ExceptionHandler.RaiseException(ex);
+        //        return BadRequest(new { success = false, message = "An internal error occurred" });
+        //    }
+        //}
 
-        [HttpPost("{id:guid}/deposit/refund")]
-        [Authorize(Roles = "Admin,System Admin,Staff,Customer")]
-        public async Task<IActionResult> RefundDeposit(Guid id, [FromBody] RefundRequest request)
-        {
-            try
-            {
-                if (!ModelState.IsValid)
-                    return BadRequest(new { success = false, message = "Validation failed", errors = ModelState });
+        //[HttpPost("{id:guid}/deposit/refund")]
+        //[Authorize(Roles = "Admin,System Admin,Staff,Customer")]
+        //public async Task<IActionResult> RefundDeposit(Guid id, [FromBody] RefundRequest request)
+        //{
+        //    try
+        //    {
+        //        if (!ModelState.IsValid)
+        //            return BadRequest(new { success = false, message = "Validation failed", errors = ModelState });
 
-                var user = await GetCurrentUserAsync();
-                var result = await reservationService.RefundDeposit(id, request.InitiatedBy, user?.Id.ToString());
-                return Ok(new { success = true, message = "Deposit refund recorded", data = result });
-            }
-            catch (AppException ex)
-            {
-                return this.BadRequest(ex.Message);
-            }
-            catch (KeyNotFoundException ex)
-            {
-                return NotFound(new { success = false, message = ex.Message });
-            }
-            catch (InvalidOperationException ex)
-            {
-                return Conflict(new { success = false, message = ex.Message });
-            }
-            catch (Exception ex)
-            {
-                ExceptionHandler.RaiseException(ex);
-                return BadRequest(new { success = false, message = "An internal error occurred" });
-            }
-        }
+        //        var user = await GetCurrentUserAsync();
+        //        var result = await reservationService.RefundDeposit(id, request.InitiatedBy, user?.Id.ToString());
+        //        return Ok(new { success = true, message = "Deposit refund recorded", data = result });
+        //    }
+        //    catch (AppException ex)
+        //    {
+        //        return this.BadRequest(ex.Message);
+        //    }
+        //    catch (KeyNotFoundException ex)
+        //    {
+        //        return NotFound(new { success = false, message = ex.Message });
+        //    }
+        //    catch (InvalidOperationException ex)
+        //    {
+        //        return Conflict(new { success = false, message = ex.Message });
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        ExceptionHandler.RaiseException(ex);
+        //        return BadRequest(new { success = false, message = "An internal error occurred" });
+        //    }
+        //}
 
     }
 }

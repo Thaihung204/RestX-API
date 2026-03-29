@@ -34,7 +34,7 @@ namespace RestX.Models.Orders
 
         public DateTime PaymentDate { get; set; } = DateTime.UtcNow.AddHours(7);
 
-        public PaymentStatus Status { get; set; } = PaymentStatus.Unpaid;
+        public PaymentStatus Status { get; set; } = PaymentStatus.Pending;
 
         public PaymentPurpose Purpose { get; set; } = PaymentPurpose.Order;
 

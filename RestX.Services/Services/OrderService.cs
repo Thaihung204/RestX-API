@@ -1,6 +1,7 @@
 ﻿using AutoMapper;
 using Microsoft.Data.SqlClient;
 using RestX.BLL.DataTranferObjects.Orders;
+using RestX.BLL.Exceptionhandling;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Inventory;
 using RestX.BLL.Interfaces.Status;
@@ -459,6 +460,14 @@ namespace RestX.BLL.Services
                 return false;
 
             var oldStatus = order.OrderStatusId;
+
+            if (statusId == (int)OrderStatus.Completed)
+            {
+                var hasPaidPayment = await Repo.GetExistsAsync<Payment>(
+                    p => p.OrderId == orderId && p.Status == PaymentStatus.Paid);
+                if (!hasPaidPayment)
+                    throw new AppException("Cannot complete order: order has not been paid");
+            }
 
             if (userId != String.Empty)
             {

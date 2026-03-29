@@ -464,7 +464,7 @@ namespace RestX.BLL.Services
             if (statusId == (int)OrderStatus.Completed)
             {
                 var hasPaidPayment = await Repo.GetExistsAsync<Payment>(
-                    p => p.OrderId == orderId && p.Status == PaymentStatus.Paid);
+                    p => p.OrderId == orderId && p.Status == PaymentStatus.Success);
                 if (!hasPaidPayment)
                     throw new AppException("Cannot complete order: order has not been paid");
             }

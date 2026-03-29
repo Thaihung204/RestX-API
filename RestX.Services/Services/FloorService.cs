@@ -165,7 +165,13 @@ namespace RestX.BLL.Services
                             Height = t.Height,
                             Rotation = t.Rotation,
                             Shape = t.Shape
-                        }
+                        },
+                        CubeFrontImageUrl = t.CubeFrontImageUrl,
+                        CubeBackImageUrl = t.CubeBackImageUrl,
+                        CubeLeftImageUrl = t.CubeLeftImageUrl,
+                        CubeRightImageUrl = t.CubeRightImageUrl,
+                        CubeTopImageUrl = t.CubeTopImageUrl,
+                        CubeBottomImageUrl = t.CubeBottomImageUrl
                     };
                 }).ToList()
             };

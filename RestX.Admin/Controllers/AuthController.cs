@@ -1,7 +1,10 @@
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using RestX.Admin.Controllers.BaseControllers;
 using RestX.BLL.DataTranferObjects.Authentication;
+using RestX.BLL.DataTranferObjects.Common;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Auth;
 using System.Security.Claims;
@@ -13,11 +16,13 @@ namespace RestX.Admin.Controllers
     public class AuthController : BaseController
     {
         private readonly IAdminAuthService adminAuthService;
+        private readonly JwtSettings jwtSettings;
 
-        public AuthController(IAdminAuthService adminAuthService, IExceptionHandler exceptionHandler)
+        public AuthController(IAdminAuthService adminAuthService, IExceptionHandler exceptionHandler, IOptions<JwtSettings> jwtSettings)
             : base(exceptionHandler)
         {
             this.adminAuthService = adminAuthService;
+            this.jwtSettings = jwtSettings.Value;
         }
 
         [HttpPost("login")]
@@ -33,6 +38,8 @@ namespace RestX.Admin.Controllers
                 if (!result.Success)
                     return BadRequest(result);
 
+                if (result.Data is AdminLoginResponse loginData)
+                    SetAuthCookies(loginData);
                 return Ok(result);
             }
             catch (Exception ex)
@@ -56,6 +63,7 @@ namespace RestX.Admin.Controllers
                 if (!result.Success)
                     return BadRequest(result);
 
+                ClearAuthCookies();
                 return Ok(result);
             }
             catch (Exception ex)
@@ -148,6 +156,8 @@ namespace RestX.Admin.Controllers
                 if (!result.Success)
                     return BadRequest(result);
 
+                if (result.Data is AdminLoginResponse refreshData)
+                    UpdateAccessTokenCookie(refreshData);
                 return Ok(result);
             }
             catch (Exception ex)
@@ -157,8 +167,33 @@ namespace RestX.Admin.Controllers
             }
         }
 
+        #region Helpers
+
         private string? GetCurrentAdminId()
             => User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+        private void SetAuthCookies(AdminLoginResponse loginData)
+        {
+            Response.Cookies.Append("admin_access_token", loginData.AccessToken,
+                new CookieOptions { HttpOnly = true, Secure = true, SameSite = SameSiteMode.None, Expires = loginData.ExpiresAt });
+            Response.Cookies.Append("admin_refresh_token", loginData.RefreshToken,
+                new CookieOptions { HttpOnly = true, Secure = true, SameSite = SameSiteMode.None, Expires = DateTimeOffset.UtcNow.AddDays(jwtSettings.RefreshTokenExpiryDays) });
+        }
+
+        private void UpdateAccessTokenCookie(AdminLoginResponse loginData)
+        {
+            Response.Cookies.Append("admin_access_token", loginData.AccessToken,
+                new CookieOptions { HttpOnly = true, Secure = true, SameSite = SameSiteMode.None, Expires = loginData.ExpiresAt });
+        }
+
+        private void ClearAuthCookies()
+        {
+            var cookieOptions = new CookieOptions { HttpOnly = true, Secure = true, SameSite = SameSiteMode.None };
+            Response.Cookies.Delete("admin_access_token", cookieOptions);
+            Response.Cookies.Delete("admin_refresh_token", cookieOptions);
+        }
+
+        #endregion
     }
 
 }

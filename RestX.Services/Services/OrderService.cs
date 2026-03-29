@@ -113,7 +113,6 @@ namespace RestX.BLL.Services
                 o.CustomerId,
                 o.ReservationId,
                 o.OrderStatusId,
-                o.PaymentStatusId,
                 o.SubTotal,
                 o.DiscountAmount,
                 o.TaxAmount,
@@ -215,6 +214,10 @@ namespace RestX.BLL.Services
                 .GroupBy(s => s.Id)
                 .ToDictionary(g => g.Key, g => g.First());
 
+            var paidPayments = await Repo.GetAsync<Payment>(
+                p => p.OrderId.HasValue && orderIds.Contains(p.OrderId.Value) && p.Status == PaymentStatus.Success);
+            var paidOrderIds = paidPayments.Select(p => p.OrderId!.Value).ToHashSet();
+
             foreach (var o in orders)
             {
                 if (tablesByOrderId.TryGetValue(o.Id, out var ots))
@@ -230,6 +233,8 @@ namespace RestX.BLL.Services
 
                     o.OrderDetails = ods;
                 }
+
+                o.IsPaid = paidOrderIds.Contains(o.Id);
             }
 
             result.Orders = mapper.Map<List<DataTranferObjects.Orders.Order>>(orders);
@@ -254,7 +259,7 @@ namespace RestX.BLL.Services
         {
             var order = await Repo.GetOneAsync<Models.Orders.Order>(
                 filter: o => o.Id == id,
-                includeProperties: "OrderDetails,OrderDetails.ItemStatus,OrderTables"
+                includeProperties: "OrderDetails,OrderDetails.ItemStatus,OrderTables,Payments"
             );
 
             return mapper.Map<DataTranferObjects.Orders.Order>(order);
@@ -286,7 +291,6 @@ namespace RestX.BLL.Services
                 ReservationId = order.ReservationId,
 
                 OrderStatusId = order.OrderStatusId,
-                PaymentStatusId = order.PaymentStatusId,
 
                 DiscountAmount = discountAmount,
                 TaxAmount = taxAmount,

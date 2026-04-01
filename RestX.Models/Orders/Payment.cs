@@ -1,14 +1,9 @@
-﻿using RestX.Models.BaseModel;
-using RestX.Models.Common;
+using RestX.Models.BaseModel;
+using RestX.Models.Enum;
 using RestX.Models.HR;
 using RestX.Models.Reservations;
-using System;
-using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace RestX.Models.Orders
 {
@@ -39,8 +34,9 @@ namespace RestX.Models.Orders
 
         public DateTime PaymentDate { get; set; } = DateTime.UtcNow.AddHours(7);
 
-        [RestX.Models.Attributes.TriggerProperty]
-        public int PaymentStatusId { get; set; }
+        public PaymentStatus Status { get; set; } = PaymentStatus.Pending;
+
+        public PaymentPurpose Purpose { get; set; } = PaymentPurpose.Order;
 
         [Column(TypeName = "decimal(18,2)")]
         [Range(0, 999999999.99)]
@@ -52,7 +48,6 @@ namespace RestX.Models.Orders
 
         public virtual Order? Order { get; set; }
         public virtual Reservation? Reservation { get; set; }
-        public virtual StatusValue PaymentStatus { get; set; }
         public virtual Employee? Processor { get; set; }
     }
 }

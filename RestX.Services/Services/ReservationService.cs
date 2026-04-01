@@ -1,5 +1,8 @@
 using System.Linq.Expressions;
 using AutoMapper;
+using Hangfire;
+using PayOS;
+using PayOS.Models.Webhooks;
 using RestX.BLL.DataTranferObjects.Authentication;
 using RestX.BLL.DataTranferObjects.Common;
 using RestX.BLL.DataTranferObjects.Reservation;
@@ -9,6 +12,7 @@ using RestX.BLL.Interfaces.Reservations;
 using RestX.BLL.Interfaces.Status;
 using RestX.Models.Customers;
 using RestX.Models.Enum;
+using RestX.Models.Orders;
 using RestX.Models.Reservations;
 using RestX.Models.Tables;
 using RestX.Models.Tenants;
@@ -18,14 +22,15 @@ namespace RestX.BLL.Services
     public class ReservationService : BaseService, IReservationService
     {
         private const string ReservationStatusTypeCode = "RESERVATION";
-        private const string PendingCode = "PENDING";
+        private const string DepositPendingCode = "DEPOSIT_PENDING";
         private const string ConfirmedCode = "CONFIRMED";
         private const string CancelledCode = "CANCELLED";
         private const string CompletedCode = "COMPLETED";
+        private const string NoShowCode = "NO_SHOW";
         private const int ReservationBufferMinutes = 120;
 
         private static readonly TimeSpan VietnamOffset = TimeSpan.FromHours(7);
-        private static DateTime VnNow => DateTime.UtcNow.AddHours(7).Add(VietnamOffset);
+        private static DateTime VnNow => DateTime.UtcNow.Add(VietnamOffset);
 
         private const string ReservationIncludes = "ReservationTables.Table.Floor,Customer.ApplicationUser,ReservationStatus";
         private const string TablesIncludes = "ReservationTables.Table";
@@ -35,12 +40,16 @@ namespace RestX.BLL.Services
         private readonly IStatusValueService statusValueService;
         private readonly IAuthService authService;
         private readonly IEmailService emailService;
+        private readonly IDepositConfigService depositConfigService;
+        private readonly IPaymentSettingService paymentSettingService;
 
         public ReservationService(
             IMapper mapper,
             IStatusValueService statusValueService,
             IAuthService authService,
             IEmailService emailService,
+            IDepositConfigService depositConfigService,
+            IPaymentSettingService paymentSettingService,
             IRepository repo,
             IRedisService redisService,
             IEnumerable<ActiveTenant> tenant = null
@@ -50,6 +59,8 @@ namespace RestX.BLL.Services
             this.statusValueService = statusValueService;
             this.authService = authService;
             this.emailService = emailService;
+            this.depositConfigService = depositConfigService;
+            this.paymentSettingService = paymentSettingService;
         }
 
         public async Task<ReservationDetail> CreateReservation(CreateReservationRequest request)
@@ -75,8 +86,27 @@ namespace RestX.BLL.Services
                 throw new InvalidOperationException("One or more tables are already reserved at this time");
 
             var statuses = await statusValueService.GetStatuses(ReservationStatusTypeCode);
-            var pendingStatus = statuses.FirstOrDefault(s => s.IsDefault)
-                ?? throw new InvalidOperationException("Default reservation status not configured");
+
+            var depositConfig = await depositConfigService.GetDepositConfig(CurrentTenant.Id);
+            var requiresDeposit = depositConfig != null && request.NumberOfGuests >= depositConfig.MinPartySize;
+
+            string initialStatusCode;
+            decimal depositAmount = 0;
+            DateTime? paymentDeadline = null;
+
+            if (requiresDeposit)
+            {
+                initialStatusCode = DepositPendingCode;
+                depositAmount = request.NumberOfGuests * depositConfig!.DepositAmountPerPerson;
+                paymentDeadline = VnNow.AddHours(depositConfig.DeadlineHours);
+            }
+            else
+            {
+                initialStatusCode = ConfirmedCode;
+            }
+
+            var initialStatus = statuses.FirstOrDefault(s => s.Code == initialStatusCode)
+                ?? throw new InvalidOperationException($"Status '{initialStatusCode}' not configured");
 
             var reservation = new Reservation
             {
@@ -84,7 +114,9 @@ namespace RestX.BLL.Services
                 NumberOfGuests = request.NumberOfGuests,
                 Time = request.ReservationDateTime,
                 SpecialRequests = request.SpecialRequests,
-                ReservationStatusId = pendingStatus.Id
+                ReservationStatusId = initialStatus.Id,
+                DepositAmount = depositAmount,
+                PaymentDeadline = paymentDeadline
             };
 
             await Repo.CreateAsync(reservation);
@@ -99,6 +131,11 @@ namespace RestX.BLL.Services
                 });
             }
             await Repo.SaveAsync();
+
+            if (requiresDeposit)
+                BackgroundJob.Schedule<IReservationService>(
+                    s => s.AutoCancelDepositReservation(reservation.Id),
+                    paymentDeadline!.Value);
 
             var saved = await LoadReservation(reservation.Id);
             var detail = mapper.Map<ReservationDetail>(saved!);
@@ -119,7 +156,7 @@ namespace RestX.BLL.Services
                                 r.ReservationStatus.Code == CompletedCode || r.ReservationStatus.Code == CancelledCode ? 2 :
                                 r.Time >= VnNow ? 0 : 1)
                             .ThenBy(r => r.Time)
-                            .ThenBy(r => r.ReservationStatus.Code == ConfirmedCode ? 0 : r.ReservationStatus.Code == PendingCode ? 1 : 2),
+                            .ThenBy(r => r.ReservationStatus.Code == ConfirmedCode ? 0 : r.ReservationStatus.Code == DepositPendingCode ? 1 : 2),
                 includeProperties: ReservationIncludes,
                 skip: (filter.PageNumber - 1) * filter.PageSize,
                 take: filter.PageSize
@@ -245,12 +282,10 @@ namespace RestX.BLL.Services
             var status = statuses.FirstOrDefault(s => s.Id == statusId)
                 ?? throw new KeyNotFoundException($"Status ID {statusId} not found");
 
-            if (status.Code.Equals(ConfirmedCode, StringComparison.OrdinalIgnoreCase))
-                await ConfirmReservation(id, userId);
-            else if (status.Code.Equals(CompletedCode, StringComparison.OrdinalIgnoreCase))
-                await CompleteReservation(id, userId);
-            else if (status.Code.Equals(CancelledCode, StringComparison.OrdinalIgnoreCase))
+            if (status.Code.Equals(CancelledCode, StringComparison.OrdinalIgnoreCase))
                 await CancelReservation(id, userId);
+            else if (status.Code.Equals(NoShowCode, StringComparison.OrdinalIgnoreCase))
+                await NoShowReservation(id, userId);
             else
                 throw new ArgumentException($"Cannot manually set status '{status.Code}'");
         }
@@ -260,8 +295,8 @@ namespace RestX.BLL.Services
             var reservation = await RequireReservation(id, TablesAndStatusIncludes);
 
             var statusCode = reservation.ReservationStatus?.Code;
-            if (statusCode != PendingCode)
-                throw new InvalidOperationException("Only pending reservations can be confirmed");
+            if (statusCode != DepositPendingCode)
+                throw new InvalidOperationException("Only deposit-pending reservations can be confirmed this way");
 
             var statuses = await statusValueService.GetStatuses(ReservationStatusTypeCode);
             var confirmedStatus = statuses.FirstOrDefault(s => s.Code == ConfirmedCode)
@@ -269,6 +304,23 @@ namespace RestX.BLL.Services
 
             reservation.ReservationStatusId = confirmedStatus.Id;
             Repo.Update(reservation, userId);
+            await Repo.SaveAsync();
+        }
+
+        private async Task NoShowReservation(Guid id, string? userId)
+        {
+            var reservation = await RequireReservation(id, TablesIncludes);
+            var statusCode = reservation.ReservationStatus?.Code;
+            if (statusCode != ConfirmedCode)
+                throw new InvalidOperationException("Only confirmed reservations can be marked as no-show");
+
+            var statuses = await statusValueService.GetStatuses(ReservationStatusTypeCode);
+            var noShowStatus = statuses.FirstOrDefault(s => s.Code == NoShowCode)
+                ?? throw new InvalidOperationException("No-show status not configured");
+
+            reservation.ReservationStatusId = noShowStatus.Id;
+            Repo.Update(reservation, userId);
+            await FreeTablesAndSessions(reservation, NoShowCode, userId);
             await Repo.SaveAsync();
         }
 
@@ -282,6 +334,8 @@ namespace RestX.BLL.Services
             var statusCode = reservation.ReservationStatus?.Code;
             if (statusCode == CancelledCode || statusCode == CompletedCode)
                 throw new InvalidOperationException("Cannot check in a reservation that is cancelled or completed");
+            if (statusCode == DepositPendingCode)
+                throw new InvalidOperationException("Cannot check in a reservation that has an unpaid deposit");
 
             if (reservation.CheckedInAt.HasValue)
                 throw new InvalidOperationException("Reservation has already been checked in");
@@ -334,10 +388,27 @@ namespace RestX.BLL.Services
 
         private async Task CancelReservation(Guid id, string? userId)
         {
-            var reservation = await RequireReservation(id, TablesIncludes);
+            var reservation = await RequireReservation(id, TablesAndStatusIncludes);
             var statuses = await statusValueService.GetStatuses(ReservationStatusTypeCode);
             var cancelledStatus = statuses.FirstOrDefault(s => s.Code == CancelledCode)
                 ?? throw new InvalidOperationException("Cancelled status not configured");
+            if (reservation.ReservationStatus?.Code == DepositPendingCode)
+            {
+                var pendingPayment = await Repo.GetOneAsync<Payment>(
+                    p => p.ReservationId == id && p.Purpose == PaymentPurpose.Deposit && p.Status == PaymentStatus.Pending);
+                if (pendingPayment?.PayOSOrderCode != null)
+                {
+                    try
+                    {
+                        var (gatewayClient, _) = await GetDepositGateway();
+                        await gatewayClient.PaymentRequests.CancelAsync(pendingPayment.PayOSOrderCode.Value, "Reservation cancelled");
+                    }
+                    catch { }
+                    pendingPayment.Status = PaymentStatus.Fail;
+                    Repo.Update(pendingPayment);
+                }
+            }
+
             reservation.ReservationStatusId = cancelledStatus.Id;
             Repo.Update(reservation, userId);
             await FreeTablesAndSessions(reservation, CancelledCode, userId);
@@ -598,6 +669,162 @@ namespace RestX.BLL.Services
 
         private static string GenerateConfirmationCode(Guid id)
             => id.ToString("N")[..6].ToUpper();
+
+        #endregion
+
+        #region Deposit
+
+        public async Task<DepositStatusResponse> GetDepositStatus(Guid reservationId)
+        {
+            var reservation = await Repo.GetByIdAsync<Reservation>(reservationId)
+                ?? throw new KeyNotFoundException("Reservation not found");
+
+            var depositPayments = await Repo.GetAsync<Payment>(
+                p => p.ReservationId == reservationId && p.Purpose == PaymentPurpose.Deposit,
+                orderBy: q => q.OrderByDescending(p => p.PaymentDate));
+            var depositPayment = depositPayments.FirstOrDefault();
+
+            return new DepositStatusResponse
+            {
+                ReservationId = reservationId,
+                DepositAmount = reservation.DepositAmount,
+                PaymentDeadline = reservation.PaymentDeadline,
+                IsPaid = depositPayment?.Status == PaymentStatus.Success,
+                CheckoutUrl = depositPayment?.Status == PaymentStatus.Pending ? depositPayment.CheckoutUrl : null,
+                PaymentStatus = depositPayment?.Status
+            };
+        }
+
+        public async Task<string> CreateDepositPaymentLink(Guid reservationId)
+        {
+            var reservation = await Repo.GetByIdAsync<Reservation>(reservationId)
+                ?? throw new KeyNotFoundException("Reservation not found");
+
+            if (reservation.ReservationStatus?.Code != DepositPendingCode)
+            {
+                var status = await Repo.GetOneAsync<RestX.Models.Common.StatusValue>(s => s.Id == reservation.ReservationStatusId);
+                if (status?.Code != DepositPendingCode)
+                    throw new InvalidOperationException("Reservation is not in deposit-pending status");
+            }
+
+            var alreadyPaid = await Repo.GetExistsAsync<Payment>(
+                p => p.ReservationId == reservationId && p.Purpose == PaymentPurpose.Deposit && p.Status == PaymentStatus.Success);
+            if (alreadyPaid)
+                throw new InvalidOperationException("Deposit has already been paid");
+
+            // Cancel existing unpaid link if any
+            var existingUnpaid = await Repo.GetOneAsync<Payment>(
+                p => p.ReservationId == reservationId && p.Purpose == PaymentPurpose.Deposit && p.Status == PaymentStatus.Pending);
+            if (existingUnpaid?.PayOSOrderCode != null)
+            {
+                var (gatewayClient, _) = await GetDepositGateway();
+                await gatewayClient.PaymentRequests.CancelAsync(existingUnpaid.PayOSOrderCode.Value, "Recreating deposit link");
+                existingUnpaid.Status = PaymentStatus.Fail;
+                Repo.Update(existingUnpaid);
+                await Repo.SaveAsync();
+            }
+
+            var (client, settings) = await GetDepositGateway();
+            var orderCode = GenerateDepositOrderCode();
+            var description = $"Coc dat ban {reservation.ConfirmationCode}";
+            if (description.Length > 25) description = description[..25];
+
+            var linkRequest = new PayOS.Models.V2.PaymentRequests.CreatePaymentLinkRequest
+            {
+                OrderCode = orderCode,
+                Amount = (long)reservation.DepositAmount,
+                Description = description,
+                Items = new List<PayOS.Models.V2.PaymentRequests.PaymentLinkItem>
+                {
+                    new() { Name = "Tien coc dat ban", Quantity = 1, Price = (long)reservation.DepositAmount }
+                },
+                ReturnUrl = settings.ReturnUrl,
+                CancelUrl = settings.CancelUrl
+            };
+
+            var link = await client.PaymentRequests.CreateAsync(linkRequest);
+
+            var payment = new Payment
+            {
+                ReservationId = reservationId,
+                PaymentMethodId = "BANK",
+                Amount = reservation.DepositAmount,
+                PayOSOrderCode = orderCode,
+                CheckoutUrl = link.CheckoutUrl,
+                Status = PaymentStatus.Pending,
+                Purpose = PaymentPurpose.Deposit,
+                PaymentDate = VnNow
+            };
+
+            await Repo.CreateAsync(payment);
+            await Repo.SaveAsync();
+
+            return link.CheckoutUrl;
+        }
+
+        public async Task ConfirmCashDeposit(Guid reservationId, string userId)
+        {
+            var reservation = await Repo.GetOneAsync<Reservation>(
+                filter: r => r.Id == reservationId,
+                includeProperties: "ReservationStatus")
+                ?? throw new KeyNotFoundException("Reservation not found");
+
+            if (reservation.ReservationStatus?.Code != DepositPendingCode)
+                throw new InvalidOperationException("Reservation is not in deposit-pending status");
+
+            var alreadyPaid = await Repo.GetExistsAsync<Payment>(
+                p => p.ReservationId == reservationId && p.Purpose == PaymentPurpose.Deposit && p.Status == PaymentStatus.Success);
+            if (alreadyPaid)
+                throw new InvalidOperationException("Deposit has already been paid");
+
+            var payment = new Payment
+            {
+                ReservationId = reservationId,
+                PaymentMethodId = "CASH",
+                Amount = reservation.DepositAmount,
+                Status = PaymentStatus.Success,
+                Purpose = PaymentPurpose.Deposit,
+                PaymentDate = VnNow,
+                ProcessedBy = string.IsNullOrEmpty(userId) ? null : Guid.Parse(userId)
+            };
+
+            await Repo.CreateAsync(payment, userId);
+            await ConfirmReservation(reservationId, userId);
+            await Repo.SaveAsync();
+        }
+
+
+        public async Task AutoCancelDepositReservation(Guid reservationId)
+        {
+            var reservation = await Repo.GetOneAsync<Reservation>(
+                filter: r => r.Id == reservationId,
+                includeProperties: "ReservationStatus,ReservationTables")
+                ?? throw new KeyNotFoundException("Reservation not found");
+
+            if (reservation.ReservationStatus?.Code != DepositPendingCode)
+                return;
+
+            var hasPaidDeposit = await Repo.GetExistsAsync<Payment>(
+                p => p.ReservationId == reservationId && p.Purpose == PaymentPurpose.Deposit && p.Status == PaymentStatus.Success);
+            if (hasPaidDeposit)
+                return;
+
+            await CancelReservation(reservationId, null);
+        }
+
+        private async Task<(PayOSClient client, DataTranferObjects.Common.PaymentGatewaySettings settings)> GetDepositGateway()
+        {
+            var settings = await paymentSettingService.GetPaymentSettingByTenantId(CurrentTenant.Id)
+                ?? throw new InvalidOperationException("Payment gateway is not configured for this tenant");
+            return (new PayOSClient(settings.ClientId, settings.ApiKey, settings.ChecksumKey, null), settings);
+        }
+
+        private static long GenerateDepositOrderCode()
+        {
+            var timestamp = DateTimeOffset.UtcNow.ToOffset(VietnamOffset).ToUnixTimeSeconds();
+            var suffix = Random.Shared.Next(1000, 9999);
+            return long.Parse($"9{timestamp}{suffix}");
+        }
 
         #endregion
     }

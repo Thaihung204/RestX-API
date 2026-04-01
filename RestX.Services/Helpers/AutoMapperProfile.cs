@@ -117,7 +117,9 @@ namespace RestX.BLL.Helpers
                 .ForMember(dest => dest.ItemStatusId, opt => opt.Ignore())
                 .ForMember(dest => dest.ItemStatus, opt => opt.Ignore())
                 .ForMember(dest => dest.Order, opt => opt.Ignore())
-                .ForMember(dest => dest.Dish, opt => opt.Ignore()); CreateMap<Models.Orders.Order, DataTranferObjects.Orders.Order>()
+                .ForMember(dest => dest.Dish, opt => opt.Ignore());
+
+            CreateMap<Models.Orders.Order, DataTranferObjects.Orders.Order>()
                 .ForMember(
                     dest => dest.TableIds,
                     opt => opt.MapFrom(src => src.OrderTables != null
@@ -130,6 +132,13 @@ namespace RestX.BLL.Helpers
                         src.OrderTables != null && src.OrderTables.Any()
                             ? src.OrderTables.Select(ot => ot.TableId).FirstOrDefault()
                             : Guid.Empty)
+                )
+                .ForMember(
+                    dest => dest.PaymentStatus,
+                    opt => opt.MapFrom(src =>
+                        src.IsPaid || (src.Payments != null && src.Payments.Any(p => p.Status == PaymentStatus.Success))
+                            ? PaymentStatus.Success
+                            : PaymentStatus.Pending)
                 );
 
             CreateMap<DataTranferObjects.Orders.Order, Models.Orders.Order>()
@@ -137,9 +146,7 @@ namespace RestX.BLL.Helpers
                 .ForMember(dest => dest.OrderDetails, opt => opt.Ignore()); CreateMap<Models.Inventory.IngredientCategory, DataTranferObjects.Inventory.IngredientCategory>().ReverseMap();
 
             CreateMap<LoyaltyPointBandEntity, DataTranferObjects.Loyalty.LoyaltyPointBand>().ReverseMap();
-            CreateMap<Models.Orders.Payment, PaymentDetail>()
-                .ForMember(dest => dest.PaymentStatusName, opt => opt.MapFrom(src => src.PaymentStatus != null ? src.PaymentStatus.Name : null))
-                .ForMember(dest => dest.PaymentStatusCode, opt => opt.MapFrom(src => src.PaymentStatus != null ? src.PaymentStatus.Code : null));
+            CreateMap<Models.Orders.Payment, PaymentDetail>();
 
             CreateMap<StatusValue, StatusValues>();
             CreateMap<StatusValues, StatusValue>()

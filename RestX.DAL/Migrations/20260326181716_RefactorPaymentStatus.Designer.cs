@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using RestX.DAL.Context;
 
@@ -11,9 +12,11 @@ using RestX.DAL.Context;
 namespace RestX.DAL.Migrations
 {
     [DbContext(typeof(TenantDbContext))]
-    partial class TenantDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260326181716_RefactorPaymentStatus")]
+    partial class RefactorPaymentStatus
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1635,17 +1638,16 @@ namespace RestX.DAL.Migrations
                     b.Property<string>("PropertiesJson")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<int>("Purpose")
-                        .HasColumnType("int");
-
                     b.Property<DateTime?>("RefundDate")
                         .HasColumnType("datetime2");
 
                     b.Property<Guid?>("ReservationId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<int>("Status")
-                        .HasColumnType("int");
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<string>("TransactionId")
                         .HasMaxLength(100)
@@ -1852,6 +1854,9 @@ namespace RestX.DAL.Migrations
                     b.Property<decimal>("DepositAmount")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<bool>("DepositPaid")
+                        .HasColumnType("bit");
+
                     b.Property<string>("ModifiedBy")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
@@ -1861,9 +1866,6 @@ namespace RestX.DAL.Migrations
 
                     b.Property<int>("NumberOfGuests")
                         .HasColumnType("int");
-
-                    b.Property<DateTime?>("PaymentDeadline")
-                        .HasColumnType("datetime2");
 
                     b.Property<string>("PropertiesJson")
                         .HasColumnType("nvarchar(max)");

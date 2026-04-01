@@ -33,7 +33,7 @@ namespace RestX.Models.Reservations
         [Range(0, 999999999.99)]
         public decimal DepositAmount { get; set; } = 0;
 
-        public bool DepositPaid { get; set; } = false;
+        public DateTime? PaymentDeadline { get; set; }
 
         public DateTime? CheckedInAt { get; set; }
 

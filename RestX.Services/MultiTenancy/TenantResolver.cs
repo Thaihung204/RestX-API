@@ -67,7 +67,7 @@ namespace RestX.BLL.MultiTenancy
             log.LogInformation("X-Forwarded-Host: {XFH}",
                 context.Request.Headers["X-Forwarded-Host"].FirstOrDefault());
 
-            Console.WriteLine("hostname: ", hostname);
+            log.LogInformation(hostname);
 
             var hostnameWithPath = "";
             try
@@ -79,7 +79,7 @@ namespace RestX.BLL.MultiTenancy
                                 context.Request.Path.Value.Substring(1).IndexOf("/", StringComparison.Ordinal))
                             : context.Request.Path.Value.Substring(1)))
                     : string.Empty;
-                Console.WriteLine("hostnameWithPath: ", hostnameWithPath);
+                log.LogInformation("hostnameWithPath: ", hostnameWithPath);
             }
             catch (Exception ex)
             {

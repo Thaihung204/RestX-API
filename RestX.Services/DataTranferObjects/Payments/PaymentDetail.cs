@@ -17,5 +17,7 @@ namespace RestX.BLL.DataTranferObjects.Payments
         public DateTime PaymentDate { get; set; }
         public PaymentStatus Status { get; set; }
         public string StatusName => Status.ToString();
+        public PaymentPurpose Purpose { get; set; }
+        public string PurposeName => Purpose.ToString();
     }
 }

@@ -48,6 +48,7 @@ namespace RestX.BLL.Helpers
             services.AddScoped<IPaymentService, PaymentService>();
             services.AddScoped<IReceiptService, ReceiptService>();
             services.AddScoped<IReservationService, ReservationService>();
+            services.AddScoped<IDepositConfigService, DepositConfigService>();
             services.AddScoped<IFormListHelper, FormListHelper>();
             services.AddScoped<IPromotionService, PromotionService>();
             services.AddScoped<IAIService, AIService>();

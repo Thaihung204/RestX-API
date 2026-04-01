@@ -7,15 +7,15 @@ namespace RestX.Models.Admin
     {
         [Key]
         public Guid TenantId { get; set; }
-        public int MinPartySize { get; set; } = 8;
+        public int MinPartySize { get; set; }
         [Column(TypeName = "decimal(18,2)")]
-        public decimal DepositAmountPerPerson { get; set; } = 50000;
-        public int DeadlineHours { get; set; } = 2;
-        public int EarlyRefundHours { get; set; } = 48;
+        public decimal DepositAmountPerPerson { get; set; }
+        public int DeadlineHours { get; set; }
+        public int EarlyRefundHours { get; set; }
         [Range(0, 100)]
-        public int EarlyRefundPercentage { get; set; } = 100;
-        public int LateRefundHours { get; set; } = 24;
+        public int EarlyRefundPercentage { get; set; }
+        public int LateRefundHours { get; set; }
         [Range(0, 100)]
-        public int LateRefundPercentage { get; set; } = 50;
+        public int LateRefundPercentage { get; set; }
     }
 }

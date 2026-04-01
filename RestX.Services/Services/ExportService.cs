@@ -17,7 +17,6 @@ namespace RestX.BLL.Services
         private readonly ICustomerService customerService;
         private readonly IReservationService reservationService;
         private readonly IOrderService orderService;
-
         public ExportService(
             ICustomerService customerService,
             IReservationService reservationService,
@@ -41,10 +40,7 @@ namespace RestX.BLL.Services
 
             if (!customers.Any())
                 return CreateEmptyWorkbook("Customers");
-
-            // Batch query: lấy stats tất cả customer 1 lần, tránh N+1
             var idList = string.Join(",", customers.Select(c => $"'{c.Id}'"));
-
             var statsQuery = $@"
                 SELECT
                     CustomerId,
@@ -60,7 +56,6 @@ namespace RestX.BLL.Services
 
             using var package = new ExcelPackage();
             var sheet = package.Workbook.Worksheets.Add("Customers");
-
             var headers = new[]
             {
                 "Full Name", "Email", "Phone Number", "Membership Level",
@@ -68,7 +63,6 @@ namespace RestX.BLL.Services
                 "Last Visit", "Registered Date", "Status"
             };
             WriteHeaders(sheet, headers);
-
             int row = 2;
             foreach (var c in customers)
             {
@@ -87,7 +81,6 @@ namespace RestX.BLL.Services
                 sheet.Cells[row, 10].Value = c.IsActive ? "Active" : "Inactive";
                 row++;
             }
-
             AutoFitAndStyle(sheet, headers.Length, row - 1);
             return package.GetAsByteArray();
         }
@@ -98,13 +91,10 @@ namespace RestX.BLL.Services
             filter.PageSize = int.MaxValue;
             var result = await reservationService.GetReservations(filter);
             var reservations = result.Items.ToList();
-
             if (!reservations.Any())
                 return CreateEmptyWorkbook("Reservations");
-
             using var package = new ExcelPackage();
             var sheet = package.Workbook.Worksheets.Add("Reservations");
-
             var headers = new[]
             {
                 "Confirmation Code", "Contact Name", "Contact Phone",
@@ -112,7 +102,6 @@ namespace RestX.BLL.Services
                 "Status", "Deposit Amount", "Created At"
             };
             WriteHeaders(sheet, headers);
-
             int row = 2;
             foreach (var r in reservations)
             {
@@ -128,7 +117,6 @@ namespace RestX.BLL.Services
                 sheet.Cells[row, 9].Value = r.CreatedAt.ToString("dd/MM/yyyy HH:mm");
                 row++;
             }
-
             AutoFitAndStyle(sheet, headers.Length, row - 1);
             return package.GetAsByteArray();
         }
@@ -139,13 +127,10 @@ namespace RestX.BLL.Services
             filter.ItemsPerPage = int.MaxValue;
             var result = await orderService.GetAllOrders(filter);
             var orders = result.Orders;
-
             if (!orders.Any())
                 return CreateEmptyWorkbook("Orders");
-
             using var package = new ExcelPackage();
             var sheet = package.Workbook.Worksheets.Add("Orders");
-
             var headers = new[]
             {
                 "Reference", "Order Status", "Sub Total", "Discount",
@@ -153,7 +138,6 @@ namespace RestX.BLL.Services
                 "Item Count", "Created Date", "Completed At", "Cancelled At"
             };
             WriteHeaders(sheet, headers);
-
             int row = 2;
             foreach (var o in orders)
             {
@@ -169,14 +153,10 @@ namespace RestX.BLL.Services
                 sheet.Cells[row, 10].Value = o.CreatedDate.HasValue ? o.CreatedDate.Value.ToString("dd/MM/yyyy HH:mm") : "";
                 sheet.Cells[row, 11].Value = o.CompletedAt.HasValue ? o.CompletedAt.Value.ToString("dd/MM/yyyy HH:mm") : "";
                 sheet.Cells[row, 12].Value = o.CancelledAt.HasValue ? o.CancelledAt.Value.ToString("dd/MM/yyyy HH:mm") : "";
-
-                // Format số tiền
                 foreach (var col in new[] { 3, 4, 5, 6, 7 })
                     sheet.Cells[row, col].Style.Numberformat.Format = "#,##0";
-
                 row++;
             }
-
             AutoFitAndStyle(sheet, headers.Length, row - 1);
             return package.GetAsByteArray();
         }
@@ -212,7 +192,6 @@ namespace RestX.BLL.Services
             tableRange.Style.Border.Bottom.Style = ExcelBorderStyle.Thin;
             tableRange.Style.Border.Left.Style = ExcelBorderStyle.Thin;
             tableRange.Style.Border.Right.Style = ExcelBorderStyle.Thin;
-
             sheet.Cells[sheet.Dimension.Address].AutoFitColumns();
         }
 
@@ -222,7 +201,6 @@ namespace RestX.BLL.Services
             package.Workbook.Worksheets.Add(sheetName);
             return package.GetAsByteArray();
         }
-
         private class CustomerStatRow
         {
             public Guid CustomerId { get; set; }

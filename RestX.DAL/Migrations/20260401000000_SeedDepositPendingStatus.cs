@@ -19,8 +19,8 @@ namespace RestX.DAL.Migrations
                     SELECT 1 FROM StatusValues WHERE Code = 'DEPOSIT_PENDING' AND StatusTypeId = @reservationTypeId
                 )
                 BEGIN
-                    INSERT INTO StatusValues (StatusTypeId, Code, Name, ColorCode, IsDefault)
-                    VALUES (@reservationTypeId, 'DEPOSIT_PENDING', 'Deposit Pending', '#FF9800', 0);
+                    INSERT INTO StatusValues (StatusTypeId, Code, Name, ColorCode, IsDefault, CreatedDate)
+                    VALUES (@reservationTypeId, 'DEPOSIT_PENDING', 'Deposit Pending', '#FF9800', 0, GETDATE());
                 END
             ");
         }

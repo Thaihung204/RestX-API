@@ -68,10 +68,11 @@ namespace RestX.DAL.DataSeeders
             }));
             values.AddRange(CreateValuesForType(typeMap["RESERVATION"], new[]
             {
-                ("PENDING", "Pending", "#FFA500", true),
+                ("DEPOSIT_PENDING", "Deposit Pending", "#FF9800", true),
                 ("CONFIRMED", "Confirmed", "#4CAF50", false),
                 ("COMPLETED", "Completed", "#00C853", false),
-                ("CANCELLED", "Cancelled", "#F44336", false)
+                ("CANCELLED", "Cancelled", "#F44336", false),
+                ("NO_SHOW", "No Show", "#9E9E9E", false)
             }));
             values.AddRange(CreateValuesForType(typeMap["ORDER-DETAIL"], new[]
             {

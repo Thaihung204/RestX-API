@@ -583,6 +583,7 @@ namespace RestX.DAL.Context
                 entity.Property(e => e.ConfirmationCode).HasMaxLength(20);
                 entity.Property(e => e.SpecialRequests).HasMaxLength(1000);
                 entity.Property(e => e.DepositAmount).HasColumnType("decimal(18,2)");
+                entity.Property(e => e.PaymentDeadline);
 
                 entity.HasOne<Customer>(e => e.Customer)
                     .WithMany(c => c.Reservations)
@@ -716,6 +717,9 @@ namespace RestX.DAL.Context
                     .OnDelete(DeleteBehavior.SetNull);
 
                 entity.Property(e => e.Status)
+                    .HasConversion<int>();
+
+                entity.Property(e => e.Purpose)
                     .HasConversion<int>();
 
                 entity.HasOne<Employee>(e => e.Processor)

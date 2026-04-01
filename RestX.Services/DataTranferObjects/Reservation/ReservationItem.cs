@@ -97,7 +97,7 @@ namespace RestX.BLL.DataTranferObjects.Reservation
         public string? ContactPhone { get; set; }
         public ReservationStatusInfo Status { get; set; } = new();
         public decimal DepositAmount { get; set; }
-        public bool DepositPaid { get; set; }
+        public DateTime? PaymentDeadline { get; set; }
         public DateTime CreatedAt { get; set; }
     }
 
@@ -112,7 +112,7 @@ namespace RestX.BLL.DataTranferObjects.Reservation
         public string? SpecialRequests { get; set; }
         public ReservationStatusInfo Status { get; set; } = new();
         public decimal DepositAmount { get; set; }
-        public bool DepositPaid { get; set; }
+        public DateTime? PaymentDeadline { get; set; }
         public DateTime? CheckedInAt { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }

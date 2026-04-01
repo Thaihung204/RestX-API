@@ -9,6 +9,7 @@ using RestX.Models.Customers;
 using RestX.Models.Enum;
 using RestX.Models.Loyalty;
 using RestX.Models.Orders;
+using RestX.Models.Reservations;
 using RestX.Models.Tenants;
 
 namespace RestX.BLL.Services
@@ -72,19 +73,23 @@ namespace RestX.BLL.Services
             if (alreadyPaid)
                 throw new InvalidOperationException("Order is already paid");
 
-            if (request.CashReceive < order.TotalAmount)
-                throw new InvalidOperationException($"Cash received ({request.CashReceive}) is less than order total ({order.TotalAmount})");
+            var depositPaid = await GetPaidDepositAmount(order.ReservationId);
+            var amountDue = order.TotalAmount - depositPaid;
 
-            var cashback = request.CashReceive - order.TotalAmount;
+            if (request.CashReceive < amountDue)
+                throw new InvalidOperationException($"Cash received ({request.CashReceive}) is less than amount due ({amountDue})");
+
+            var cashback = request.CashReceive - amountDue;
 
             var payment = new Payment
             {
                 OrderId = orderId,
                 PaymentMethodId = PaymentConstants.Method.Cash,
-                Amount = order.TotalAmount,
+                Amount = amountDue,
                 CashReceive = request.CashReceive,
                 Cashback = cashback,
                 Status = PaymentStatus.Success,
+                Purpose = PaymentPurpose.Order,
                 PaymentDate = DateTime.UtcNow.AddHours(7)
             };
 
@@ -113,7 +118,8 @@ namespace RestX.BLL.Services
             if (alreadyPaid)
                 throw new InvalidOperationException("Order is already paid");
 
-            var amount = (long)order.TotalAmount;
+            var depositPaid = await GetPaidDepositAmount(order.ReservationId);
+            var amount = (long)(order.TotalAmount - depositPaid);
             if (amount <= 0)
                 throw new InvalidOperationException("Order total must be greater than zero");
 
@@ -145,10 +151,11 @@ namespace RestX.BLL.Services
             {
                 OrderId = orderId,
                 PaymentMethodId = PaymentConstants.Method.Bank,
-                Amount = order.TotalAmount,
+                Amount = (decimal)amount,
                 PayOSOrderCode = orderCode,
                 CheckoutUrl = link.CheckoutUrl,
                 Status = PaymentStatus.Pending,
+                Purpose = PaymentPurpose.Order,
                 PaymentDate = DateTime.UtcNow.AddHours(7)
             };
 
@@ -197,11 +204,19 @@ namespace RestX.BLL.Services
                 filter: p => p.PayOSOrderCode == data.OrderCode)
                 ?? throw new KeyNotFoundException($"Payment not found for orderCode {data.OrderCode}");
 
+            if (payment.Status == PaymentStatus.Success)
+                return;
+
             payment.Status = PaymentStatus.Success;
             payment.TransactionId = data.Reference;
+            payment.PaymentDate = DateTime.UtcNow.AddHours(7);
             Repo.Update(payment);
 
-            if (payment.OrderId.HasValue)
+            if (payment.Purpose == PaymentPurpose.Deposit && payment.ReservationId.HasValue)
+            {
+                await ConfirmReservationAfterDeposit(payment.ReservationId.Value);
+            }
+            else if (payment.OrderId.HasValue)
             {
                 var order = await Repo.GetByIdAsync<Order>(payment.OrderId.Value);
                 if (order != null)
@@ -209,6 +224,25 @@ namespace RestX.BLL.Services
             }
 
             await Repo.SaveAsync();
+        }
+
+        private async Task ConfirmReservationAfterDeposit(Guid reservationId)
+        {
+            var reservation = await Repo.GetOneAsync<Reservation>(
+                filter: r => r.Id == reservationId,
+                includeProperties: "ReservationStatus,ReservationTables")
+                ?? throw new KeyNotFoundException("Reservation not found");
+
+            if (reservation.ReservationStatus?.Code != "DEPOSIT_PENDING")
+                return;
+
+            var confirmedStatus = await Repo.GetOneAsync<RestX.Models.Common.StatusValue>(
+                s => s.Code == "CONFIRMED" && s.StatusType.Code == "RESERVATION",
+                includeProperties: "StatusType")
+                ?? throw new InvalidOperationException("CONFIRMED status not configured");
+
+            reservation.ReservationStatusId = confirmedStatus.Id;
+            Repo.Update(reservation);
         }
 
         private async Task<(PayOSClient client, PaymentGatewaySettings settings)> GetTenantGateway()
@@ -248,6 +282,14 @@ namespace RestX.BLL.Services
                 Points = points,
                 Description = $"Earned {points} points from order {order.Reference}"
             });
+        }
+
+        private async Task<decimal> GetPaidDepositAmount(Guid? reservationId)
+        {
+            if (!reservationId.HasValue) return 0;
+            var deposit = await Repo.GetOneAsync<Payment>(
+                p => p.ReservationId == reservationId && p.Purpose == PaymentPurpose.Deposit && p.Status == PaymentStatus.Success);
+            return deposit?.Amount ?? 0;
         }
 
         private static long GenerateOrderCode()

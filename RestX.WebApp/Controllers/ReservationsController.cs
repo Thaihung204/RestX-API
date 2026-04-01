@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using RestX.BLL.DataTranferObjects.Common;
 using RestX.BLL.DataTranferObjects.Reservation;
+using RestX.BLL.DataTranferObjects.Tenants;
 using RestX.BLL.Exceptionhandling;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Reservations;
@@ -25,12 +26,14 @@ namespace RestX.WebApp.Controllers
     {
         private readonly IReservationService reservationService;
         private readonly ITableService tableService;
+        private readonly IDepositConfigService depositConfigService;
         private readonly IHubContext<SignalrServer> hub;
         private readonly ICsvExportService csvExportService;
 
         public ReservationsController(
             IReservationService reservationService,
             ITableService tableService,
+            IDepositConfigService depositConfigService,
             IHubContext<SignalrServer> hub,
             ICsvExportService csvExportService,
             IMapper mapper,
@@ -40,6 +43,7 @@ namespace RestX.WebApp.Controllers
         {
             this.reservationService = reservationService;
             this.tableService = tableService;
+            this.depositConfigService = depositConfigService;
             this.hub = hub;
             this.csvExportService = csvExportService;
         }
@@ -314,27 +318,40 @@ namespace RestX.WebApp.Controllers
             }
         }
 
-        [HttpDelete("{id:guid}")]
+        // ── Deposit ──────────────────────────────────────────────────────────
+
+        [HttpGet("{id:guid}/deposit")]
         [Authorize(Roles = "Admin,System Admin,Staff,Customer")]
-        public async Task<IActionResult> CancelReservation(Guid id)
+        public async Task<IActionResult> GetDepositStatus(Guid id)
         {
             try
             {
-                var reservation = await reservationService.GetReservationById(id);
-                await reservationService.CancelReservation(id);
+                var result = await reservationService.GetDepositStatus(id);
+                return Ok(new { success = true, data = result });
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { success = false, message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest(new { success = false, message = "An internal error occurred" });
+            }
+        }
 
-                if (reservation != null)
-                    foreach (var tableInfo in reservation.Tables)
-                        await hub.BroadcastToTenant(CurrentTenant.Id, SignalrServer.TableStatusChanged, new
-                        {
-                            tableId = tableInfo.Id,
-                            tableCode = tableInfo.Code,
-                            floorId = tableInfo.FloorId,
-                            status = (int)TableStatus.Available,
-                            statusName = TableStatus.Available.ToString()
-                        });
-
-                return Ok(new { success = true, message = "Reservation cancelled successfully" });
+        [HttpPost("{id:guid}/deposit/pay")]
+        [AllowAnonymous]
+        public async Task<IActionResult> CreateDepositPaymentLink(Guid id)
+        {
+            try
+            {
+                var checkoutUrl = await reservationService.CreateDepositPaymentLink(id);
+                return Ok(new { success = true, data = new { checkoutUrl } });
             }
             catch (AppException ex)
             {
@@ -346,7 +363,94 @@ namespace RestX.WebApp.Controllers
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(new { success = false, message = ex.Message });
+                return Conflict(new { success = false, message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest(new { success = false, message = "An internal error occurred" });
+            }
+        }
+
+        [HttpPost("{id:guid}/deposit/confirm-cash")]
+        [Authorize(Roles = "Admin,System Admin,Staff")]
+        public async Task<IActionResult> ConfirmCashDeposit(Guid id)
+        {
+            try
+            {
+                var user = await GetCurrentUserAsync();
+                await reservationService.ConfirmCashDeposit(id, user?.Id.ToString());
+                return Ok(new { success = true, message = "Cash deposit confirmed" });
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { success = false, message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { success = false, message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest(new { success = false, message = "An internal error occurred" });
+            }
+        }
+
+        [HttpGet("config")]
+        [Authorize(Roles = "Admin,System Admin")]
+        public async Task<IActionResult> GetDepositConfig()
+        {
+            try
+            {
+                var config = await depositConfigService.GetDepositConfig(CurrentTenant.Id);
+                if (config == null)
+                    return NotFound(new { success = false, message = "Deposit config not found" });
+
+                return Ok(new { success = true, data = config });
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest(new { success = false, message = "An internal error occurred" });
+            }
+        }
+
+        [HttpPut("config")]
+        [Authorize(Roles = "Admin,System Admin")]
+        public async Task<IActionResult> UpsertDepositConfig([FromBody] DepositConfig config)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                    return BadRequest(new { success = false, message = "Validation failed", errors = ModelState });
+
+                await depositConfigService.UpsertDepositConfig(CurrentTenant.Id, config);
+                return Ok(new { success = true, message = "Deposit config saved" });
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest(new { success = false, message = "An internal error occurred" });
+            }
+        }
+
+        [HttpDelete("config")]
+        [Authorize(Roles = "Admin,System Admin")]
+        public async Task<IActionResult> DeleteDepositConfig()
+        {
+            try
+            {
+                await depositConfigService.DeleteDepositConfig(CurrentTenant.Id);
+                return Ok(new { success = true, message = "Deposit config deleted" });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { success = false, message = ex.Message });
             }
             catch (Exception ex)
             {

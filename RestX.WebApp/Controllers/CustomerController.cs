@@ -10,7 +10,6 @@ using RestX.Models.Identity;
 using RestX.Models.Tenants;
 using RestX.WebApp.Controllers.BaseControllers;
 using System.ComponentModel.DataAnnotations;
-using System.Net.Mime;
 
 namespace RestX.WebApp.Controllers
 {
@@ -20,16 +19,16 @@ namespace RestX.WebApp.Controllers
     public class CustomerController : BaseController
     {
         private readonly ICustomerService customerService;
-        private readonly ICsvExportService csvExportService;
+        private readonly IExportService exportService;
         public CustomerController(ICustomerService customerService,
-            ICsvExportService csvExportService,
+            IExportService exportService,
             IMapper mapper,
             UserManager<ApplicationUser> userManager,
             IExceptionHandler exceptionHandler,
             IEnumerable<ActiveTenant> tenant) : base(mapper, userManager, exceptionHandler, tenant)
         {
             this.customerService = customerService;
-            this.csvExportService = csvExportService;
+            this.exportService = exportService;
         }
         [HttpGet]
         [Authorize(Roles = "Admin,System Admin")]
@@ -133,9 +132,9 @@ namespace RestX.WebApp.Controllers
         {
             try
             {
-                var bytes = await csvExportService.ExportCustomersCsvAsync(filter);
-                var fileName = $"customers_{DateTime.UtcNow.AddHours(7):yyyyMMdd_HHmmss}.csv";
-                return File(bytes, MediaTypeNames.Text.Csv, fileName);
+                var bytes = await exportService.ExportCustomersAsync(filter);
+                var fileName = $"customers_{DateTime.UtcNow.AddHours(7):yyyyMMdd_HHmmss}.xlsx";
+                return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
             }
             catch (Exception ex)
             {

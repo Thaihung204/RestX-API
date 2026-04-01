@@ -15,7 +15,6 @@ using RestX.Models.Identity;
 using RestX.Models.Tenants;
 using RestX.WebApp.Controllers.BaseControllers;
 using RestX.WebApp.Helpers;
-using System.Net.Mime;
 
 namespace RestX.WebApp.Controllers
 {
@@ -28,14 +27,14 @@ namespace RestX.WebApp.Controllers
         private readonly ITableService tableService;
         private readonly IDepositConfigService depositConfigService;
         private readonly IHubContext<SignalrServer> hub;
-        private readonly ICsvExportService csvExportService;
+        private readonly IExportService exportService;
 
         public ReservationsController(
             IReservationService reservationService,
             ITableService tableService,
             IDepositConfigService depositConfigService,
             IHubContext<SignalrServer> hub,
-            ICsvExportService csvExportService,
+            IExportService exportService,
             IMapper mapper,
             UserManager<ApplicationUser> userManager,
             IExceptionHandler exceptionHandler,
@@ -45,7 +44,7 @@ namespace RestX.WebApp.Controllers
             this.tableService = tableService;
             this.depositConfigService = depositConfigService;
             this.hub = hub;
-            this.csvExportService = csvExportService;
+            this.exportService = exportService;
         }
 
         [HttpPost]
@@ -89,9 +88,9 @@ namespace RestX.WebApp.Controllers
         {
             try
             {
-                var bytes = await csvExportService.ExportReservationsCsvAsync(filter);
-                var fileName = $"reservations_{DateTime.UtcNow.AddHours(7):yyyyMMdd_HHmmss}.csv";
-                return File(bytes, MediaTypeNames.Text.Csv, fileName);
+                var bytes = await exportService.ExportReservationsAsync(filter);
+                var fileName = $"reservations_{DateTime.UtcNow.AddHours(7):yyyyMMdd_HHmmss}.xlsx";
+                return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
             }
             catch (Exception ex)
             {

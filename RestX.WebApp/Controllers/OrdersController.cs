@@ -11,7 +11,6 @@ using RestX.Models.Tenants;
 using RestX.WebApp.Controllers.BaseControllers;
 using RestX.WebApp.Helpers;
 using System.ComponentModel.DataAnnotations;
-using System.Net.Mime;
 
 namespace RestX.WebApp.Controllers
 {
@@ -22,12 +21,12 @@ namespace RestX.WebApp.Controllers
     {
         private readonly IOrderService orderService;
         private readonly IHubContext<SignalrServer> hubContext;
-        private readonly ICsvExportService csvExportService;
+        private readonly IExportService exportService;
 
         public OrdersController(
             IOrderService orderService,
             IHubContext<SignalrServer> hubContext,
-            ICsvExportService csvExportService,
+            IExportService exportService,
             IMapper mapper,
             UserManager<ApplicationUser> userManager,
             IExceptionHandler exceptionHandler,
@@ -36,7 +35,7 @@ namespace RestX.WebApp.Controllers
         {
             this.orderService = orderService;
             this.hubContext = hubContext;
-            this.csvExportService = csvExportService;
+            this.exportService = exportService;
         }
 
         [HttpGet("export/csv")]
@@ -45,9 +44,9 @@ namespace RestX.WebApp.Controllers
         {
             try
             {
-                var bytes = await csvExportService.ExportOrdersCsvAsync(filter);
-                var fileName = $"orders_{DateTime.UtcNow.AddHours(7):yyyyMMdd_HHmmss}.csv";
-                return File(bytes, MediaTypeNames.Text.Csv, fileName);
+                var bytes = await exportService.ExportOrdersAsync(filter);
+                var fileName = $"orders_{DateTime.UtcNow.AddHours(7):yyyyMMdd_HHmmss}.xlsx";
+                return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
             }
             catch (AppException ex)
             {

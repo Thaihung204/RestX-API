@@ -20,9 +20,6 @@ namespace RestX.BLL.Interfaces.Reservations
         Task<DepositStatusResponse> GetDepositStatus(Guid reservationId);
         Task<string> CreateDepositPaymentLink(Guid reservationId);
         Task ConfirmCashDeposit(Guid reservationId, string userId);
-        Task ConfirmDepositCallback(long payOSOrderCode);
-        //Task<RefundCalculationResponse> CalculateRefund(Guid reservationId, Models.Enum.RefundInitiator initiatedBy);
-        //Task<RefundCalculationResponse> RefundDeposit(Guid reservationId, Models.Enum.RefundInitiator initiatedBy, string userId);
         Task AutoCancelDepositReservation(Guid reservationId);
     }
 }

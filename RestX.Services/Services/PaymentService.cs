@@ -9,6 +9,7 @@ using RestX.Models.Customers;
 using RestX.Models.Enum;
 using RestX.Models.Loyalty;
 using RestX.Models.Orders;
+using RestX.Models.Reservations;
 using RestX.Models.Tenants;
 
 namespace RestX.BLL.Services
@@ -203,11 +204,19 @@ namespace RestX.BLL.Services
                 filter: p => p.PayOSOrderCode == data.OrderCode)
                 ?? throw new KeyNotFoundException($"Payment not found for orderCode {data.OrderCode}");
 
+            if (payment.Status == PaymentStatus.Success)
+                return;
+
             payment.Status = PaymentStatus.Success;
             payment.TransactionId = data.Reference;
+            payment.PaymentDate = DateTime.UtcNow.AddHours(7);
             Repo.Update(payment);
 
-            if (payment.OrderId.HasValue)
+            if (payment.Purpose == PaymentPurpose.Deposit && payment.ReservationId.HasValue)
+            {
+                await ConfirmReservationAfterDeposit(payment.ReservationId.Value);
+            }
+            else if (payment.OrderId.HasValue)
             {
                 var order = await Repo.GetByIdAsync<Order>(payment.OrderId.Value);
                 if (order != null)
@@ -215,6 +224,25 @@ namespace RestX.BLL.Services
             }
 
             await Repo.SaveAsync();
+        }
+
+        private async Task ConfirmReservationAfterDeposit(Guid reservationId)
+        {
+            var reservation = await Repo.GetOneAsync<Reservation>(
+                filter: r => r.Id == reservationId,
+                includeProperties: "ReservationStatus,ReservationTables")
+                ?? throw new KeyNotFoundException("Reservation not found");
+
+            if (reservation.ReservationStatus?.Code != "DEPOSIT_PENDING")
+                return;
+
+            var confirmedStatus = await Repo.GetOneAsync<RestX.Models.Common.StatusValue>(
+                s => s.Code == "CONFIRMED" && s.StatusType.Code == "RESERVATION",
+                includeProperties: "StatusType")
+                ?? throw new InvalidOperationException("CONFIRMED status not configured");
+
+            reservation.ReservationStatusId = confirmedStatus.Id;
+            Repo.Update(reservation);
         }
 
         private async Task<(PayOSClient client, PaymentGatewaySettings settings)> GetTenantGateway()

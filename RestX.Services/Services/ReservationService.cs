@@ -30,7 +30,7 @@ namespace RestX.BLL.Services
         private const int ReservationBufferMinutes = 120;
 
         private static readonly TimeSpan VietnamOffset = TimeSpan.FromHours(7);
-        private static DateTime VnNow => DateTime.UtcNow.AddHours(7).Add(VietnamOffset);
+        private static DateTime VnNow => DateTime.UtcNow.Add(VietnamOffset);
 
         private const string ReservationIncludes = "ReservationTables.Table.Floor,Customer.ApplicationUser,ReservationStatus";
         private const string TablesIncludes = "ReservationTables.Table";
@@ -334,6 +334,8 @@ namespace RestX.BLL.Services
             var statusCode = reservation.ReservationStatus?.Code;
             if (statusCode == CancelledCode || statusCode == CompletedCode)
                 throw new InvalidOperationException("Cannot check in a reservation that is cancelled or completed");
+            if (statusCode == DepositPendingCode)
+                throw new InvalidOperationException("Cannot check in a reservation that has an unpaid deposit");
 
             if (reservation.CheckedInAt.HasValue)
                 throw new InvalidOperationException("Reservation has already been checked in");
@@ -386,10 +388,27 @@ namespace RestX.BLL.Services
 
         private async Task CancelReservation(Guid id, string? userId)
         {
-            var reservation = await RequireReservation(id, TablesIncludes);
+            var reservation = await RequireReservation(id, TablesAndStatusIncludes);
             var statuses = await statusValueService.GetStatuses(ReservationStatusTypeCode);
             var cancelledStatus = statuses.FirstOrDefault(s => s.Code == CancelledCode)
                 ?? throw new InvalidOperationException("Cancelled status not configured");
+            if (reservation.ReservationStatus?.Code == DepositPendingCode)
+            {
+                var pendingPayment = await Repo.GetOneAsync<Payment>(
+                    p => p.ReservationId == id && p.Purpose == PaymentPurpose.Deposit && p.Status == PaymentStatus.Pending);
+                if (pendingPayment?.PayOSOrderCode != null)
+                {
+                    try
+                    {
+                        var (gatewayClient, _) = await GetDepositGateway();
+                        await gatewayClient.PaymentRequests.CancelAsync(pendingPayment.PayOSOrderCode.Value, "Reservation cancelled");
+                    }
+                    catch { }
+                    pendingPayment.Status = PaymentStatus.Fail;
+                    Repo.Update(pendingPayment);
+                }
+            }
+
             reservation.ReservationStatusId = cancelledStatus.Id;
             Repo.Update(reservation, userId);
             await FreeTablesAndSessions(reservation, CancelledCode, userId);
@@ -774,113 +793,6 @@ namespace RestX.BLL.Services
             await Repo.SaveAsync();
         }
 
-        public async Task ConfirmDepositCallback(long payOSOrderCode)
-        {
-            var (gatewayClient, _) = await GetDepositGateway();
-            var payment = await Repo.GetOneAsync<Payment>(
-                p => p.PayOSOrderCode == payOSOrderCode && p.Purpose == PaymentPurpose.Deposit)
-                ?? throw new KeyNotFoundException($"Deposit payment not found for orderCode {payOSOrderCode}");
-
-            if (payment.Status == PaymentStatus.Success)
-                return;
-
-            payment.Status = PaymentStatus.Success;
-            payment.PaymentDate = VnNow;
-            Repo.Update(payment);
-
-            if (payment.ReservationId.HasValue)
-                await ConfirmReservation(payment.ReservationId.Value, null);
-
-            await Repo.SaveAsync();
-
-        }
-
-        //public async Task<RefundCalculationResponse> CalculateRefund(Guid reservationId, RefundInitiator initiatedBy)
-        //{
-        //    var reservation = await Repo.GetOneAsync<Reservation>(
-        //        filter: r => r.Id == reservationId,
-        //        includeProperties: "ReservationStatus")
-        //        ?? throw new KeyNotFoundException("Reservation not found");
-
-        //    var statusCode = reservation.ReservationStatus?.Code;
-        //    if (statusCode == NoShowCode)
-        //        throw new InvalidOperationException("Deposit is forfeited for no-show reservations");
-
-        //    if (statusCode != CancelledCode && statusCode != ConfirmedCode && statusCode != DepositPendingCode)
-        //        throw new InvalidOperationException("Refund is only available for cancelled or confirmed reservations");
-
-        //    if (initiatedBy == RefundInitiator.Restaurant)
-        //        return new RefundCalculationResponse
-        //        {
-        //            DepositAmount = reservation.DepositAmount,
-        //            RefundAmount = reservation.DepositAmount,
-        //            RefundPercentage = 100,
-        //            Reason = "Nhà hàng hủy — hoàn 100%"
-        //        };
-
-        //    var config = await depositConfigService.GetDepositConfig(CurrentTenant.Id)
-        //        ?? throw new InvalidOperationException("Deposit config not found");
-
-        //    var hoursLeft = (reservation.Time - VnNow).TotalHours;
-        //    int percentage;
-        //    string reason;
-
-        //    if (hoursLeft > config.EarlyRefundHours)
-        //    {
-        //        percentage = config.EarlyRefundPercentage;
-        //        reason = $"Hủy trước {config.EarlyRefundHours}h — hoàn {percentage}%";
-        //    }
-        //    else if (hoursLeft > config.LateRefundHours)
-        //    {
-        //        percentage = config.LateRefundPercentage;
-        //        reason = $"Hủy trước {config.LateRefundHours}h — hoàn {percentage}%";
-        //    }
-        //    else
-        //    {
-        //        throw new InvalidOperationException($"Quá thời hạn hoàn cọc (dưới {config.LateRefundHours}h trước giờ hẹn)");
-        //    }
-
-        //    var refundAmount = reservation.DepositAmount * percentage / 100;
-        //    return new RefundCalculationResponse
-        //    {
-        //        DepositAmount = reservation.DepositAmount,
-        //        RefundAmount = refundAmount,
-        //        RefundPercentage = percentage,
-        //        Reason = reason
-        //    };
-        //}
-
-        //public async Task<RefundCalculationResponse> RefundDeposit(Guid reservationId, RefundInitiator initiatedBy, string userId)
-        //{
-        //    var result = await CalculateRefund(reservationId, initiatedBy);
-
-        //    var depositPayment = await Repo.GetOneAsync<Payment>(
-        //        p => p.ReservationId == reservationId && p.Purpose == PaymentPurpose.Deposit && p.Status == PaymentStatus.Success)
-        //        ?? throw new InvalidOperationException("No paid deposit found for this reservation");
-
-        //    var alreadyRefunded = await Repo.GetExistsAsync<Payment>(
-        //        p => p.ReservationId == reservationId && p.Purpose == PaymentPurpose.DepositRefund);
-        //    if (alreadyRefunded)
-        //        throw new InvalidOperationException("Deposit has already been refunded");
-
-        //    depositPayment.Status = PaymentStatus.Refunded;
-        //    depositPayment.RefundDate = VnNow;
-        //    Repo.Update(depositPayment, userId);
-
-        //    await Repo.CreateAsync(new Payment
-        //    {
-        //        ReservationId = reservationId,
-        //        PaymentMethodId = depositPayment.PaymentMethodId,
-        //        Amount = result.RefundAmount,
-        //        Status = PaymentStatus.Success,
-        //        Purpose = PaymentPurpose.DepositRefund,
-        //        PaymentDate = VnNow,
-        //        ProcessedBy = string.IsNullOrEmpty(userId) ? null : Guid.Parse(userId)
-        //    }, userId);
-
-        //    await Repo.SaveAsync();
-        //    return result;
-        //}
 
         public async Task AutoCancelDepositReservation(Guid reservationId)
         {
@@ -909,7 +821,7 @@ namespace RestX.BLL.Services
 
         private static long GenerateDepositOrderCode()
         {
-            var timestamp = DateTimeOffset.UtcNow.AddHours(7).ToUnixTimeSeconds();
+            var timestamp = DateTimeOffset.UtcNow.ToOffset(VietnamOffset).ToUnixTimeSeconds();
             var suffix = Random.Shared.Next(1000, 9999);
             return long.Parse($"9{timestamp}{suffix}");
         }

@@ -16,5 +16,6 @@ namespace RestX.BLL.DataTranferObjects.Authentication
         public string? PhoneNumber { get; set; }
         public string? AvatarUrl { get; set; }
         public List<string> Roles { get; set; } = new();
+        public string? Position { get; set; }
     }
 }

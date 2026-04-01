@@ -14,6 +14,7 @@ using RestX.Models.Identity;
 using RestX.Models.Tenants;
 using RestX.WebApp.Controllers.BaseControllers;
 using RestX.WebApp.Helpers;
+using System.Net.Mime;
 
 namespace RestX.WebApp.Controllers
 {
@@ -25,11 +26,13 @@ namespace RestX.WebApp.Controllers
         private readonly IReservationService reservationService;
         private readonly ITableService tableService;
         private readonly IHubContext<SignalrServer> hub;
+        private readonly ICsvExportService csvExportService;
 
         public ReservationsController(
             IReservationService reservationService,
             ITableService tableService,
             IHubContext<SignalrServer> hub,
+            ICsvExportService csvExportService,
             IMapper mapper,
             UserManager<ApplicationUser> userManager,
             IExceptionHandler exceptionHandler,
@@ -38,6 +41,7 @@ namespace RestX.WebApp.Controllers
             this.reservationService = reservationService;
             this.tableService = tableService;
             this.hub = hub;
+            this.csvExportService = csvExportService;
         }
 
         [HttpPost]
@@ -67,6 +71,23 @@ namespace RestX.WebApp.Controllers
             catch (InvalidOperationException ex)
             {
                 return Conflict(new { success = false, message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest(new { success = false, message = "An internal error occurred" });
+            }
+        }
+
+        [HttpGet("export/csv")]
+        [Authorize(Roles = "Admin,System Admin,Staff")]
+        public async Task<IActionResult> ExportReservationsCsv([FromQuery] ReservationFilterParams filter)
+        {
+            try
+            {
+                var bytes = await csvExportService.ExportReservationsCsvAsync(filter);
+                var fileName = $"reservations_{DateTime.UtcNow.AddHours(7):yyyyMMdd_HHmmss}.csv";
+                return File(bytes, MediaTypeNames.Text.Csv, fileName);
             }
             catch (Exception ex)
             {

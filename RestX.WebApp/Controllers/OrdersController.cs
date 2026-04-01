@@ -11,6 +11,7 @@ using RestX.Models.Tenants;
 using RestX.WebApp.Controllers.BaseControllers;
 using RestX.WebApp.Helpers;
 using System.ComponentModel.DataAnnotations;
+using System.Net.Mime;
 
 namespace RestX.WebApp.Controllers
 {
@@ -21,10 +22,12 @@ namespace RestX.WebApp.Controllers
     {
         private readonly IOrderService orderService;
         private readonly IHubContext<SignalrServer> hubContext;
+        private readonly ICsvExportService csvExportService;
 
         public OrdersController(
             IOrderService orderService,
             IHubContext<SignalrServer> hubContext,
+            ICsvExportService csvExportService,
             IMapper mapper,
             UserManager<ApplicationUser> userManager,
             IExceptionHandler exceptionHandler,
@@ -33,6 +36,28 @@ namespace RestX.WebApp.Controllers
         {
             this.orderService = orderService;
             this.hubContext = hubContext;
+            this.csvExportService = csvExportService;
+        }
+
+        [HttpGet("export/csv")]
+        [Authorize(Roles = "System Admin,Admin,Staff")]
+        public async Task<IActionResult> ExportOrdersCsv([FromQuery] OrderSearch filter)
+        {
+            try
+            {
+                var bytes = await csvExportService.ExportOrdersCsvAsync(filter);
+                var fileName = $"orders_{DateTime.UtcNow.AddHours(7):yyyyMMdd_HHmmss}.csv";
+                return File(bytes, MediaTypeNames.Text.Csv, fileName);
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+        }
         }
 
         [HttpGet]

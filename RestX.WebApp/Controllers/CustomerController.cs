@@ -10,6 +10,7 @@ using RestX.Models.Identity;
 using RestX.Models.Tenants;
 using RestX.WebApp.Controllers.BaseControllers;
 using System.ComponentModel.DataAnnotations;
+using System.Net.Mime;
 
 namespace RestX.WebApp.Controllers
 {
@@ -19,13 +20,16 @@ namespace RestX.WebApp.Controllers
     public class CustomerController : BaseController
     {
         private readonly ICustomerService customerService;
+        private readonly ICsvExportService csvExportService;
         public CustomerController(ICustomerService customerService,
+            ICsvExportService csvExportService,
             IMapper mapper,
             UserManager<ApplicationUser> userManager,
             IExceptionHandler exceptionHandler,
             IEnumerable<ActiveTenant> tenant) : base(mapper, userManager, exceptionHandler, tenant)
         {
             this.customerService = customerService;
+            this.csvExportService = csvExportService;
         }
         [HttpGet]
         [Authorize(Roles = "Admin,System Admin")]
@@ -123,6 +127,23 @@ namespace RestX.WebApp.Controllers
                 return BadRequest(new { success = false, message = "An internal error occurred" });
             }
         }
+        [HttpGet("export/csv")]
+        [Authorize(Roles = "Admin,System Admin")]
+        public async Task<IActionResult> ExportCustomersCsv([FromQuery] CustomerFilterParams filter)
+        {
+            try
+            {
+                var bytes = await csvExportService.ExportCustomersCsvAsync(filter);
+                var fileName = $"customers_{DateTime.UtcNow.AddHours(7):yyyyMMdd_HHmmss}.csv";
+                return File(bytes, MediaTypeNames.Text.Csv, fileName);
+            }
+            catch (Exception ex)
+            {
+                this.ExceptionHandler.RaiseException(ex);
+                return BadRequest(new { success = false, message = "An internal error occurred" });
+            }
+        }
+
         [HttpDelete("{id}")]
         [Authorize(Roles = "Admin,System Admin")]
         public async Task<IActionResult> DeleteCustomer([Required] Guid id)

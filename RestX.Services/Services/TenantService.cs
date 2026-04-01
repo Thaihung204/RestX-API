@@ -48,7 +48,7 @@ namespace RestX.BLL.Services
                 return null;
 
             Tenant? tenant = null;
-            var cacheKey = $"{data.ToLower()}:Tenant";
+            var cacheKey = $"{data.ToLower():Tenant}";
 
             var cachedTenant = await RedisService.GetStringAsync(cacheKey);
             if (!string.IsNullOrEmpty(cachedTenant))

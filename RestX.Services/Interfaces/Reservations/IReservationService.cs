@@ -21,5 +21,6 @@ namespace RestX.BLL.Interfaces.Reservations
         Task<string> CreateDepositPaymentLink(Guid reservationId);
         Task ConfirmCashDeposit(Guid reservationId, string userId);
         Task AutoCancelDepositReservation(Guid reservationId);
+        Task<byte[]> ExportAsync(ReservationFilterParams filter);
     }
 }

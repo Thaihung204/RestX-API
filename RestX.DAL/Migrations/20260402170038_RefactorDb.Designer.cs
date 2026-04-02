@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using RestX.DAL.Context;
 
@@ -11,9 +12,11 @@ using RestX.DAL.Context;
 namespace RestX.DAL.Migrations
 {
     [DbContext(typeof(TenantDbContext))]
-    partial class TenantDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260402170038_RefactorDb")]
+    partial class RefactorDb
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1456,6 +1459,9 @@ namespace RestX.DAL.Migrations
                     b.Property<int>("OrderStatusId")
                         .HasColumnType("int");
 
+                    b.Property<int>("PaymentStatusId")
+                        .HasColumnType("int");
+
                     b.Property<string>("PropertiesJson")
                         .HasColumnType("nvarchar(max)");
 
@@ -1590,23 +1596,20 @@ namespace RestX.DAL.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
+                    b.Property<int>("PaymentStatusId")
+                        .HasColumnType("int");
+
                     b.Property<Guid?>("ProcessedBy")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("PropertiesJson")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<int>("Purpose")
-                        .HasColumnType("int");
-
                     b.Property<DateTime?>("RefundDate")
                         .HasColumnType("datetime2");
 
                     b.Property<Guid?>("ReservationId")
                         .HasColumnType("uniqueidentifier");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("int");
 
                     b.Property<string>("TransactionId")
                         .HasMaxLength(100)
@@ -1619,6 +1622,8 @@ namespace RestX.DAL.Migrations
                     b.HasIndex("PayOSOrderCode")
                         .IsUnique()
                         .HasFilter("[PayOSOrderCode] IS NOT NULL");
+
+                    b.HasIndex("PaymentStatusId");
 
                     b.HasIndex("ProcessedBy");
 
@@ -1813,6 +1818,9 @@ namespace RestX.DAL.Migrations
                     b.Property<decimal>("DepositAmount")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<bool>("DepositPaid")
+                        .HasColumnType("bit");
+
                     b.Property<string>("ModifiedBy")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
@@ -1822,9 +1830,6 @@ namespace RestX.DAL.Migrations
 
                     b.Property<int>("NumberOfGuests")
                         .HasColumnType("int");
-
-                    b.Property<DateTime?>("PaymentDeadline")
-                        .HasColumnType("datetime2");
 
                     b.Property<string>("PropertiesJson")
                         .HasColumnType("nvarchar(max)");
@@ -2683,6 +2688,12 @@ namespace RestX.DAL.Migrations
                         .HasForeignKey("OrderId")
                         .OnDelete(DeleteBehavior.SetNull);
 
+                    b.HasOne("RestX.Models.Common.StatusValue", "PaymentStatus")
+                        .WithMany()
+                        .HasForeignKey("PaymentStatusId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("RestX.Models.HR.Employee", "Processor")
                         .WithMany("ProcessedPayments")
                         .HasForeignKey("ProcessedBy")
@@ -2693,6 +2704,8 @@ namespace RestX.DAL.Migrations
                         .HasForeignKey("ReservationId");
 
                     b.Navigation("Order");
+
+                    b.Navigation("PaymentStatus");
 
                     b.Navigation("Processor");
 

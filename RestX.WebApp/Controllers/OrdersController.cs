@@ -21,12 +21,10 @@ namespace RestX.WebApp.Controllers
     {
         private readonly IOrderService orderService;
         private readonly IHubContext<SignalrServer> hubContext;
-        private readonly IExportService exportService;
 
         public OrdersController(
             IOrderService orderService,
             IHubContext<SignalrServer> hubContext,
-            IExportService exportService,
             IMapper mapper,
             UserManager<ApplicationUser> userManager,
             IExceptionHandler exceptionHandler,
@@ -35,7 +33,6 @@ namespace RestX.WebApp.Controllers
         {
             this.orderService = orderService;
             this.hubContext = hubContext;
-            this.exportService = exportService;
         }
 
         [HttpGet("export/csv")]
@@ -44,7 +41,7 @@ namespace RestX.WebApp.Controllers
         {
             try
             {
-                var bytes = await exportService.ExportOrdersAsync(filter);
+                var bytes = await orderService.ExportAsync(filter);
                 var fileName = $"orders_{DateTime.UtcNow.AddHours(7):yyyyMMdd_HHmmss}.xlsx";
                 return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
             }

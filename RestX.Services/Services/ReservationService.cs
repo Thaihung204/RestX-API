@@ -1,11 +1,13 @@
 using System.Linq.Expressions;
 using AutoMapper;
 using Hangfire;
+using OfficeOpenXml;
 using PayOS;
 using PayOS.Models.Webhooks;
 using RestX.BLL.DataTranferObjects.Authentication;
 using RestX.BLL.DataTranferObjects.Common;
 using RestX.BLL.DataTranferObjects.Reservation;
+using RestX.BLL.Helpers;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Auth;
 using RestX.BLL.Interfaces.Reservations;
@@ -122,14 +124,6 @@ namespace RestX.BLL.Services
             await Repo.CreateAsync(reservation);
             reservation.ConfirmationCode = GenerateConfirmationCode(reservation.Id);
             Repo.Update(reservation);
-            foreach (var table in tables)
-            {
-                await Repo.CreateAsync(new ReservationTable
-                {
-                    ReservationId = reservation.Id,
-                    TableId = table.Id
-                });
-            }
             await Repo.SaveAsync();
 
             if (requiresDeposit)
@@ -219,55 +213,54 @@ namespace RestX.BLL.Services
                 ValidateDistinctTableIds(request.TableIds);
 
             var newDateTime = request.ReservationDateTime ?? reservation.Time;
-            var currentTableIds = reservation.ReservationTables.Select(rt => rt.TableId).ToList();
             var tablesChanged = request.TableIds is { Count: > 0 };
             var dateChanged = request.ReservationDateTime.HasValue;
-            var newTableIds = tablesChanged ? request.TableIds! : currentTableIds;
+            //var newTableIds = tablesChanged ? request.TableIds! : currentTableIds;
 
-            List<Table> newTables = reservation.ReservationTables.Select(rt => rt.Table).ToList();
-            if (tablesChanged)
-                newTables = await ValidateReservationTables(newTableIds);
+            //List<Table> newTables = reservation.ReservationTables.Select(rt => rt.Table).ToList();
+            //if (tablesChanged)
+            //    newTables = await ValidateReservationTables(newTableIds);
 
-            if (tablesChanged || dateChanged)
-                await ValidateTableNotOccupied(newTables, newDateTime);
+            //if (tablesChanged || dateChanged)
+            //    await ValidateTableNotOccupied(newTables, newDateTime);
 
-            if (tablesChanged || dateChanged)
-            {
-                var conflicts = (await Repo.GetAsync<ReservationTable>(
-                    filter: rt =>
-                        newTableIds.Contains(rt.TableId) &&
-                        rt.ReservationId != id &&
-                        rt.Reservation.Time >= newDateTime.AddMinutes(-ReservationBufferMinutes) &&
-                        rt.Reservation.Time <= newDateTime.AddMinutes(ReservationBufferMinutes) &&
-                        rt.Reservation.ReservationStatus.Code != CancelledCode &&
-                        rt.Reservation.ReservationStatus.Code != CompletedCode,
-                    includeProperties: "Reservation.ReservationStatus"
-                )).ToList();
+            //if (tablesChanged || dateChanged)
+            //{
+            //    var conflicts = (await Repo.GetAsync<ReservationTable>(
+            //        filter: rt =>
+            //            newTableIds.Contains(rt.TableId) &&
+            //            rt.ReservationId != id &&
+            //            rt.Reservation.Time >= newDateTime.AddMinutes(-ReservationBufferMinutes) &&
+            //            rt.Reservation.Time <= newDateTime.AddMinutes(ReservationBufferMinutes) &&
+            //            rt.Reservation.ReservationStatus.Code != CancelledCode &&
+            //            rt.Reservation.ReservationStatus.Code != CompletedCode,
+            //        includeProperties: "Reservation.ReservationStatus"
+            //    )).ToList();
 
-                if (conflicts.Any())
-                    throw new InvalidOperationException("One or more tables are already reserved at this time");
-            }
+            //    if (conflicts.Any())
+            //        throw new InvalidOperationException("One or more tables are already reserved at this time");
+            //}
 
-            var numberOfGuests = request.NumberOfGuests ?? reservation.NumberOfGuests;
-            ValidateCapacity(numberOfGuests, newTables);
+            //var numberOfGuests = request.NumberOfGuests ?? reservation.NumberOfGuests;
+            //ValidateCapacity(numberOfGuests, newTables);
 
-            if (tablesChanged)
-            {
-                var removedTableIds = currentTableIds.Except(newTableIds).ToList();
-                var addedTableIds = newTableIds.Except(currentTableIds).ToList();
+            //if (tablesChanged)
+            //{
+            //    var removedTableIds = currentTableIds.Except(newTableIds).ToList();
+            //    var addedTableIds = newTableIds.Except(currentTableIds).ToList();
 
-                foreach (var rt in reservation.ReservationTables.Where(rt => removedTableIds.Contains(rt.TableId)).ToList())
-                {
-                    Repo.Delete<ReservationTable>(rt.Id);
-                }
-                foreach (var table in newTables.Where(t => addedTableIds.Contains(t.Id)))
-                {
-                    await Repo.CreateAsync(new ReservationTable { ReservationId = id, TableId = table.Id });
-                }
-            }
+            //    foreach (var rt in reservation.ReservationTables.Where(rt => removedTableIds.Contains(rt.TableId)).ToList())
+            //    {
+            //        Repo.Delete<ReservationTable>(rt.Id);
+            //    }
+            //    foreach (var table in newTables.Where(t => addedTableIds.Contains(t.Id)))
+            //    {
+            //        await Repo.CreateAsync(new ReservationTable { ReservationId = id, TableId = table.Id });
+            //    }
+            //}
 
             reservation.Time = newDateTime;
-            reservation.NumberOfGuests = numberOfGuests;
+            //reservation.NumberOfGuests = numberOfGuests;
             reservation.SpecialRequests = request.SpecialRequests ?? reservation.SpecialRequests;
 
             Repo.Update(reservation);
@@ -343,20 +336,6 @@ namespace RestX.BLL.Services
             reservation.CheckedInAt = VnNow;
             Repo.Update(reservation, userId);
 
-            foreach (var rt in reservation.ReservationTables)
-            {
-                rt.Table.TableStatusId = TableStatus.Occupied;
-                Repo.Update(rt.Table, userId);
-
-                await Repo.CreateAsync(new TableSession
-                {
-                    TableId = rt.TableId,
-                    ReservationId = reservation.Id,
-                    StartedAt = VnNow,
-                    IsActive = true
-                }, userId);
-            }
-
             await Repo.SaveAsync();
         }
 
@@ -419,26 +398,26 @@ namespace RestX.BLL.Services
         {
             var bufferStart = request.ReservationDateTime.AddMinutes(-request.BufferMinutes);
             var bufferEnd = request.ReservationDateTime.AddMinutes(request.BufferMinutes);
-            var conflicts = (await Repo.GetAsync<ReservationTable>(
-                filter: rt =>
-                    request.TableIds.Contains(rt.TableId) &&
-                    rt.Reservation.Time >= bufferStart &&
-                    rt.Reservation.Time <= bufferEnd &&
-                    rt.Reservation.ReservationStatus.Code != CancelledCode &&
-                    rt.Reservation.ReservationStatus.Code != CompletedCode,
-                includeProperties: "Table,Reservation.ReservationStatus"
-            )).ToList();
-            var conflictingSlots = conflicts.Select(rt => new ConflictingSlot
-            {
-                TableId = rt.TableId,
-                TableCode = rt.Table.Code,
-                ConflictTime = rt.Reservation.Time,
-                ConflictStatus = rt.Reservation.ReservationStatus.Name
-            }).ToList();
+            //var conflicts = (await Repo.GetAsync<ReservationTable>(
+            //    filter: rt =>
+            //        request.TableIds.Contains(rt.TableId) &&
+            //        rt.Reservation.Time >= bufferStart &&
+            //        rt.Reservation.Time <= bufferEnd &&
+            //        rt.Reservation.ReservationStatus.Code != CancelledCode &&
+            //        rt.Reservation.ReservationStatus.Code != CompletedCode,
+            //    includeProperties: "Table,Reservation.ReservationStatus"
+            //)).ToList();
+            //var conflictingSlots = conflicts.Select(rt => new ConflictingSlot
+            //{
+            //    TableId = rt.TableId,
+            //    TableCode = rt.Table.Code,
+            //    ConflictTime = rt.Reservation.Time,
+            //    ConflictStatus = rt.Reservation.ReservationStatus.Name
+            //}).ToList();
             return new CheckAvailabilityResponse
             {
-                Available = !conflictingSlots.Any(),
-                ConflictingSlots = conflictingSlots
+                //Available = !conflictingSlots.Any(),
+                //ConflictingSlots = conflictingSlots
             };
         }
 
@@ -448,7 +427,7 @@ namespace RestX.BLL.Services
             return r =>
                 (!filter.StatusId.HasValue || r.ReservationStatusId == filter.StatusId.Value) &&
                 (!filter.Date.HasValue || r.Time.Date == filter.Date.Value.Date) &&
-                (!filter.TableId.HasValue || r.ReservationTables.Any(rt => rt.TableId == filter.TableId.Value)) &&
+                (!filter.TableId.HasValue) &&
                 (string.IsNullOrEmpty(search) ||
                     (r.ConfirmationCode != null && r.ConfirmationCode.ToLower().Contains(search)) ||
                     (r.Customer.ApplicationUser.FullName != null &&
@@ -618,12 +597,6 @@ namespace RestX.BLL.Services
         {
             if (newStatusCode != CompletedCode && newStatusCode != CancelledCode)
                 return;
-
-            foreach (var rt in reservation.ReservationTables)
-            {
-                rt.Table.TableStatusId = TableStatus.Available;
-                Repo.Update(rt.Table, userId);
-            }
 
             var activeSessions = (await Repo.GetAsync<TableSession>(
                 filter: ts => ts.ReservationId == reservation.Id && ts.IsActive)).ToList();
@@ -824,6 +797,46 @@ namespace RestX.BLL.Services
             var timestamp = DateTimeOffset.UtcNow.ToOffset(VietnamOffset).ToUnixTimeSeconds();
             var suffix = Random.Shared.Next(1000, 9999);
             return long.Parse($"9{timestamp}{suffix}");
+        }
+
+        public async Task<byte[]> ExportAsync(ReservationFilterParams filter)
+        {
+            ExcelPackage.License.SetNonCommercialPersonal("RestX");
+            filter.PageNumber = 1;
+            filter.PageSize = int.MaxValue;
+            var result = await GetReservations(filter);
+            var reservations = result.Items.ToList();
+
+            if (!reservations.Any())
+                return ExcelHelper.CreateEmptyWorkbook("Reservations");
+
+            using var package = new ExcelPackage();
+            var sheet = package.Workbook.Worksheets.Add("Reservations");
+            var headers = new[]
+            {
+                "Confirmation Code", "Contact Name", "Contact Phone",
+                "Reservation Date & Time", "Guests",
+                "Status", "Deposit Amount", "Created At"
+            };
+            ExcelHelper.WriteHeaders(sheet, headers);
+
+            int row = 2;
+            foreach (var r in reservations)
+            {
+                sheet.Cells[row, 1].Value = r.ConfirmationCode;
+                sheet.Cells[row, 2].Value = r.ContactName;
+                sheet.Cells[row, 3].Value = r.ContactPhone;
+                sheet.Cells[row, 4].Value = r.ReservationDateTime.ToString("dd/MM/yyyy HH:mm");
+                sheet.Cells[row, 5].Value = r.NumberOfGuests;
+                sheet.Cells[row, 6].Value = r.Status.Name;
+                sheet.Cells[row, 7].Value = r.DepositAmount;
+                sheet.Cells[row, 7].Style.Numberformat.Format = "#,##0";
+                sheet.Cells[row, 8].Value = r.CreatedAt.ToString("dd/MM/yyyy HH:mm");
+                row++;
+            }
+
+            ExcelHelper.AutoFitAndStyle(sheet, headers.Length, row - 1);
+            return package.GetAsByteArray();
         }
 
         #endregion

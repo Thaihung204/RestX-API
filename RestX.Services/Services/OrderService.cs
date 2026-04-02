@@ -1,7 +1,9 @@
 ﻿using AutoMapper;
 using Microsoft.Data.SqlClient;
+using OfficeOpenXml;
 using RestX.BLL.DataTranferObjects.Orders;
 using RestX.BLL.Exceptionhandling;
+using RestX.BLL.Helpers;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Inventory;
 using RestX.BLL.Interfaces.Status;
@@ -153,16 +155,6 @@ namespace RestX.BLL.Services
 
             var inClause = string.Join(", ", idParams.Select(p => "@" + p.ParameterName));
 
-            var orderTablesQuery = $@"
-                SELECT
-                    ot.Id,
-                    ot.OrderId,
-                    ot.TableId
-                FROM dbo.OrderTables ot
-                WHERE ot.OrderId IN ({inClause})
-                ORDER BY ot.OrderId, ot.Id
-            ";
-
             var orderDetailsQuery = $@"
                 SELECT
                     od.Id,
@@ -188,11 +180,6 @@ namespace RestX.BLL.Services
                 )
             ";
 
-            var orderTables = await Repo.ExecuteSqlSelectAsync<OrderTable>(
-                orderTablesQuery,
-                CloneParams(idParams)
-            );
-
             var orderDetails = await Repo.ExecuteSqlSelectAsync<Models.Orders.OrderDetail>(
                 orderDetailsQuery,
                 CloneParams(idParams)
@@ -202,10 +189,6 @@ namespace RestX.BLL.Services
                 itemStatusesQuery,
                 CloneParams(idParams)
             );
-
-            var tablesByOrderId = orderTables
-                .GroupBy(t => t.OrderId)
-                .ToDictionary(g => g.Key, g => g.ToList());
 
             var detailsByOrderId = orderDetails
                 .GroupBy(d => d.OrderId)
@@ -221,9 +204,6 @@ namespace RestX.BLL.Services
 
             foreach (var o in orders)
             {
-                if (tablesByOrderId.TryGetValue(o.Id, out var ots))
-                    o.OrderTables = ots;
-
                 if (detailsByOrderId.TryGetValue(o.Id, out var ods))
                 {
                     foreach (var d in ods)
@@ -298,11 +278,6 @@ namespace RestX.BLL.Services
                 ServiceCharge = serviceCharge,
 
                 SubTotal = subTotal,
-
-                OrderTables = new List<OrderTable>
-                {
-                    new OrderTable { TableId = order.TableId }
-                },
 
                 OrderDetails = order.OrderDetails.Select(d => new Models.Orders.OrderDetail
                 {
@@ -380,25 +355,10 @@ namespace RestX.BLL.Services
                 }
             }
 
-            if (orderEntity.OrderTables?.Any() == true)
-            {
-                foreach (var ot in orderEntity.OrderTables.ToList())
-                    Repo.Delete<OrderTable>(ot.Id);
-            }
-
             var tableIds = (orderDto.TableIds ?? new List<Guid>())
                 .Append(orderDto.TableId)
                 .Distinct()
                 .ToList();
-
-            foreach (var tableId in tableIds)
-            {
-                await Repo.CreateAsync(new OrderTable
-                {
-                    OrderId = orderEntity.Id,
-                    TableId = tableId
-                });
-            }
 
             orderEntity.SubTotal = subTotal;
             orderEntity.CalculateTotalAmount();
@@ -515,6 +475,51 @@ namespace RestX.BLL.Services
             await Repo.SaveAsync();
 
             return true;
+        }
+
+        public async Task<byte[]> ExportAsync(OrderSearch filter)
+        {
+            ExcelPackage.License.SetNonCommercialPersonal("RestX");
+            filter.Page = 1;
+            filter.ItemsPerPage = int.MaxValue;
+            var result = await GetAllOrders(filter);
+            var orders = result.Orders;
+
+            if (!orders.Any())
+                return ExcelHelper.CreateEmptyWorkbook("Orders");
+
+            using var package = new ExcelPackage();
+            var sheet = package.Workbook.Worksheets.Add("Orders");
+            var headers = new[]
+            {
+                "Reference", "Order Status", "Sub Total", "Discount",
+                "Tax", "Service Charge", "Total Amount", "Payment Status",
+                "Item Count", "Created Date", "Completed At", "Cancelled At"
+            };
+            ExcelHelper.WriteHeaders(sheet, headers);
+
+            int row = 2;
+            foreach (var o in orders)
+            {
+                sheet.Cells[row, 1].Value = o.Reference;
+                sheet.Cells[row, 2].Value = o.OrderStatusId.ToString();
+                sheet.Cells[row, 3].Value = o.SubTotal ?? 0;
+                sheet.Cells[row, 4].Value = o.DiscountAmount ?? 0;
+                sheet.Cells[row, 5].Value = o.TaxAmount ?? 0;
+                sheet.Cells[row, 6].Value = o.ServiceCharge ?? 0;
+                sheet.Cells[row, 7].Value = o.TotalAmount;
+                sheet.Cells[row, 8].Value = o.PaymentStatusName;
+                sheet.Cells[row, 9].Value = o.OrderDetails?.Sum(d => d.Quantity) ?? 0;
+                sheet.Cells[row, 10].Value = o.CreatedDate.HasValue ? o.CreatedDate.Value.ToString("dd/MM/yyyy HH:mm") : "";
+                sheet.Cells[row, 11].Value = o.CompletedAt.HasValue ? o.CompletedAt.Value.ToString("dd/MM/yyyy HH:mm") : "";
+                sheet.Cells[row, 12].Value = o.CancelledAt.HasValue ? o.CancelledAt.Value.ToString("dd/MM/yyyy HH:mm") : "";
+                foreach (var col in new[] { 3, 4, 5, 6, 7 })
+                    sheet.Cells[row, col].Style.Numberformat.Format = "#,##0";
+                row++;
+            }
+
+            ExcelHelper.AutoFitAndStyle(sheet, headers.Length, row - 1);
+            return package.GetAsByteArray();
         }
     }
 }

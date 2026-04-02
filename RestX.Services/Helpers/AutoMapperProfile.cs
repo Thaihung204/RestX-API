@@ -117,33 +117,9 @@ namespace RestX.BLL.Helpers
                 .ForMember(dest => dest.ItemStatusId, opt => opt.Ignore())
                 .ForMember(dest => dest.ItemStatus, opt => opt.Ignore())
                 .ForMember(dest => dest.Order, opt => opt.Ignore())
-                .ForMember(dest => dest.Dish, opt => opt.Ignore());
-
-            CreateMap<Models.Orders.Order, DataTranferObjects.Orders.Order>()
-                .ForMember(
-                    dest => dest.TableIds,
-                    opt => opt.MapFrom(src => src.OrderTables != null
-                        ? src.OrderTables.Select(ot => ot.TableId).ToList()
-                        : new List<Guid>())
-                )
-                .ForMember(
-                    dest => dest.TableId,
-                    opt => opt.MapFrom(src =>
-                        src.OrderTables != null && src.OrderTables.Any()
-                            ? src.OrderTables.Select(ot => ot.TableId).FirstOrDefault()
-                            : Guid.Empty)
-                )
-                .ForMember(
-                    dest => dest.PaymentStatus,
-                    opt => opt.MapFrom(src =>
-                        src.IsPaid || (src.Payments != null && src.Payments.Any(p => p.Status == PaymentStatus.Success))
-                            ? PaymentStatus.Success
-                            : PaymentStatus.Pending)
-                )
-                .ForMember(dest => dest.CreatedDate, opt => opt.MapFrom(src => src.CreatedDate));
+                .ForMember(dest => dest.Dish, opt => opt.Ignore()); CreateMap<Models.Orders.Order, DataTranferObjects.Orders.Order>();
 
             CreateMap<DataTranferObjects.Orders.Order, Models.Orders.Order>()
-                .ForMember(dest => dest.OrderTables, opt => opt.Ignore())
                 .ForMember(dest => dest.OrderDetails, opt => opt.Ignore()); CreateMap<Models.Inventory.IngredientCategory, DataTranferObjects.Inventory.IngredientCategory>().ReverseMap();
 
             CreateMap<LoyaltyPointBandEntity, DataTranferObjects.Loyalty.LoyaltyPointBand>().ReverseMap();
@@ -156,14 +132,6 @@ namespace RestX.BLL.Helpers
                 .ForMember(dest => dest.StatusType, opt => opt.Ignore());
             CreateMap<StatusValue, ReservationStatusInfo>();
 
-            CreateMap<ReservationTable, ReservationTableInfo>()
-                .ForMember(dest => dest.Id, opt => opt.MapFrom(src => src.Table.Id))
-                .ForMember(dest => dest.Code, opt => opt.MapFrom(src => src.Table.Code))
-                .ForMember(dest => dest.Capacity, opt => opt.MapFrom(src => src.Table.SeatingCapacity))
-                .ForMember(dest => dest.FloorId, opt => opt.MapFrom(src => src.Table.FloorId))
-                .ForMember(dest => dest.FloorName, opt => opt.MapFrom(src =>
-                    src.Table.Floor != null ? src.Table.Floor.Name : string.Empty));
-
             CreateMap<Reservation, ReservationContactInfo>()
                 .ForMember(dest => dest.Name, opt => opt.MapFrom(src => src.Customer.ApplicationUser.FullName ?? string.Empty))
                 .ForMember(dest => dest.Phone, opt => opt.MapFrom(src => src.Customer.ApplicationUser.PhoneNumber))
@@ -172,7 +140,7 @@ namespace RestX.BLL.Helpers
                 .ForMember(dest => dest.LoyaltyPoints, opt => opt.MapFrom(src => src.Customer.LoyaltyPoints));
 
             CreateMap<Reservation, ReservationListItem>()
-                .ForMember(dest => dest.Tables, opt => opt.MapFrom(src => src.ReservationTables))
+                .ForMember(dest => dest.Tables, opt => opt.Ignore())
                 .ForMember(dest => dest.ReservationDateTime, opt => opt.MapFrom(src => src.Time))
                 .ForMember(dest => dest.ContactName, opt => opt.MapFrom(src => src.Customer.ApplicationUser.FullName ?? string.Empty))
                 .ForMember(dest => dest.ContactPhone, opt => opt.MapFrom(src => src.Customer.ApplicationUser.PhoneNumber))
@@ -180,7 +148,7 @@ namespace RestX.BLL.Helpers
                 .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(src => src.CreatedDate));
 
             CreateMap<Reservation, ReservationDetail>()
-                .ForMember(dest => dest.Tables, opt => opt.MapFrom(src => src.ReservationTables))
+                .ForMember(dest => dest.Tables, opt => opt.Ignore())
                 .ForMember(dest => dest.ReservationDateTime, opt => opt.MapFrom(src => src.Time))
                 .ForMember(dest => dest.Contact, opt => opt.MapFrom(src => src))
                 .ForMember(dest => dest.Status, opt => opt.MapFrom(src => src.ReservationStatus))

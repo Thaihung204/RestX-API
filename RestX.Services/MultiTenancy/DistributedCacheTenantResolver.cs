@@ -95,7 +95,7 @@ namespace RestX.BLL.MultiTenancy
 
                         foreach (var identifier in tenantIdentifiers)
                         {
-                            await redisService.SetStringAsync(identifier, JsonConvert.SerializeObject(tenantContext, new JsonSerializerSettings{ReferenceLoopHandling = ReferenceLoopHandling.Ignore}), TimeSpan.FromHours(2));
+//                            await redisService.SetStringAsync(identifier, JsonConvert.SerializeObject(tenantContext, new JsonSerializerSettings{ReferenceLoopHandling = ReferenceLoopHandling.Ignore}), TimeSpan.FromHours(2));
                         }
                     }
                 }

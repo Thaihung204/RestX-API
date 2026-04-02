@@ -32,9 +32,9 @@ namespace RestX.BLL.Services
         private static readonly TimeSpan VietnamOffset = TimeSpan.FromHours(7);
         private static DateTime VnNow => DateTime.UtcNow.Add(VietnamOffset);
 
-        private const string ReservationIncludes = "ReservationTables.Table.Floor,Customer.ApplicationUser,ReservationStatus";
-        private const string TablesIncludes = "ReservationTables.Table";
-        private const string TablesAndStatusIncludes = "ReservationTables.Table,ReservationStatus";
+        private const string ReservationIncludes = "TableSessions.Table.Floor,Customer.ApplicationUser,ReservationStatus";
+        private const string TablesIncludes = "TableSessions.Table";
+        private const string TablesAndStatusIncludes = "TableSessions.Table,ReservationStatus";
 
         private readonly IMapper mapper;
         private readonly IStatusValueService statusValueService;
@@ -122,6 +122,27 @@ namespace RestX.BLL.Services
             await Repo.CreateAsync(reservation);
             reservation.ConfirmationCode = GenerateConfirmationCode(reservation.Id);
             Repo.Update(reservation);
+
+            var order = new Order
+            {
+                Reference = GenerateOrderReference(reservation.Id),
+                CustomerId = customerId,
+                ReservationId = reservation.Id,
+                OrderStatusId = OrderStatus.Pending
+            };
+            await Repo.CreateAsync(order);
+
+            foreach (var table in tables)
+            {
+                await Repo.CreateAsync(new TableSession
+                {
+                    TableId = table.Id,
+                    ReservationId = reservation.Id,
+                    CurrentOrderId = order.Id,
+                    StartedAt = request.ReservationDateTime,
+                    IsActive = true
+                });
+            }
             await Repo.SaveAsync();
 
             if (requiresDeposit)
@@ -211,54 +232,77 @@ namespace RestX.BLL.Services
                 ValidateDistinctTableIds(request.TableIds);
 
             var newDateTime = request.ReservationDateTime ?? reservation.Time;
+            var currentSessions = reservation.TableSessions.ToList();
+            var currentTableIds = currentSessions.Select(ts => ts.TableId).ToList();
             var tablesChanged = request.TableIds is { Count: > 0 };
             var dateChanged = request.ReservationDateTime.HasValue;
-            //var newTableIds = tablesChanged ? request.TableIds! : currentTableIds;
+            var newTableIds = tablesChanged ? request.TableIds! : currentTableIds;
 
-            //List<Table> newTables = reservation.ReservationTables.Select(rt => rt.Table).ToList();
-            //if (tablesChanged)
-            //    newTables = await ValidateReservationTables(newTableIds);
+            List<Table> newTables = currentSessions.Select(ts => ts.Table).ToList();
+            if (tablesChanged)
+                newTables = await ValidateReservationTables(newTableIds);
 
-            //if (tablesChanged || dateChanged)
-            //    await ValidateTableNotOccupied(newTables, newDateTime);
+            if (tablesChanged || dateChanged)
+                await ValidateTableNotOccupied(newTables, newDateTime);
 
-            //if (tablesChanged || dateChanged)
-            //{
-            //    var conflicts = (await Repo.GetAsync<ReservationTable>(
-            //        filter: rt =>
-            //            newTableIds.Contains(rt.TableId) &&
-            //            rt.ReservationId != id &&
-            //            rt.Reservation.Time >= newDateTime.AddMinutes(-ReservationBufferMinutes) &&
-            //            rt.Reservation.Time <= newDateTime.AddMinutes(ReservationBufferMinutes) &&
-            //            rt.Reservation.ReservationStatus.Code != CancelledCode &&
-            //            rt.Reservation.ReservationStatus.Code != CompletedCode,
-            //        includeProperties: "Reservation.ReservationStatus"
-            //    )).ToList();
+            if (tablesChanged || dateChanged)
+            {
+                var conflicts = (await Repo.GetAsync<TableSession>(
+                    filter: ts =>
+                        newTableIds.Contains(ts.TableId) &&
+                        ts.ReservationId != id &&
+                        ts.ReservationId != null &&
+                        ts.Reservation.Time >= newDateTime.AddMinutes(-ReservationBufferMinutes) &&
+                        ts.Reservation.Time <= newDateTime.AddMinutes(ReservationBufferMinutes) &&
+                        ts.Reservation.ReservationStatus.Code != CancelledCode &&
+                        ts.Reservation.ReservationStatus.Code != CompletedCode,
+                    includeProperties: "Reservation.ReservationStatus"
+                )).ToList();
 
-            //    if (conflicts.Any())
-            //        throw new InvalidOperationException("One or more tables are already reserved at this time");
-            //}
+                if (conflicts.Any())
+                    throw new InvalidOperationException("One or more tables are already reserved at this time");
+            }
 
-            //var numberOfGuests = request.NumberOfGuests ?? reservation.NumberOfGuests;
-            //ValidateCapacity(numberOfGuests, newTables);
+            var numberOfGuests = request.NumberOfGuests ?? reservation.NumberOfGuests;
+            ValidateCapacity(numberOfGuests, newTables);
 
-            //if (tablesChanged)
-            //{
-            //    var removedTableIds = currentTableIds.Except(newTableIds).ToList();
-            //    var addedTableIds = newTableIds.Except(currentTableIds).ToList();
+            if (tablesChanged)
+            {
+                var removedTableIds = currentTableIds.Except(newTableIds).ToList();
+                var addedTableIds = newTableIds.Except(currentTableIds).ToList();
 
-            //    foreach (var rt in reservation.ReservationTables.Where(rt => removedTableIds.Contains(rt.TableId)).ToList())
-            //    {
-            //        Repo.Delete<ReservationTable>(rt.Id);
-            //    }
-            //    foreach (var table in newTables.Where(t => addedTableIds.Contains(t.Id)))
-            //    {
-            //        await Repo.CreateAsync(new ReservationTable { ReservationId = id, TableId = table.Id });
-            //    }
-            //}
+                var sharedOrderId = currentSessions.FirstOrDefault()?.CurrentOrderId;
+
+                foreach (var session in currentSessions.Where(ts => removedTableIds.Contains(ts.TableId)))
+                {
+                    Repo.Delete<TableSession>(session.Id);
+                }
+                foreach (var table in newTables.Where(t => addedTableIds.Contains(t.Id)))
+                {
+                    await Repo.CreateAsync(new TableSession
+                    {
+                        TableId = table.Id,
+                        ReservationId = id,
+                        CurrentOrderId = sharedOrderId,
+                        StartedAt = newDateTime,
+                        IsActive = true
+                    });
+                }
+            }
+            else if (dateChanged)
+            {
+                if (!reservation.CheckedInAt.HasValue)
+                {
+                    foreach (var session in currentSessions)
+                    {
+                        session.StartedAt = newDateTime;
+                        Repo.Update(session);
+                    }
+                }
+            }
 
             reservation.Time = newDateTime;
-            //reservation.NumberOfGuests = numberOfGuests;
+            reservation.NumberOfGuests = numberOfGuests;
             reservation.SpecialRequests = request.SpecialRequests ?? reservation.SpecialRequests;
 
             Repo.Update(reservation);
@@ -334,6 +378,18 @@ namespace RestX.BLL.Services
             reservation.CheckedInAt = VnNow;
             Repo.Update(reservation, userId);
 
+            var sessions = (await Repo.GetAsync<TableSession>(
+                filter: ts => ts.ReservationId == reservation.Id && ts.IsActive,
+                includeProperties: "Table")).ToList();
+
+            foreach (var session in sessions)
+            {
+                session.StartedAt = VnNow;
+                session.Table.TableStatusId = TableStatus.Occupied;
+                Repo.Update(session, userId);
+                Repo.Update(session.Table, userId);
+            }
+
             await Repo.SaveAsync();
         }
 
@@ -396,26 +452,27 @@ namespace RestX.BLL.Services
         {
             var bufferStart = request.ReservationDateTime.AddMinutes(-request.BufferMinutes);
             var bufferEnd = request.ReservationDateTime.AddMinutes(request.BufferMinutes);
-            //var conflicts = (await Repo.GetAsync<ReservationTable>(
-            //    filter: rt =>
-            //        request.TableIds.Contains(rt.TableId) &&
-            //        rt.Reservation.Time >= bufferStart &&
-            //        rt.Reservation.Time <= bufferEnd &&
-            //        rt.Reservation.ReservationStatus.Code != CancelledCode &&
-            //        rt.Reservation.ReservationStatus.Code != CompletedCode,
-            //    includeProperties: "Table,Reservation.ReservationStatus"
-            //)).ToList();
-            //var conflictingSlots = conflicts.Select(rt => new ConflictingSlot
-            //{
-            //    TableId = rt.TableId,
-            //    TableCode = rt.Table.Code,
-            //    ConflictTime = rt.Reservation.Time,
-            //    ConflictStatus = rt.Reservation.ReservationStatus.Name
-            //}).ToList();
+            var conflicts = (await Repo.GetAsync<TableSession>(
+                filter: ts =>
+                    request.TableIds.Contains(ts.TableId) &&
+                    ts.ReservationId != null &&
+                    ts.Reservation.Time >= bufferStart &&
+                    ts.Reservation.Time <= bufferEnd &&
+                    ts.Reservation.ReservationStatus.Code != CancelledCode &&
+                    ts.Reservation.ReservationStatus.Code != CompletedCode,
+                includeProperties: "Table,Reservation.ReservationStatus"
+            )).ToList();
+            var conflictingSlots = conflicts.Select(ts => new ConflictingSlot
+            {
+                TableId = ts.TableId,
+                TableCode = ts.Table.Code,
+                ConflictTime = ts.Reservation!.Time,
+                ConflictStatus = ts.Reservation.ReservationStatus.Name
+            }).ToList();
             return new CheckAvailabilityResponse
             {
-                //Available = !conflictingSlots.Any(),
-                //ConflictingSlots = conflictingSlots
+                Available = !conflictingSlots.Any(),
+                ConflictingSlots = conflictingSlots
             };
         }
 
@@ -425,7 +482,7 @@ namespace RestX.BLL.Services
             return r =>
                 (!filter.StatusId.HasValue || r.ReservationStatusId == filter.StatusId.Value) &&
                 (!filter.Date.HasValue || r.Time.Date == filter.Date.Value.Date) &&
-                (!filter.TableId.HasValue) &&
+                (!filter.TableId.HasValue || r.TableSessions.Any(ts => ts.TableId == filter.TableId.Value)) &&
                 (string.IsNullOrEmpty(search) ||
                     (r.ConfirmationCode != null && r.ConfirmationCode.ToLower().Contains(search)) ||
                     (r.Customer.ApplicationUser.FullName != null &&
@@ -596,13 +653,35 @@ namespace RestX.BLL.Services
             if (newStatusCode != CompletedCode && newStatusCode != CancelledCode)
                 return;
 
-            var activeSessions = (await Repo.GetAsync<TableSession>(
-                filter: ts => ts.ReservationId == reservation.Id && ts.IsActive)).ToList();
-            foreach (var session in activeSessions)
+            var sessions = (await Repo.GetAsync<TableSession>(
+                filter: ts => ts.ReservationId == reservation.Id && ts.IsActive,
+                includeProperties: "Table")).ToList();
+
+            foreach (var session in sessions)
             {
                 session.IsActive = false;
                 session.EndedAt = VnNow;
+                session.Table.TableStatusId = TableStatus.Available;
                 Repo.Update(session, userId);
+                Repo.Update(session.Table, userId);
+            }
+
+            // Huỷ order rỗng (chưa có detail) nếu là cancel
+            if (newStatusCode == CancelledCode)
+            {
+                var sharedOrderId = sessions.FirstOrDefault()?.CurrentOrderId;
+                if (sharedOrderId.HasValue)
+                {
+                    var order = await Repo.GetOneAsync<Order>(
+                        filter: o => o.Id == sharedOrderId.Value,
+                        includeProperties: "OrderDetails");
+                    if (order != null && !order.OrderDetails.Any())
+                    {
+                        order.OrderStatusId = OrderStatus.Cancelled;
+                        order.CancelledAt = VnNow;
+                        Repo.Update(order, userId);
+                    }
+                }
             }
         }
 
@@ -640,6 +719,9 @@ namespace RestX.BLL.Services
 
         private static string GenerateConfirmationCode(Guid id)
             => id.ToString("N")[..6].ToUpper();
+
+        private static string GenerateOrderReference(Guid reservationId)
+            => "R-" + reservationId.ToString("N")[..8].ToUpper();
 
         #endregion
 
@@ -769,7 +851,7 @@ namespace RestX.BLL.Services
         {
             var reservation = await Repo.GetOneAsync<Reservation>(
                 filter: r => r.Id == reservationId,
-                includeProperties: "ReservationStatus,ReservationTables")
+                includeProperties: "ReservationStatus")
                 ?? throw new KeyNotFoundException("Reservation not found");
 
             if (reservation.ReservationStatus?.Code != DepositPendingCode)

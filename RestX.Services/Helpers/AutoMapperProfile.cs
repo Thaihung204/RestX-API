@@ -132,6 +132,14 @@ namespace RestX.BLL.Helpers
                 .ForMember(dest => dest.StatusType, opt => opt.Ignore());
             CreateMap<StatusValue, ReservationStatusInfo>();
 
+            CreateMap<TableSession, ReservationTableInfo>()
+                .ForMember(dest => dest.Id, opt => opt.MapFrom(src => src.Table.Id))
+                .ForMember(dest => dest.Code, opt => opt.MapFrom(src => src.Table.Code))
+                .ForMember(dest => dest.Capacity, opt => opt.MapFrom(src => src.Table.SeatingCapacity))
+                .ForMember(dest => dest.FloorId, opt => opt.MapFrom(src => src.Table.FloorId))
+                .ForMember(dest => dest.FloorName, opt => opt.MapFrom(src =>
+                    src.Table.Floor != null ? src.Table.Floor.Name : string.Empty));
+
             CreateMap<Reservation, ReservationContactInfo>()
                 .ForMember(dest => dest.Name, opt => opt.MapFrom(src => src.Customer.ApplicationUser.FullName ?? string.Empty))
                 .ForMember(dest => dest.Phone, opt => opt.MapFrom(src => src.Customer.ApplicationUser.PhoneNumber))
@@ -140,6 +148,7 @@ namespace RestX.BLL.Helpers
                 .ForMember(dest => dest.LoyaltyPoints, opt => opt.MapFrom(src => src.Customer.LoyaltyPoints));
 
             CreateMap<Reservation, ReservationListItem>()
+                .ForMember(dest => dest.Tables, opt => opt.MapFrom(src => src.TableSessions))
                 .ForMember(dest => dest.ReservationDateTime, opt => opt.MapFrom(src => src.Time))
                 .ForMember(dest => dest.ContactName, opt => opt.MapFrom(src => src.Customer.ApplicationUser.FullName ?? string.Empty))
                 .ForMember(dest => dest.ContactPhone, opt => opt.MapFrom(src => src.Customer.ApplicationUser.PhoneNumber))
@@ -147,6 +156,7 @@ namespace RestX.BLL.Helpers
                 .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(src => src.CreatedDate));
 
             CreateMap<Reservation, ReservationDetail>()
+                .ForMember(dest => dest.Tables, opt => opt.MapFrom(src => src.TableSessions))
                 .ForMember(dest => dest.ReservationDateTime, opt => opt.MapFrom(src => src.Time))
                 .ForMember(dest => dest.Contact, opt => opt.MapFrom(src => src))
                 .ForMember(dest => dest.Status, opt => opt.MapFrom(src => src.ReservationStatus))

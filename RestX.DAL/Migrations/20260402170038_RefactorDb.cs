@@ -11,19 +11,10 @@ namespace RestX.DAL.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropForeignKey(
-                name: "FK_Orders_Reservations_ReservationId",
-                table: "Orders");
-
-            migrationBuilder.DropForeignKey(
-                name: "FK_Payments_Reservations_ReservationId",
-                table: "Payments");
-
-            migrationBuilder.DropTable(
-                name: "OrderTables");
-
-            migrationBuilder.DropTable(
-                name: "ReservationTables");
+            migrationBuilder.Sql("IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_Orders_Reservations_ReservationId') ALTER TABLE [Orders] DROP CONSTRAINT [FK_Orders_Reservations_ReservationId]");
+            migrationBuilder.Sql("IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_Payments_Reservations_ReservationId') ALTER TABLE [Payments] DROP CONSTRAINT [FK_Payments_Reservations_ReservationId]");
+            migrationBuilder.Sql("IF OBJECT_ID('OrderTables', 'U') IS NOT NULL DROP TABLE [OrderTables]");
+            migrationBuilder.Sql("IF OBJECT_ID('ReservationTables', 'U') IS NOT NULL DROP TABLE [ReservationTables]");
 
             migrationBuilder.AddForeignKey(
                 name: "FK_Orders_Reservations_ReservationId",

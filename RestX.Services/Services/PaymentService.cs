@@ -230,7 +230,7 @@ namespace RestX.BLL.Services
         {
             var reservation = await Repo.GetOneAsync<Reservation>(
                 filter: r => r.Id == reservationId,
-                includeProperties: "ReservationStatus,ReservationTables")
+                includeProperties: "ReservationStatus")
                 ?? throw new KeyNotFoundException("Reservation not found");
 
             if (reservation.ReservationStatus?.Code != "DEPOSIT_PENDING")

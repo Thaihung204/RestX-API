@@ -22,8 +22,7 @@ namespace RestX.BLL.Services
         public async Task<byte[]> GenerateReceiptAsync(Guid paymentId)
         {
             var payment = await Repo.GetOneAsync<Payment>(
-                filter: p => p.Id == paymentId,
-                includeProperties: "PaymentStatus")
+                filter: p => p.Id == paymentId)
                 ?? throw new KeyNotFoundException("Payment not found");
 
             var order = await Repo.GetOneAsync<Order>(
@@ -133,7 +132,7 @@ namespace RestX.BLL.Services
                         col.Item().Row(row =>
                         {
                             row.RelativeItem().Text("Status");
-                            row.RelativeItem().AlignRight().Text(payment.PaymentStatus?.Name ?? string.Empty);
+                            row.RelativeItem().AlignRight().Text(payment.Status.ToString());
                         });
 
                         if (string.Equals(payment.PaymentMethodId, PaymentConstants.Method.Cash, StringComparison.OrdinalIgnoreCase) && payment.CashReceive > 0)

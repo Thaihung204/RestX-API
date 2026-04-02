@@ -1,8 +1,11 @@
 using AutoMapper;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using RestX.BLL.DataTranferObjects.Authentication;
+using RestX.BLL.DataTranferObjects.Common;
 using RestX.BLL.Exceptionhandling;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Auth;
@@ -18,13 +21,20 @@ namespace RestX.WebApp.Controllers
     public class AuthController : BaseController
     {
         private readonly IAuthService authService;
+        private readonly ICookieManager cookieManager;
+        private readonly JwtSettings jwtSettings;
+
         public AuthController(IAuthService authService,
             IMapper mapper,
             UserManager<ApplicationUser> userManager,
             IExceptionHandler exceptionHandler,
-            IEnumerable<ActiveTenant> tenant) : base(mapper, userManager, exceptionHandler, tenant)
+            IEnumerable<ActiveTenant> tenant,
+            ICookieManager cookieManager,
+            IOptions<JwtSettings> jwtSettings) : base(mapper, userManager, exceptionHandler, tenant)
         {
             this.authService = authService;
+            this.cookieManager = cookieManager;
+            this.jwtSettings = jwtSettings.Value;
         }
         [HttpPost("login")]
         [AllowAnonymous]
@@ -41,6 +51,8 @@ namespace RestX.WebApp.Controllers
                 {
                     return BadRequest(result);
                 }
+                if (result.Data is LoginResponse loginData)
+                    SetAuthCookies(loginData);
                 return Ok(result);
             }
             catch (AppException ex)
@@ -69,6 +81,7 @@ namespace RestX.WebApp.Controllers
                 {
                     return BadRequest(result);
                 }
+                ClearAuthCookies();
                 return Ok(result);
             }
             catch (AppException ex)
@@ -183,6 +196,8 @@ namespace RestX.WebApp.Controllers
                 {
                     return BadRequest(result);
                 }
+                if (result.Data is LoginResponse refreshData)
+                    UpdateAccessTokenCookie(refreshData);
                 return Ok(result);
             }
             catch (AppException ex)
@@ -194,16 +209,6 @@ namespace RestX.WebApp.Controllers
                 this.ExceptionHandler.RaiseException(ex);
                 return BadRequest(AuthResponse.FailureResponse("An internal error occurred"));
             }
-        }
-
-        private Guid? GetCurrentUserId()
-        {
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (string.IsNullOrEmpty(userIdClaim))
-            {
-                return null;
-            }
-            return Guid.TryParse(userIdClaim, out var userId) ? userId : null;
         }
 
         [HttpPost("customer/check-phone")]
@@ -245,6 +250,8 @@ namespace RestX.WebApp.Controllers
                 {
                     return BadRequest(result);
                 }
+                if (result.Data is LoginResponse phoneLoginData)
+                    SetAuthCookies(phoneLoginData);
                 return Ok(result);
             }
             catch (Exception ex)
@@ -269,6 +276,8 @@ namespace RestX.WebApp.Controllers
                 {
                     return BadRequest(result);
                 }
+                if (result.Data is LoginResponse phoneRegisterData)
+                    SetAuthCookies(phoneRegisterData);
                 return Ok(result);
             }
             catch (AppException ex)
@@ -281,6 +290,38 @@ namespace RestX.WebApp.Controllers
                 return BadRequest(AuthResponse.FailureResponse("An internal error occurred"));
             }
         }
+
+        #region Helpers
+
+        private Guid? GetCurrentUserId()
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userIdClaim))
+                return null;
+            return Guid.TryParse(userIdClaim, out var userId) ? userId : null;
+        }
+
+        private void SetAuthCookies(LoginResponse loginData)
+        {
+            cookieManager.AppendResponseCookie(HttpContext, "restx_access_token", loginData.AccessToken,
+                new CookieOptions { HttpOnly = true, Secure = true, Expires = loginData.ExpiresAt });
+            cookieManager.AppendResponseCookie(HttpContext, "restx_refresh_token", loginData.RefreshToken,
+                new CookieOptions { HttpOnly = true, Secure = true, Expires = DateTimeOffset.UtcNow.AddDays(jwtSettings.RefreshTokenExpiryDays) });
+        }
+
+        private void UpdateAccessTokenCookie(LoginResponse loginData)
+        {
+            cookieManager.AppendResponseCookie(HttpContext, "restx_access_token", loginData.AccessToken,
+                new CookieOptions { HttpOnly = true, Secure = true, Expires = loginData.ExpiresAt });
+        }
+
+        private void ClearAuthCookies()
+        {
+            cookieManager.DeleteCookie(HttpContext, "restx_access_token", new CookieOptions());
+            cookieManager.DeleteCookie(HttpContext, "restx_refresh_token", new CookieOptions());
+        }
+
+        #endregion
     }
     public class RefreshTokenRequestDto
     {

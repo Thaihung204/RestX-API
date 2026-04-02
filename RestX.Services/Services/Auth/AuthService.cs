@@ -7,6 +7,7 @@ using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Auth;
 using RestX.BLL.Interfaces.Customers;
 using RestX.Models.Customers;
+using RestX.Models.HR;
 using RestX.Models.Identity;
 using RestX.Models.Tenants;
 
@@ -220,6 +221,12 @@ namespace RestX.BLL.Services.Auth
             var userInfo = mapper.Map<UserInfo>(user);
             userInfo.Roles = tokenRoles.ToList();
             userInfo.CustomerId = customerId;
+
+            if (user.MemberId.HasValue && tokenRoles.Any(r => r != CustomerRole))
+            {
+                var employee = await Repo.GetFirstAsync<Employee>(e => e.Id == user.MemberId.Value);
+                userInfo.Position = employee?.Position;
+            }
             return AuthResponse.SuccessResponse(message, new LoginResponse
             {
                 AccessToken = accessToken,

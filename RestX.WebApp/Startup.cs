@@ -2,6 +2,7 @@
 using Hangfire;
 using Hangfire.SqlServer;
 using Microsoft.ApplicationInsights.Extensibility;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization;
@@ -125,6 +126,16 @@ namespace RestX.WebApp
                  };
                  cfg.Events = new JwtBearerEvents
                  {
+                     OnMessageReceived = context =>
+                     {
+                         if (!context.Request.Headers.ContainsKey("Authorization"))
+                         {
+                             var cookieToken = context.Request.Cookies["restx_access_token"];
+                             if (!string.IsNullOrEmpty(cookieToken))
+                                 context.Token = cookieToken;
+                         }
+                         return Task.CompletedTask;
+                     },
                      OnTokenValidated = context =>
                      {
                          var tokenTenant = context.Principal?.FindFirst("tenant")?.Value;
@@ -183,6 +194,7 @@ namespace RestX.WebApp
             // Registering the Singleton SocketsHttpHandler lets you reuse it across any HttpClient in your application
             services.AddSingleton<SocketsHttpHandler>(socketsHttpHandler);
             services.AddSignalR();
+            services.AddScoped<ICookieManager, RestXCookieManager>();
             services.AddScoped<IExceptionHandler, ExceptionHandler>();
             services.AddScoped<ITenantService, TenantService>();
             services.AddSingleton<IMemoryCache, MemoryCache>();

@@ -123,9 +123,7 @@ namespace RestX.BLL.Helpers
                 .ForMember(dest => dest.OrderDetails, opt => opt.Ignore()); CreateMap<Models.Inventory.IngredientCategory, DataTranferObjects.Inventory.IngredientCategory>().ReverseMap();
 
             CreateMap<LoyaltyPointBandEntity, DataTranferObjects.Loyalty.LoyaltyPointBand>().ReverseMap();
-            CreateMap<Models.Orders.Payment, PaymentDetail>()
-                .ForMember(dest => dest.PaymentStatusName, opt => opt.MapFrom(src => src.PaymentStatus != null ? src.PaymentStatus.Name : null))
-                .ForMember(dest => dest.PaymentStatusCode, opt => opt.MapFrom(src => src.PaymentStatus != null ? src.PaymentStatus.Code : null));
+            CreateMap<Models.Orders.Payment, PaymentDetail>();
 
             CreateMap<StatusValue, StatusValues>();
             CreateMap<StatusValues, StatusValue>()

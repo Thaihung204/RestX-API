@@ -100,6 +100,19 @@ builder.Services.AddAuthentication(options =>
         ClockSkew = TimeSpan.Zero,
         RoleClaimType = ClaimTypes.Role
     };
+    cfg.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            if (!context.Request.Headers.ContainsKey("Authorization"))
+            {
+                var cookieToken = context.Request.Cookies["admin_access_token"];
+                if (!string.IsNullOrEmpty(cookieToken))
+                    context.Token = cookieToken;
+            }
+            return Task.CompletedTask;
+        }
+    };
 });
 
 builder.Services.AddAuthorization();

@@ -584,6 +584,7 @@ namespace RestX.DAL.Context
                 entity.Property(e => e.ConfirmationCode).HasMaxLength(20);
                 entity.Property(e => e.SpecialRequests).HasMaxLength(1000);
                 entity.Property(e => e.DepositAmount).HasColumnType("decimal(18,2)");
+                entity.Property(e => e.PaymentDeadline);
 
                 entity.HasOne<Customer>(e => e.Customer)
                     .WithMany(c => c.Reservations)
@@ -614,9 +615,6 @@ namespace RestX.DAL.Context
                 entity.Property(e => e.TaxAmount).HasColumnType("decimal(18,2)");
                 entity.Property(e => e.ServiceCharge).HasColumnType("decimal(18,2)");
                 entity.Property(e => e.TotalAmount).HasColumnType("decimal(18,2)");
-                entity.Property(x => x.PaymentStatusId)
-                    .HasConversion<int>();
-                entity.Ignore(x => x.PaymentStatus);
 
                 entity.HasOne<Customer>(e => e.Customer)
                     .WithMany(c => c.Orders)
@@ -677,10 +675,16 @@ namespace RestX.DAL.Context
                     .HasForeignKey(e => e.OrderId)
                     .OnDelete(DeleteBehavior.SetNull);
 
-                entity.HasOne<StatusValue>(e => e.PaymentStatus)
-                    .WithMany()
-                    .HasForeignKey(e => e.PaymentStatusId)
-                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne<Reservation>(e => e.Reservation)
+                    .WithMany(r => r.Payments)
+                    .HasForeignKey(e => e.ReservationId)
+                    .OnDelete(DeleteBehavior.SetNull);
+
+                entity.Property(e => e.Status)
+                    .HasConversion<int>();
+
+                entity.Property(e => e.Purpose)
+                    .HasConversion<int>();
 
                 entity.HasOne<Employee>(e => e.Processor)
                     .WithMany(emp => emp.ProcessedPayments)

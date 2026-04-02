@@ -25,6 +25,12 @@ namespace RestX.BLL.DataTranferObjects.Floor
         public int SeatingCapacity { get; set; }
         public string Status { get; set; } = string.Empty;
         public TableLayoutPosition Layout { get; set; } = null!;
+        public string? CubeFrontImageUrl { get; set; }
+        public string? CubeBackImageUrl { get; set; }
+        public string? CubeLeftImageUrl { get; set; }
+        public string? CubeRightImageUrl { get; set; }
+        public string? CubeTopImageUrl { get; set; }
+        public string? CubeBottomImageUrl { get; set; }
     }
 
     public class TableLayoutPosition

@@ -25,7 +25,6 @@ namespace RestX.Models.Orders
         public Guid? ReservationId { get; set; }
         [TriggerProperty(DisplayName = "Status")]
         public OrderStatus OrderStatusId { get; set; }
-        public PaymentStatus PaymentStatusId { get; set; }
 
         [Column(TypeName = "decimal(18,2)")]
         [Range(0, 999999999.99)]
@@ -51,9 +50,11 @@ namespace RestX.Models.Orders
         public DateTime? CancelledAt { get; set; }
         public Guid? HandledBy { get; set; }
 
+        [NotMapped]
+        public bool IsPaid { get; set; }
+
         public virtual Customer? Customer { get; set; }
         public virtual Reservation? Reservation { get; set; }
-        public virtual StatusValue PaymentStatus { get; set; } = null!;
         public virtual Employee? Handler { get; set; }
         public virtual ICollection<OrderDetail> OrderDetails { get; set; } = new HashSet<OrderDetail>();
         public virtual ICollection<Payment> Payments { get; set; } = new HashSet<Payment>();

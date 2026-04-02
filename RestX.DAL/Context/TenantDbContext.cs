@@ -1,7 +1,10 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Storage;
 using RestX.Models.Admin;
 using RestX.Models.AI;
 using RestX.Models.Common;
@@ -155,13 +158,11 @@ namespace RestX.DAL.Context
 
         #region DbSets - Reservations
         public virtual DbSet<Reservation> Reservations { get; set; }
-        public virtual DbSet<ReservationTable> ReservationTables { get; set; }
         #endregion
 
         #region DbSets - Orders
         public virtual DbSet<Order> Orders { get; set; }
         public virtual DbSet<OrderDetail> OrderDetails { get; set; }
-        public virtual DbSet<OrderTable> OrderTables { get; set; }
         #endregion
 
         #region DbSets - Payments
@@ -597,22 +598,6 @@ namespace RestX.DAL.Context
                     .OnDelete(DeleteBehavior.Restrict);
             });
 
-            modelBuilder.Entity<ReservationTable>(entity =>
-            {
-                entity.ToTable("ReservationTables");
-                entity.HasKey(e => e.Id);
-                entity.HasIndex(e => new { e.ReservationId, e.TableId }).IsUnique();
-
-                entity.HasOne<Reservation>(e => e.Reservation)
-                    .WithMany(r => r.ReservationTables)
-                    .HasForeignKey(e => e.ReservationId)
-                    .OnDelete(DeleteBehavior.Cascade);
-
-                entity.HasOne<Table>(e => e.Table)
-                    .WithMany(t => t.ReservationTables)
-                    .HasForeignKey(e => e.TableId)
-                    .OnDelete(DeleteBehavior.Restrict);
-            });
         }
 
         private void ConfigureOrders(ModelBuilder modelBuilder)
@@ -634,11 +619,6 @@ namespace RestX.DAL.Context
                 entity.HasOne<Customer>(e => e.Customer)
                     .WithMany(c => c.Orders)
                     .HasForeignKey(e => e.CustomerId)
-                    .OnDelete(DeleteBehavior.SetNull);
-
-                entity.HasOne<Reservation>(e => e.Reservation)
-                    .WithMany(r => r.Orders)
-                    .HasForeignKey(e => e.ReservationId)
                     .OnDelete(DeleteBehavior.SetNull);
 
                 entity.HasOne<Employee>(e => e.Handler)
@@ -670,22 +650,6 @@ namespace RestX.DAL.Context
                     .OnDelete(DeleteBehavior.Restrict);
             });
 
-            modelBuilder.Entity<OrderTable>(entity =>
-            {
-                entity.ToTable("OrderTables");
-                entity.HasKey(e => e.Id);
-                entity.HasIndex(e => new { e.OrderId, e.TableId }).IsUnique();
-
-                entity.HasOne<Order>(e => e.Order)
-                    .WithMany(o => o.OrderTables)
-                    .HasForeignKey(e => e.OrderId)
-                    .OnDelete(DeleteBehavior.Cascade);
-
-                entity.HasOne<Table>(e => e.Table)
-                    .WithMany(t => t.OrderTables)
-                    .HasForeignKey(e => e.TableId)
-                    .OnDelete(DeleteBehavior.Restrict);
-            });
         }
 
         private void ConfigurePayments(ModelBuilder modelBuilder)

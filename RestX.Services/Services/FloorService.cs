@@ -111,22 +111,12 @@ namespace RestX.BLL.Services
             );
             if (floor == null) return null;
 
-            HashSet<Guid> reservedTableIds = new();
             HashSet<Guid> occupiedTableIds = new();
 
             if (at.HasValue)
             {
                 var bufferStart = at.Value.AddMinutes(-ReservationBufferMinutes);
                 var bufferEnd = at.Value.AddMinutes(ReservationBufferMinutes);
-
-                reservedTableIds = (await Repo.GetAsync<ReservationTable>(
-                    filter: rt =>
-                        rt.Reservation.Time >= bufferStart &&
-                        rt.Reservation.Time <= bufferEnd &&
-                        rt.Reservation.ReservationStatus.Code != "CANCELLED" &&
-                        rt.Reservation.ReservationStatus.Code != "COMPLETED",
-                    includeProperties: "Reservation.ReservationStatus"
-                )).Select(rt => rt.TableId).ToHashSet();
 
                 occupiedTableIds = (await Repo.GetAsync<TableSession>(
                     filter: ts => ts.IsActive && ts.StartedAt.AddMinutes(ReservationBufferMinutes) > at.Value
@@ -145,18 +135,18 @@ namespace RestX.BLL.Services
                 },
                 Tables = floor.Tables.Select(t =>
                 {
-                    var status = at.HasValue
-                        ? (occupiedTableIds.Contains(t.Id) ? TableStatus.Occupied
-                            : reservedTableIds.Contains(t.Id) ? TableStatus.Reserved
-                            : TableStatus.Available)
-                        : t.TableStatusId;
+                    //var status = at.HasValue
+                    //    ? (occupiedTableIds.Contains(t.Id) ? TableStatus.Occupied
+                    //        : reservedTableIds.Contains(t.Id) ? TableStatus.Reserved
+                    //        : TableStatus.Available)
+                    //    : t.TableStatusId;
 
                     return new TableLayoutItem
                     {
                         Id = t.Id,
                         Code = t.Code,
                         SeatingCapacity = t.SeatingCapacity,
-                        Status = status.ToString(),
+                        //Status = status.ToString(),
                         Layout = new TableLayoutPosition
                         {
                             X = t.PositionX,

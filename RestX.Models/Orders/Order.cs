@@ -57,7 +57,6 @@ namespace RestX.Models.Orders
         public virtual Reservation? Reservation { get; set; }
         public virtual Employee? Handler { get; set; }
         public virtual ICollection<OrderDetail> OrderDetails { get; set; } = new HashSet<OrderDetail>();
-        public virtual ICollection<OrderTable> OrderTables { get; set; } = new HashSet<OrderTable>();
         public virtual ICollection<Payment> Payments { get; set; } = new HashSet<Payment>();
         public virtual ICollection<PromotionHistory> PromotionHistories { get; set; } = new HashSet<PromotionHistory>();
         public virtual ICollection<PointsTransaction> PointsTransactions { get; set; } = new HashSet<PointsTransaction>();

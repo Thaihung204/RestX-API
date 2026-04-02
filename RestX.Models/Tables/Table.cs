@@ -94,7 +94,5 @@ namespace RestX.Models.Tables
         public virtual Floor Floor { get; set; }
         public virtual Table3DModel? Table3DModel { get; set; }
         public virtual ICollection<TableSession> TableSessions { get; set; } = new HashSet<TableSession>();
-        public virtual ICollection<ReservationTable> ReservationTables { get; set; } = new HashSet<ReservationTable>();
-        public virtual ICollection<OrderTable> OrderTables { get; set; } = new HashSet<OrderTable>();
     }
 }

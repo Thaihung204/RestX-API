@@ -153,16 +153,6 @@ namespace RestX.BLL.Services
 
             var inClause = string.Join(", ", idParams.Select(p => "@" + p.ParameterName));
 
-            var orderTablesQuery = $@"
-                SELECT
-                    ot.Id,
-                    ot.OrderId,
-                    ot.TableId
-                FROM dbo.OrderTables ot
-                WHERE ot.OrderId IN ({inClause})
-                ORDER BY ot.OrderId, ot.Id
-            ";
-
             var orderDetailsQuery = $@"
                 SELECT
                     od.Id,
@@ -188,11 +178,6 @@ namespace RestX.BLL.Services
                 )
             ";
 
-            var orderTables = await Repo.ExecuteSqlSelectAsync<OrderTable>(
-                orderTablesQuery,
-                CloneParams(idParams)
-            );
-
             var orderDetails = await Repo.ExecuteSqlSelectAsync<Models.Orders.OrderDetail>(
                 orderDetailsQuery,
                 CloneParams(idParams)
@@ -202,10 +187,6 @@ namespace RestX.BLL.Services
                 itemStatusesQuery,
                 CloneParams(idParams)
             );
-
-            var tablesByOrderId = orderTables
-                .GroupBy(t => t.OrderId)
-                .ToDictionary(g => g.Key, g => g.ToList());
 
             var detailsByOrderId = orderDetails
                 .GroupBy(d => d.OrderId)
@@ -221,9 +202,6 @@ namespace RestX.BLL.Services
 
             foreach (var o in orders)
             {
-                if (tablesByOrderId.TryGetValue(o.Id, out var ots))
-                    o.OrderTables = ots;
-
                 if (detailsByOrderId.TryGetValue(o.Id, out var ods))
                 {
                     foreach (var d in ods)
@@ -298,11 +276,6 @@ namespace RestX.BLL.Services
                 ServiceCharge = serviceCharge,
 
                 SubTotal = subTotal,
-
-                OrderTables = new List<OrderTable>
-                {
-                    new OrderTable { TableId = order.TableId }
-                },
 
                 OrderDetails = order.OrderDetails.Select(d => new Models.Orders.OrderDetail
                 {
@@ -380,25 +353,10 @@ namespace RestX.BLL.Services
                 }
             }
 
-            if (orderEntity.OrderTables?.Any() == true)
-            {
-                foreach (var ot in orderEntity.OrderTables.ToList())
-                    Repo.Delete<OrderTable>(ot.Id);
-            }
-
             var tableIds = (orderDto.TableIds ?? new List<Guid>())
                 .Append(orderDto.TableId)
                 .Distinct()
                 .ToList();
-
-            foreach (var tableId in tableIds)
-            {
-                await Repo.CreateAsync(new OrderTable
-                {
-                    OrderId = orderEntity.Id,
-                    TableId = tableId
-                });
-            }
 
             orderEntity.SubTotal = subTotal;
             orderEntity.CalculateTotalAmount();

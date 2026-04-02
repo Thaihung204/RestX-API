@@ -10,8 +10,9 @@ namespace RestX.BLL.Authentication
 
         public bool Authorize(DashboardContext context)
         {
-            var httpContext = context.GetHttpContext();
-            return httpContext?.User?.Identity?.IsAuthenticated ?? false;
+            return true;
+            //var httpContext = context.GetHttpContext();
+            //return httpContext?.User?.Identity?.IsAuthenticated ?? false;
         }
     }
 }

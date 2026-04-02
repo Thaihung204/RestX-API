@@ -39,9 +39,7 @@ namespace RestX.Models.Reservations
 
         public virtual Customer Customer { get; set; } = null!;
         public virtual StatusValue ReservationStatus { get; set; }
-        public virtual ICollection<ReservationTable> ReservationTables { get; set; } = new HashSet<ReservationTable>();
         public virtual ICollection<TableSession> TableSessions { get; set; } = new HashSet<TableSession>();
-        public virtual ICollection<Order> Orders { get; set; } = new HashSet<Order>();
         public virtual ICollection<Payment> Payments { get; set; } = new HashSet<Payment>();
     }
 }

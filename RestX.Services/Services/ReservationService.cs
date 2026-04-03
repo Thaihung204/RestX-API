@@ -123,22 +123,13 @@ namespace RestX.BLL.Services
             reservation.ConfirmationCode = GenerateConfirmationCode(reservation.Id);
             Repo.Update(reservation);
 
-            var order = new Order
-            {
-                Reference = GenerateOrderReference(reservation.Id),
-                CustomerId = customerId,
-                ReservationId = reservation.Id,
-                OrderStatusId = OrderStatus.Pending
-            };
-            await Repo.CreateAsync(order);
-
+            // Create table sessions for all selected tables
             foreach (var table in tables)
             {
                 await Repo.CreateAsync(new TableSession
                 {
                     TableId = table.Id,
                     ReservationId = reservation.Id,
-                    CurrentOrderId = order.Id,
                     StartedAt = request.ReservationDateTime,
                     IsActive = true
                 });
@@ -146,9 +137,15 @@ namespace RestX.BLL.Services
             await Repo.SaveAsync();
 
             if (requiresDeposit)
+            {
                 BackgroundJob.Schedule<IReservationService>(
                     s => s.AutoCancelDepositReservation(reservation.Id),
                     paymentDeadline!.Value);
+            }
+            else
+            {
+                await ConfirmReservation(reservation.Id);
+            }
 
             var saved = await LoadReservation(reservation.Id);
             var detail = mapper.Map<ReservationDetail>(saved!);
@@ -325,20 +322,42 @@ namespace RestX.BLL.Services
                 throw new ArgumentException($"Cannot manually set status '{status.Code}'");
         }
 
-        private async Task ConfirmReservation(Guid id, string? userId)
+        public async Task ConfirmReservation(Guid id, string? userId = null)
         {
             var reservation = await RequireReservation(id, TablesAndStatusIncludes);
 
             var statusCode = reservation.ReservationStatus?.Code;
-            if (statusCode != DepositPendingCode)
-                throw new InvalidOperationException("Only deposit-pending reservations can be confirmed this way");
+            if (statusCode == CompletedCode || statusCode == CancelledCode)
+                throw new InvalidOperationException("Cannot confirm a reservation that is already cancelled or completed");
+            if (statusCode == DepositPendingCode)
+            {
+                var statuses = await statusValueService.GetStatuses(ReservationStatusTypeCode);
+                var confirmedStatus = statuses.FirstOrDefault(s => s.Code == ConfirmedCode)
+                    ?? throw new InvalidOperationException("Confirmed status not configured");
 
-            var statuses = await statusValueService.GetStatuses(ReservationStatusTypeCode);
-            var confirmedStatus = statuses.FirstOrDefault(s => s.Code == ConfirmedCode)
-                ?? throw new InvalidOperationException("Confirmed status not configured");
+                reservation.ReservationStatusId = confirmedStatus.Id;
+                Repo.Update(reservation, userId);
+            }
+            var sessions = reservation.TableSessions.ToList();
+            var currentOrder = sessions.FirstOrDefault()?.CurrentOrderId;
 
-            reservation.ReservationStatusId = confirmedStatus.Id;
-            Repo.Update(reservation, userId);
+            if (!currentOrder.HasValue || currentOrder == Guid.Empty)
+            {
+                var emptyOrder = new Order
+                {
+                    Reference = await GenerateOrderReference(),
+                    CustomerId = reservation.CustomerId,
+                    ReservationId = reservation.Id,
+                    OrderStatusId = OrderStatus.Pending
+                };
+                await Repo.CreateAsync(emptyOrder);
+                foreach (var session in sessions)
+                {
+                    session.CurrentOrderId = emptyOrder.Id;
+                    Repo.Update(session, userId);
+                }
+            }
+
             await Repo.SaveAsync();
         }
 
@@ -393,7 +412,7 @@ namespace RestX.BLL.Services
             await Repo.SaveAsync();
         }
 
-        private async Task CompleteReservation(Guid id, string? userId)
+        public async Task CompleteReservation(Guid id, string? userId = null)
         {
             var reservation = await RequireReservation(id, TablesIncludes);
 
@@ -414,12 +433,7 @@ namespace RestX.BLL.Services
             await Repo.SaveAsync();
         }
 
-        public async Task CancelReservation(Guid id)
-        {
-            await CancelReservation(id, null);
-        }
-
-        private async Task CancelReservation(Guid id, string? userId)
+        public async Task CancelReservation(Guid id, string? userId)
         {
             var reservation = await RequireReservation(id, TablesAndStatusIncludes);
             var statuses = await statusValueService.GetStatuses(ReservationStatusTypeCode);
@@ -665,8 +679,6 @@ namespace RestX.BLL.Services
                 Repo.Update(session, userId);
                 Repo.Update(session.Table, userId);
             }
-
-            // Huỷ order rỗng (chưa có detail) nếu là cancel
             if (newStatusCode == CancelledCode)
             {
                 var sharedOrderId = sessions.FirstOrDefault()?.CurrentOrderId;
@@ -720,8 +732,39 @@ namespace RestX.BLL.Services
         private static string GenerateConfirmationCode(Guid id)
             => id.ToString("N")[..6].ToUpper();
 
-        private static string GenerateOrderReference(Guid reservationId)
-            => "R-" + reservationId.ToString("N")[..8].ToUpper();
+        private async Task<string> GenerateOrderReference()
+        {
+            var tenantPrefix = CurrentTenant.Prefix;
+            var reference = $"{tenantPrefix}{DateTime.UtcNow.AddHours(7):yMdsff}";
+
+            var exists = await Repo.GetExistsAsync<Order>(o => o.Reference == reference);
+            var count = 0;
+
+            while (exists && count < 20)
+            {
+                if (count < 1)
+                {
+                    reference = $"{tenantPrefix}{DateTime.UtcNow.AddHours(7):yMdsff}";
+                }
+                else if (count < 2)
+                {
+                    reference = $"{tenantPrefix}{DateTime.UtcNow.AddHours(7):yMdsfff}";
+                }
+                else if (count < 10)
+                {
+                    reference = $"{tenantPrefix}{DateTime.UtcNow.AddHours(7):yMdsHHfff}";
+                }
+                else
+                {
+                    reference = $"{tenantPrefix}{DateTime.UtcNow.AddHours(7):yMdsHHmmfff}";
+                }
+
+                exists = await Repo.GetExistsAsync<Order>(o => o.Reference == reference);
+                count++;
+            }
+
+            return reference;
+        }
 
         #endregion
 
@@ -842,8 +885,10 @@ namespace RestX.BLL.Services
             };
 
             await Repo.CreateAsync(payment, userId);
-            await ConfirmReservation(reservationId, userId);
             await Repo.SaveAsync();
+
+            // Confirm reservation after successful cash deposit
+            await ConfirmReservation(reservationId, userId);
         }
 
 

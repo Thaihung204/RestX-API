@@ -10,6 +10,8 @@ using RestX.Models.Common;
 using RestX.Models.Enum;
 using RestX.Models.Menu;
 using RestX.Models.Orders;
+using RestX.Models.Reservations;
+using RestX.Models.Tables;
 using RestX.Models.Tenants;
 using System.Data;
 using System.Text;
@@ -233,12 +235,11 @@ namespace RestX.BLL.Services
                 .Cast<object>()
                 .ToArray();
 
-
         public async Task<DataTranferObjects.Orders.Order?> GetOrderById(Guid id)
         {
             var order = await Repo.GetOneAsync<Models.Orders.Order>(
                 filter: o => o.Id == id,
-                includeProperties: "OrderDetails,OrderDetails.ItemStatus,OrderTables,Payments"
+                includeProperties: "OrderDetails,OrderDetails.ItemStatus,Payments"
             );
 
             return mapper.Map<DataTranferObjects.Orders.Order>(order);
@@ -246,59 +247,98 @@ namespace RestX.BLL.Services
 
         public async Task<Guid> CreateOrder(DataTranferObjects.Orders.Order order, string userId)
         {
-            var dishIds = order.OrderDetails
-                .Select(x => x.DishId)
-                .Distinct()
-                .ToList();
-
+            var dishIds = order.OrderDetails.Select(x => x.DishId).Distinct().ToList();
             var dishes = (await Repo.GetAsync<Dish>(filter: d => dishIds.Contains(d.Id))).ToList();
             var dishesById = dishes.ToDictionary(d => d.Id, d => d);
 
-            var discountAmount = order.DiscountAmount ?? 0m;
-            var taxAmount = order.TaxAmount ?? 0m;
-            var serviceCharge = order.ServiceCharge ?? 0m;
+            var orderDefaultStatusId = (await statusValueService.GetStatuses("order")).ToList().First(x => x.IsDefault).Id;
+            var itemDefaultStatusId = (await statusValueService.GetStatuses("order-detail")).ToList().First(x => x.IsDefault).Id;
 
-            var subTotal = order.OrderDetails.Sum(x => x.Quantity * dishesById[x.DishId].Price);
+            var incomingSubTotal = order.OrderDetails.Sum(x => x.Quantity * dishesById[x.DishId].Price);
 
-            var itemStatuses = (await statusValueService.GetStatuses("order-detail")).ToList();
+            var activeSession = await Repo.GetOneAsync<TableSession>(
+                filter: s => s.TableId == order.TableId && s.IsActive
+            );
 
-            var orderEntity = new Models.Orders.Order
+            if (activeSession != null)
             {
-                Reference = await GetNextOrderReference(),
+                var existingOrder = await Repo.GetOneAsync<Models.Orders.Order>(
+                    filter: o => o.Id == activeSession.CurrentOrderId.Value,
+                    includeProperties: "OrderDetails"
+                );
 
-                CustomerId = order.CustomerId,
-                ReservationId = order.ReservationId,
-
-                OrderStatusId = order.OrderStatusId,
-
-                DiscountAmount = discountAmount,
-                TaxAmount = taxAmount,
-                ServiceCharge = serviceCharge,
-
-                SubTotal = subTotal,
-
-                OrderDetails = order.OrderDetails.Select(d => new Models.Orders.OrderDetail
+                if (existingOrder != null)
                 {
-                    DishId = d.DishId,
-                    Quantity = d.Quantity,
-                    Note = d.Note,
-                    ItemStatusId = itemStatuses.First(x => x.IsDefault).Id,
-                }).ToList()
+                    foreach (var detail in order.OrderDetails)
+                    {
+                        await Repo.CreateAsync(new Models.Orders.OrderDetail
+                        {
+                            OrderId = existingOrder.Id,
+                            DishId = detail.DishId,
+                            Quantity = detail.Quantity,
+                            Note = detail.Note,
+                            ItemStatusId = itemDefaultStatusId
+                        }, userId);
+                    }
+
+                    existingOrder.SubTotal += incomingSubTotal;
+                    existingOrder.CalculateTotalAmount();
+
+                    Repo.Update(existingOrder, userId);
+                    await Repo.SaveAsync();
+
+                    return existingOrder.Id;
+                }
+            }
+
+            var newSession = new TableSession
+            {
+                TableId = order.TableId,
+                ReservationId = order.ReservationId,
+                IsActive = true,
+                StartedAt = DateTime.UtcNow.AddHours(7),
+                CurrentOrder = new Models.Orders.Order
+                {
+                    Reference = await GetNextOrderReference(),
+                    CustomerId = order.CustomerId,
+                    ReservationId = order.ReservationId,
+                    OrderStatusId = orderDefaultStatusId,
+
+                    DiscountAmount = order.DiscountAmount ?? 0m,
+                    TaxAmount = order.TaxAmount ?? 0m,
+                    ServiceCharge = order.ServiceCharge ?? 0m,
+                    SubTotal = incomingSubTotal,
+
+                    OrderDetails = order.OrderDetails.Select(d => new Models.Orders.OrderDetail
+                    {
+                        DishId = d.DishId,
+                        Quantity = d.Quantity,
+                        Note = d.Note,
+                        ItemStatusId = itemDefaultStatusId
+                    }).ToList()
+                }
             };
 
-            orderEntity.CalculateTotalAmount();
+            newSession.CurrentOrder.CalculateTotalAmount();
+            await Repo.CreateAsync(newSession);
 
-            await Repo.CreateAsync(orderEntity, userId);
-            await tableService.ChangeTableStatus(order.TableId, TableStatus.Reserved);
+            var tableIdsToCheck = (order.TableIds ?? new List<Guid>()).Append(order.TableId).Distinct().ToList();
+            var tables = await Repo.GetAsync<Table>(t => tableIdsToCheck.Contains(t.Id));
 
-            return orderEntity.Id;
+            foreach (var tId in tableIdsToCheck)
+            {
+                await tableService.ChangeTableStatus(tId, TableStatus.Occupied);
+            }
+
+            await Repo.SaveAsync();
+            return newSession.CurrentOrder.Id;
         }
 
         public async Task<Guid> UpdateOrder(Guid id, DataTranferObjects.Orders.Order orderDto, string userId)
         {
             var orderEntity = await Repo.GetOneAsync<Models.Orders.Order>(
                 filter: o => o.Id == id,
-                includeProperties: "OrderDetails,OrderTables"
+                includeProperties: "OrderDetails,Payments"
             );
 
             if (orderEntity == null)
@@ -318,7 +358,7 @@ namespace RestX.BLL.Services
 
             var subTotal = (orderDto.OrderDetails?.Sum(x => x.Quantity * dishesById[x.DishId].Price)) ?? 0m;
 
-            var itemStatuses = (await statusValueService.GetStatuses("order-detail")).ToList();
+            var itemDefaultStatusId = (await statusValueService.GetStatuses("order-detail")).ToList().First(x => x.IsDefault).Id;
 
             orderEntity.Reference = orderDto.Reference ?? orderEntity.Reference;
             orderEntity.CustomerId = orderDto.CustomerId;
@@ -348,7 +388,7 @@ namespace RestX.BLL.Services
                         DishId = d.DishId,
                         Quantity = d.Quantity,
                         Note = d.Note,
-                        ItemStatusId = itemStatuses.First(x => x.IsDefault).Id
+                        ItemStatusId = itemDefaultStatusId
                     });
                 }
             }
@@ -414,46 +454,35 @@ namespace RestX.BLL.Services
         public async Task<bool> UpdateStatus(Guid orderId, int statusId, string userId)
         {
             var order = await Repo.GetByIdAsync<Models.Orders.Order>(orderId);
-            if (order == null)
-                return false;
 
-            var oldStatus = order.OrderStatusId;
+            if (order == null) throw new AppException("No order");
 
-            if (statusId == (int)OrderStatus.Completed)
-            {
-                var hasPaidPayment = await Repo.GetExistsAsync<Payment>(
-                    p => p.OrderId == orderId && p.Status == PaymentStatus.Success);
-                if (!hasPaidPayment)
-                    throw new AppException("Cannot complete order: order has not been paid");
-            }
+            if (userId != String.Empty) order.HandledBy = Guid.Parse(userId);
 
-            if (userId != String.Empty)
-            {
-                order.HandledBy = Guid.Parse(userId);
-            }
-            order.OrderStatusId = (OrderStatus)statusId;
+            order.OrderStatusId = statusId;
 
-            if (statusId == (int)OrderStatus.Cancelled)
-                order.CancelledAt = DateTime.UtcNow.AddHours(7);
-            else if (statusId == (int)OrderStatus.Completed)
-                order.CompletedAt = DateTime.UtcNow.AddHours(7);
+            // Minus ingredient base on DishRecipe -> Trigger call method 
+            //if (statusId == (int)OrderStatus.Cancelled)
+            //    order.CancelledAt = DateTime.UtcNow.AddHours(7);
+            //else if (statusId == (int)OrderStatus.Completed)
+            //    order.CompletedAt = DateTime.UtcNow.AddHours(7);
 
-            if (oldStatus != OrderStatus.Confirmed && statusId == (int)OrderStatus.Confirmed)
-            {
-                var orderDetails = await Repo.GetAsync<Models.Orders.OrderDetail>(
-                    filter: od => od.OrderId == orderId,
-                    includeProperties: "Dish"
-                );
+            //if (oldStatus != OrderStatus.Confirmed && statusId == (int)OrderStatus.Confirmed)
+            //{
+            //    var orderDetails = await Repo.GetAsync<Models.Orders.OrderDetail>(
+            //        filter: od => od.OrderId == orderId,
+            //        includeProperties: "Dish"
+            //    );
 
-                foreach (var detail in orderDetails)
-                {
-                    var hasRecipe = await Repo.GetExistsAsync<DishRecipe>(r => r.DishId == detail.DishId);
-                    if (hasRecipe)
-                    {
-                        await ingredientService.DeductFromRecipe(detail.DishId, detail.Quantity);
-                    }
-                }
-            }
+            //    foreach (var detail in orderDetails)
+            //    {
+            //        var hasRecipe = await Repo.GetExistsAsync<DishRecipe>(r => r.DishId == detail.DishId);
+            //        if (hasRecipe)
+            //        {
+            //            await ingredientService.DeductFromRecipe(detail.DishId, detail.Quantity);
+            //        }
+            //    }
+            //}
 
             Repo.Update(order, userId);
             await Repo.SaveAsync();

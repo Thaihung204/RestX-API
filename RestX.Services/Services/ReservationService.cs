@@ -122,8 +122,6 @@ namespace RestX.BLL.Services
             await Repo.CreateAsync(reservation);
             reservation.ConfirmationCode = GenerateConfirmationCode(reservation.Id);
             Repo.Update(reservation);
-
-            // Create table sessions for all selected tables
             foreach (var table in tables)
             {
                 await Repo.CreateAsync(new TableSession
@@ -808,7 +806,6 @@ namespace RestX.BLL.Services
             if (alreadyPaid)
                 throw new InvalidOperationException("Deposit has already been paid");
 
-            // Cancel existing unpaid link if any
             var existingUnpaid = await Repo.GetOneAsync<Payment>(
                 p => p.ReservationId == reservationId && p.Purpose == PaymentPurpose.Deposit && p.Status == PaymentStatus.Pending);
             if (existingUnpaid?.PayOSOrderCode != null)
@@ -887,7 +884,6 @@ namespace RestX.BLL.Services
             await Repo.CreateAsync(payment, userId);
             await Repo.SaveAsync();
 
-            // Confirm reservation after successful cash deposit
             await ConfirmReservation(reservationId, userId);
         }
 

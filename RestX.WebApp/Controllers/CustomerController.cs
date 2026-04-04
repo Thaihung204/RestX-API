@@ -146,5 +146,22 @@ namespace RestX.WebApp.Controllers
                 return BadRequest(new { success = false, message = "An internal error occurred" });
             }
         }
+
+        [HttpGet("export/csv")]
+        [Authorize(Roles = "Admin,System Admin")]
+        public async Task<IActionResult> ExportCustomersCsv([FromQuery] CustomerFilterParams filter)
+        {
+            try
+            {
+                var bytes = await customerService.ExportCustomersAsync(filter);
+                var fileName = $"customers_{DateTime.UtcNow.AddHours(7):yyyyMMdd_HHmmss}.xlsx";
+                return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+            }
+            catch (Exception ex)
+            {
+                this.ExceptionHandler.RaiseException(ex);
+                return BadRequest(new { success = false, message = "An internal error occurred" });
+            }
+        }
     }
 }

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.SqlClient;
+using OfficeOpenXml;
 using RestX.BLL.DataTranferObjects.Common;
 using RestX.BLL.DataTranferObjects.Customer;
 using RestX.BLL.Helpers;
@@ -10,6 +11,7 @@ using RestX.Models.Customers;
 using RestX.Models.Identity;
 using RestX.Models.Loyalty;
 using RestX.Models.Tenants;
+using static RestX.BLL.Helpers.CsvHelper;
 
 namespace RestX.BLL.Services
 {
@@ -249,6 +251,60 @@ namespace RestX.BLL.Services
             return await Repo.GetFirstAsync<LoyaltyPointBand>(
                 filter: b => b.IsActive,
                 orderBy: q => q.OrderBy(b => b.Min));
+        }
+
+        public async Task<byte[]> ExportCustomersAsync(CustomerFilterParams filter)
+        {
+            filter.PageNumber = 1;
+            filter.PageSize = int.MaxValue;
+            var result = await GetAllCustomers(filter);
+            var customers = result.Items.ToList();
+
+            if (!customers.Any())
+                return CsvHelper.CreateEmptyWorkbook("Customers");
+            var idList = string.Join(",", customers.Select(c => $"'{c.Id}'"));
+            var statsQuery = $@"
+                SELECT
+                    CustomerId,
+                    COUNT(*) AS TotalOrders,
+                    ISNULL(SUM(CASE WHEN OrderStatusId = 4 THEN TotalAmount ELSE 0 END), 0) AS TotalSpent,
+                    MAX(CompletedAt) AS LastVisit
+                FROM Orders
+                WHERE CustomerId IN ({idList})
+                GROUP BY CustomerId";
+
+            var statsRows = await Repo.ExecuteSqlSelectAsync<CustomerStatRow>(statsQuery);
+            var statsById = statsRows.ToDictionary(s => s.CustomerId);
+
+            using var package = new ExcelPackage();
+            var sheet = package.Workbook.Worksheets.Add("Customers");
+            var headers = new[]
+            {
+                "Full Name", "Email", "Phone", "Membership Level",
+                "Loyalty Points", "Total Orders", "Total Spent (VND)",
+                "Last Visit", "Registered Date", "Status"
+            };
+            CsvHelper.WriteHeaders(sheet, headers);
+            int row = 2;
+            foreach (var c in customers)
+            {
+                statsById.TryGetValue(c.Id, out var stats);
+                sheet.Cells[row, 1].Value = c.FullName;
+                sheet.Cells[row, 2].Value = c.Email;
+                sheet.Cells[row, 3].Value = c.PhoneNumber;
+                sheet.Cells[row, 4].Value = c.MembershipLevel;
+                sheet.Cells[row, 5].Value = c.LoyaltyPoints;
+                sheet.Cells[row, 6].Value = stats?.TotalOrders ?? 0;
+                sheet.Cells[row, 7].Value = stats?.TotalSpent ?? 0;
+                sheet.Cells[row, 7].Style.Numberformat.Format = "#,##0";
+                sheet.Cells[row, 8].Value = stats?.LastVisit.HasValue == true
+                    ? stats.LastVisit.Value.ToString("dd/MM/yyyy HH:mm") : "";
+                sheet.Cells[row, 9].Value = c.CreatedDate.ToString("dd/MM/yyyy");
+                sheet.Cells[row, 10].Value = c.IsActive ? "Active" : "Inactive";
+                row++;
+            }
+            CsvHelper.AutoFitAndStyle(sheet, headers.Length, row - 1);
+            return package.GetAsByteArray();
         }
     }
 }

@@ -1,11 +1,12 @@
-using System.Linq.Expressions;
 using AutoMapper;
 using Hangfire;
+using OfficeOpenXml;
 using PayOS;
 using PayOS.Models.Webhooks;
 using RestX.BLL.DataTranferObjects.Authentication;
 using RestX.BLL.DataTranferObjects.Common;
 using RestX.BLL.DataTranferObjects.Reservation;
+using RestX.BLL.Helpers;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Auth;
 using RestX.BLL.Interfaces.Reservations;
@@ -16,6 +17,7 @@ using RestX.Models.Orders;
 using RestX.Models.Reservations;
 using RestX.Models.Tables;
 using RestX.Models.Tenants;
+using System.Linq.Expressions;
 
 namespace RestX.BLL.Services
 {
@@ -63,6 +65,42 @@ namespace RestX.BLL.Services
             this.paymentSettingService = paymentSettingService;
         }
 
+
+        public async Task<byte[]> ExportReservationsAsync(ReservationFilterParams filter)
+        {
+            filter.PageNumber = 1;
+            filter.PageSize = int.MaxValue;
+            var result = await GetReservations(filter);
+            var reservations = result.Items.ToList();
+            if (!reservations.Any())
+                return CsvHelper.CreateEmptyWorkbook("Reservations");
+            using var package = new ExcelPackage();
+            var sheet = package.Workbook.Worksheets.Add("Reservations");
+            var headers = new[]
+            {
+                "Confirmation Code", "Name", "Phone",
+                "Date & Time", "Number of Guests", "Tables",
+                "Status", "Deposit Amount", "Created At"
+            };
+            CsvHelper.WriteHeaders(sheet, headers);
+            int row = 2;
+            foreach (var r in reservations)
+            {
+                sheet.Cells[row, 1].Value = r.ConfirmationCode;
+                sheet.Cells[row, 2].Value = r.ContactName;
+                sheet.Cells[row, 3].Value = r.ContactPhone;
+                sheet.Cells[row, 4].Value = r.ReservationDateTime.ToString("dd/MM/yyyy HH:mm");
+                sheet.Cells[row, 5].Value = r.NumberOfGuests;
+                sheet.Cells[row, 6].Value = string.Join("; ", r.Tables.Select(t => t.Code));
+                sheet.Cells[row, 7].Value = r.Status.Name;
+                sheet.Cells[row, 8].Value = r.DepositAmount;
+                sheet.Cells[row, 8].Style.Numberformat.Format = "#,##0";
+                sheet.Cells[row, 9].Value = r.CreatedAt.ToString("dd/MM/yyyy HH:mm");
+                row++;
+            }
+            CsvHelper.AutoFitAndStyle(sheet, headers.Length, row - 1);
+            return package.GetAsByteArray();
+        }
         public async Task<ReservationDetail> CreateReservation(CreateReservationRequest request)
         {
             ValidateFutureDate(request.ReservationDateTime);

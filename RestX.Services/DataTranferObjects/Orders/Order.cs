@@ -40,5 +40,6 @@ namespace RestX.BLL.DataTranferObjects.Orders
 
         public List<Guid>? TableIds { get; set; } = new();
         public List<OrderDetail> OrderDetails { get; set; }
+        public DateTime? CreatedDate { get; set; }
     }
 }

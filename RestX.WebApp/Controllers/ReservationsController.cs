@@ -99,6 +99,23 @@ namespace RestX.WebApp.Controllers
             }
         }
 
+        [HttpGet("export/csv")]
+        [Authorize(Roles = "Admin,System Admin,Staff")]
+        public async Task<IActionResult> ExportReservationsCsv([FromQuery] ReservationFilterParams filter)
+        {
+            try
+            {
+                var bytes = await reservationService.ExportReservationsAsync(filter);
+                var fileName = $"reservations_{DateTime.UtcNow.AddHours(7):yyyyMMdd_HHmmss}.xlsx";
+                return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest(new { success = false, message = "An internal error occurred" });
+            }
+        }
+
         [HttpGet("my")]
         [Authorize(Roles = "Customer")]
         public async Task<IActionResult> GetMyReservations([FromQuery] PaginationParams pagination)

@@ -15,6 +15,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.Net.Http.Headers;
 using Microsoft.OpenApi.Models;
+using OfficeOpenXml;
 using RestX.AdminDAL.Context;
 using RestX.App.Helpers;
 using RestX.BLL;
@@ -60,6 +61,7 @@ namespace RestX.WebApp
 
         public void ConfigureServices(IServiceCollection services)
         {
+            ExcelPackage.License.SetNonCommercialPersonal("RestX");
             // Multi Tenant Support
             services.AddControllers();
             services.AddScoped<IRedisService, RedisService>();
@@ -86,7 +88,6 @@ namespace RestX.WebApp
             })
                 .AddEntityFrameworkStores<TenantDbContext>()
                 .AddDefaultTokenProviders();
-
 
             // Needed if using the force logout function on /logout
             //services.Configure<SecurityStampValidatorOptions>(options =>

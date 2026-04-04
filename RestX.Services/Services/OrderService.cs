@@ -249,16 +249,24 @@ namespace RestX.BLL.Services
         {
             var now = DateTime.UtcNow.AddHours(7);
 
-            var activeSession = await Repo.GetOneAsync<TableSession>(
+            //var activeSession = await Repo.GetOneAsync<TableSession>(
+            //    filter: ts => ts.TableId == order.TableId
+            //               && ts.IsActive
+            //               && ts.StartedAt <= now
+            //               && (ts.EndedAt == null || ts.EndedAt > now)
+            //);
+
+            var activeSession = (await Repo.GetAsync<TableSession>(
                 filter: ts => ts.TableId == order.TableId
-                           && ts.IsActive
-                           && ts.StartedAt <= now
-                           && (ts.EndedAt == null || ts.EndedAt > now)
-            );
+               && ts.IsActive
+               && ts.StartedAt <= now
+               && (ts.EndedAt == null || ts.EndedAt > now),
+            orderBy: q => q.OrderByDescending(ts => ts.StartedAt)
+                )).FirstOrDefault();
 
             if (activeSession != null)
             {
-                order.Id = activeSession.CurrentOrderId;
+                activeSession.CurrentOrderId= order.Id;
             }
             else
             {

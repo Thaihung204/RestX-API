@@ -1,10 +1,10 @@
-using System.Linq.Expressions;
 using AutoMapper;
 using Hangfire;
 using PayOS;
 using PayOS.Models.Webhooks;
 using RestX.BLL.DataTranferObjects.Authentication;
 using RestX.BLL.DataTranferObjects.Common;
+using RestX.BLL.DataTranferObjects.Payments;
 using RestX.BLL.DataTranferObjects.Reservation;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Auth;
@@ -13,10 +13,12 @@ using RestX.BLL.Interfaces.Status;
 using RestX.BLL.Interfaces.Tables;
 using RestX.Models.Customers;
 using RestX.Models.Enum;
+using RestX.Models.HR;
 using RestX.Models.Orders;
 using RestX.Models.Reservations;
 using RestX.Models.Tables;
 using RestX.Models.Tenants;
+using System.Linq.Expressions;
 
 namespace RestX.BLL.Services
 {
@@ -653,7 +655,7 @@ namespace RestX.BLL.Services
 
         private async Task FreeTablesAndSessions(Reservation reservation, string newStatusCode, string? userId = null)
         {
-            if (newStatusCode != CompletedCode && newStatusCode != CancelledCode)
+            if (newStatusCode != CompletedCode && newStatusCode != CancelledCode && newStatusCode != ConfirmedCode)
                 return;
 
             var sessions = (await Repo.GetAsync<TableSession>(
@@ -812,7 +814,7 @@ namespace RestX.BLL.Services
             return link.CheckoutUrl;
         }
 
-        public async Task ConfirmCashDeposit(Guid reservationId, string userId)
+        public async Task ConfirmCashDeposit(Guid reservationId, CashPaymentRequest request, string userId)
         {
             var reservation = await Repo.GetOneAsync<Reservation>(
                 filter: r => r.Id == reservationId,
@@ -826,16 +828,22 @@ namespace RestX.BLL.Services
                 p => p.ReservationId == reservationId && p.Purpose == PaymentPurpose.Deposit && p.Status == PaymentStatus.Success);
             if (alreadyPaid)
                 throw new InvalidOperationException("Deposit has already been paid");
+            var employee = await Repo.GetOneAsync<Employee>( e => e.ApplicationUser.Id.ToString() == userId);
+            if (request.CashReceive < reservation.DepositAmount)
+                throw new InvalidOperationException($"Cash received ({request.CashReceive}) is less than amount due ({reservation.DepositAmount})");
+            var cashback = request.CashReceive - reservation.DepositAmount;
 
             var payment = new Payment
             {
                 ReservationId = reservationId,
                 PaymentMethodId = "CASH",
                 Amount = reservation.DepositAmount,
+                CashReceive = request.CashReceive,
+                Cashback = cashback,
                 Status = PaymentStatus.Success,
                 Purpose = PaymentPurpose.Deposit,
                 PaymentDate = VnNow,
-                ProcessedBy = string.IsNullOrEmpty(userId) ? null : Guid.Parse(userId)
+                ProcessedBy = string.IsNullOrEmpty(userId) ? null : Guid.Parse(employee.Id.ToString())
             };
 
             await Repo.CreateAsync(payment, userId);

@@ -1,4 +1,5 @@
 using RestX.BLL.DataTranferObjects.Common;
+using RestX.BLL.DataTranferObjects.Payments;
 using RestX.BLL.DataTranferObjects.Reservation;
 
 namespace RestX.BLL.Interfaces.Reservations
@@ -21,7 +22,7 @@ namespace RestX.BLL.Interfaces.Reservations
         // Deposit
         Task<DepositStatusResponse> GetDepositStatus(Guid reservationId);
         Task<string> CreateDepositPaymentLink(Guid reservationId);
-        Task ConfirmCashDeposit(Guid reservationId, string userId);
+        Task ConfirmCashDeposit(Guid reservationId, CashPaymentRequest request, string userId);
         Task AutoCancelDepositReservation(Guid reservationId);
     }
 }

@@ -258,12 +258,12 @@ namespace RestX.BLL.Services
 
             if (activeSession != null)
             {
-                order.Id = activeSession.CurrentOrderId;
+                order.Id = activeSession.OrderId;
             }
             else
             {
                 var newSession = await tableService.CreateTableSession(order.TableId, userId, order.CustomerId);
-                order.Id = newSession.CurrentOrderId;
+                order.Id = newSession.OrderId;
             }
 
             return await UpsertOrder(order, userId);

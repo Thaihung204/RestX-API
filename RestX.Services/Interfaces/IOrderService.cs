@@ -13,7 +13,7 @@ namespace RestX.BLL.Interfaces
         Task<OrderSearchResult> GetAllOrders(OrderSearch model);
         Task<Order?> GetOrderById(Guid id);
         Task<Order> CheckSessionBeforeOrder(Order order, string userId);
-        Task<Order> UpsertOrder(Order order, string userId);
+        Task<Models.Orders.Order> UpsertOrder(Order order, string userId);
         Task<Guid> UpdateOrder(Guid id, Order order, string userId);
         Task DeleteOrder(Guid id);
         Task<bool> UpdateStatus(Guid orderId, int statusId, string userId);

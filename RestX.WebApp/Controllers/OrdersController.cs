@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
 using RestX.BLL.DataTranferObjects.Orders;
 using RestX.BLL.Exceptionhandling;
 using RestX.BLL.Interfaces;
@@ -99,6 +100,16 @@ namespace RestX.WebApp.Controllers
             {
                 return this.BadRequest(ex.Message);
             }
+            //catch (DbUpdateConcurrencyException ex)
+            //{
+            //    foreach (var entry in ex.Entries)
+            //    {
+            //        // entry.Entity sẽ cho bạn biết class nào (Order, Session, v.v.) đang lỗi
+            //        var entityType = entry.Entity.GetType().Name;
+            //        Console.WriteLine($"Lỗi đồng thời xảy ra ở bảng/thực thể: {entityType}");
+            //    }
+            //    return BadRequest("Dữ liệu đã bị thay đổi bởi người khác, vui lòng thử lại.");
+            //}
             catch (Exception ex)
             {
                 ExceptionHandler.RaiseException(ex);

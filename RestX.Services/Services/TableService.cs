@@ -193,40 +193,20 @@ namespace RestX.BLL.Services
             return newSession;
         }
 
-        private async Task<string> GetNextOrderReference()
+        public async Task<TableSession?> GetActiveTableSession(Guid tableId)
         {
-            string tenantPrefix = CurrentTenant.Prefix;
-            string reference = $"{tenantPrefix}{DateTime.UtcNow.AddHours(7):yMdsff}";
+            var now = DateTime.UtcNow.AddHours(7);
 
-            bool exists = await Repo.GetExistsAsync<Order>(o => o.Reference == reference);
-            int count = 0;
+            var session = await Repo.GetOneAsync<TableSession>(
+                filter: ts => ts.TableId == tableId && ts.IsActive
+                           && ts.IsActive
+                           && ts.StartedAt <= now
+                           && (ts.EndedAt == null || ts.EndedAt > now),
+                includeProperties: "Order,Reservation"
+            );
 
-            while (exists && count < 20)
-            {
-                if (count < 1)
-                {
-                    reference = $"{tenantPrefix}{DateTime.UtcNow.AddHours(7):yMdsff}";
-                }
-                else if (count < 2)
-                {
-                    reference = $"{tenantPrefix}{DateTime.UtcNow.AddHours(7):yMdsfff}";
-                }
-                else if (count < 10)
-                {
-                    reference = $"{tenantPrefix}{DateTime.UtcNow.AddHours(7):yMdsHHfff}";
-                }
-                else
-                {
-                    reference = $"{tenantPrefix}{DateTime.UtcNow.AddHours(7):yMdsHHmmfff}";
-                }
-
-                exists = await Repo.GetExistsAsync<Order>(o => o.Reference == reference);
-                count++;
-            }
-
-            return reference;
+            return session;
         }
-
         #region QR Code Generation
         private string GenerateTableQRCode(Guid tableId, string tenantHostname)
         {

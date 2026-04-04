@@ -1,5 +1,5 @@
-﻿using RestX.Models.Enum;
-using RestX.Models.Reservations;
+﻿using RestX.BLL.DataTranferObjects.Table;
+using RestX.Models.Enum;
 using System.ComponentModel.DataAnnotations;
 
 namespace RestX.BLL.DataTranferObjects.Orders
@@ -39,7 +39,7 @@ namespace RestX.BLL.DataTranferObjects.Orders
         public DateTime? CancelledAt { get; set; }
         public Guid? HandledBy { get; set; }
 
-        public List<TableSession>? tableSessions{ get; set; } = new();
+        public List<TableSessionInfo>? tableSessions{ get; set; } = new();
         public List<OrderDetail> OrderDetails { get; set; }
     }
 }

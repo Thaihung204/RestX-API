@@ -1,0 +1,19 @@
+﻿using System;
+
+namespace RestX.BLL.DataTranferObjects.Table
+{
+    public class TableSessionInfo
+    {
+        public Guid Id { get; set; }
+        public Guid TableId { get; set; }
+        public Guid? OrderId { get; set; } 
+        public Guid? ReservationId { get; set; }
+
+        public DateTime StartedAt { get; set; }
+        public DateTime? EndedAt { get; set; }
+        public bool IsActive { get; set; }
+
+        public string? OrderReference { get; set; }
+        public decimal? OrderTotalAmount { get; set; }
+    }
+}

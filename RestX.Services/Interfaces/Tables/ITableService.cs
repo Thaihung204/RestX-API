@@ -12,6 +12,6 @@ namespace RestX.BLL.Interfaces.Tables
         Task DeleteTable(Guid id);
         Task<TableItem> ChangeTableStatus(Guid id, TableStatus status);
         Task<TableSession> CreateTableSession(Guid tableId, string userId, Guid? customerId = null, Guid? reservationId = null);
-
+        Task<TableSession?> GetActiveTableSession(Guid tableId);
     }
 }

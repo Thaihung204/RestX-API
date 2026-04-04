@@ -247,29 +247,48 @@ namespace RestX.BLL.Services
 
         public async Task<DataTranferObjects.Orders.Order> CheckSessionBeforeOrder(DataTranferObjects.Orders.Order order, string userId)
         {
-            var now = DateTime.UtcNow.AddHours(7);
-
-            var activeSession = await Repo.GetOneAsync<TableSession>(
-                filter: ts => ts.TableId == order.TableId
-                           && ts.IsActive
-                           && ts.StartedAt <= now
-                           && (ts.EndedAt == null || ts.EndedAt > now)
-            );
+            var activeSession = await tableService.GetActiveTableSession(order.TableId);
 
             if (activeSession != null)
             {
-                order.Id = activeSession.OrderId;
+                bool isOrderSession = activeSession.OrderId.HasValue;
+
+                if (isOrderSession)
+                {
+                    order.Id = activeSession.OrderId;
+                }
+                var updatedOrder = await UpsertOrder(order, userId);
+
+                if (!isOrderSession)
+                {
+                    var reservationId = activeSession.ReservationId;
+                    var reservationSessions = await Repo.GetAsync<Models.Reservations.TableSession>(
+                            filter: ts => ts.ReservationId == reservationId.Value && ts.IsActive
+                        );
+
+                    foreach (var session in reservationSessions)
+                    {
+                        session.OrderId = updatedOrder.Id;
+                        Repo.Update(session, userId);
+                    }
+
+                    await Repo.SaveAsync();
+                }
+
+                return mapper.Map<DataTranferObjects.Orders.Order>(updatedOrder);
             }
             else
             {
                 var newSession = await tableService.CreateTableSession(order.TableId, userId, order.CustomerId);
-                order.Id = newSession.OrderId;
+                newSession.Order = await UpsertOrder(order, userId);
+                Repo.Update(newSession, userId);
+                await Repo.SaveAsync();
+                return mapper.Map<DataTranferObjects.Orders.Order>(newSession.Order);
             }
 
-            return await UpsertOrder(order, userId);
         }
 
-        public async Task<DataTranferObjects.Orders.Order> UpsertOrder(DataTranferObjects.Orders.Order order, string userId)
+        public async Task<Models.Orders.Order> UpsertOrder(DataTranferObjects.Orders.Order order, string userId)
         {
             Models.Orders.Order orderEntity;
 
@@ -321,8 +340,6 @@ namespace RestX.BLL.Services
                 orderEntity.CalculateTotalAmount();
 
                 await Repo.CreateAsync(orderEntity, userId);
-
-                order.Id = orderEntity.Id;
             }
             else
             {
@@ -333,10 +350,7 @@ namespace RestX.BLL.Services
 
                 if (orderEntity == null)
                     throw new Exception("Order not found");
-                orderEntity = await Repo.GetOneAsync<Models.Orders.Order>(
-                    filter: o => o.Id == order.Id,
-                    includeProperties: "OrderDetails,Payments"
-                );
+
                 var dishIds = (order.OrderDetails ?? new List<DataTranferObjects.Orders.OrderDetail>())
                     .Select(x => x.DishId)
                     .Distinct()
@@ -379,7 +393,7 @@ namespace RestX.BLL.Services
 
             }
 
-            return mapper.Map<DataTranferObjects.Orders.Order>(orderEntity);
+            return orderEntity;
         }
 
         public async Task<Guid> UpdateOrder(Guid id, DataTranferObjects.Orders.Order order, string userId)

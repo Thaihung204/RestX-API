@@ -11,6 +11,20 @@ namespace RestX.DAL.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.DropForeignKey(
+                name: "FK_Orders_Reservations_ReservationId",
+                table: "Orders");
+
+            migrationBuilder.DropForeignKey(
+                name: "FK_Payments_Reservations_ReservationId",
+                table: "Payments");
+
+            migrationBuilder.DropTable(
+                name: "OrderTables");
+
+            migrationBuilder.DropTable(
+                name: "ReservationTables");
+
             migrationBuilder.AddForeignKey(
                 name: "FK_Orders_Reservations_ReservationId",
                 table: "Orders",

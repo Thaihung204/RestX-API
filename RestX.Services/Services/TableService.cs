@@ -173,13 +173,13 @@ namespace RestX.BLL.Services
             //}
 
             //await ChangeTableStatus(tableId, TableStatus.Occupied);
-
+            var reservation = reservationId.HasValue ? await Repo.GetOneAsync<Reservation>(r => r.Id == reservationId.Value) : null;
             TableSession newSession = new TableSession
             {
                 TableId = tableId,
                 ReservationId = reservationId,
                 IsActive = true,
-                StartedAt = now,
+                StartedAt = reservation?.Time ?? now,
                 //CurrentOrder = new Order
                 //{
                 //    Reference = await GetNextOrderReference(),

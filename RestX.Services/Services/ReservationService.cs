@@ -10,6 +10,7 @@ using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Auth;
 using RestX.BLL.Interfaces.Reservations;
 using RestX.BLL.Interfaces.Status;
+using RestX.BLL.Interfaces.Tables;
 using RestX.Models.Customers;
 using RestX.Models.Enum;
 using RestX.Models.Orders;
@@ -42,12 +43,14 @@ namespace RestX.BLL.Services
         private readonly IEmailService emailService;
         private readonly IDepositConfigService depositConfigService;
         private readonly IPaymentSettingService paymentSettingService;
+        private readonly ITableService tableService;
 
         public ReservationService(
             IMapper mapper,
             IStatusValueService statusValueService,
             IAuthService authService,
             IEmailService emailService,
+            ITableService tableService,
             IDepositConfigService depositConfigService,
             IPaymentSettingService paymentSettingService,
             IRepository repo,
@@ -61,6 +64,7 @@ namespace RestX.BLL.Services
             this.emailService = emailService;
             this.depositConfigService = depositConfigService;
             this.paymentSettingService = paymentSettingService;
+            this.tableService = tableService;
         }
 
         public async Task<ReservationDetail> CreateReservation(CreateReservationRequest request)
@@ -124,13 +128,7 @@ namespace RestX.BLL.Services
             Repo.Update(reservation);
             foreach (var table in tables)
             {
-                await Repo.CreateAsync(new TableSession
-                {
-                    TableId = table.Id,
-                    ReservationId = reservation.Id,
-                    StartedAt = request.ReservationDateTime,
-                    IsActive = true
-                });
+               await tableService.CreateTableSession(table.Id, null, customerId, reservation.Id);
             }
             await Repo.SaveAsync();
 
@@ -274,14 +272,7 @@ namespace RestX.BLL.Services
                 }
                 foreach (var table in newTables.Where(t => addedTableIds.Contains(t.Id)))
                 {
-                    await Repo.CreateAsync(new TableSession
-                    {
-                        TableId = table.Id,
-                        ReservationId = id,
-                        CurrentOrderId = sharedOrderId,
-                        StartedAt = newDateTime,
-                        IsActive = true
-                    });
+                   await tableService.CreateTableSession(table.Id, String.Empty, reservation.CustomerId, reservation.Id);
                 }
             }
             else if (dateChanged)
@@ -336,25 +327,25 @@ namespace RestX.BLL.Services
                 reservation.ReservationStatusId = confirmedStatus.Id;
                 Repo.Update(reservation, userId);
             }
-            var sessions = reservation.TableSessions.ToList();
-            var currentOrder = sessions.FirstOrDefault()?.CurrentOrderId;
+            //var sessions = reservation.TableSessions.ToList();
+            //var currentOrder = sessions.FirstOrDefault()?.CurrentOrderId;
 
-            if (!currentOrder.HasValue || currentOrder == Guid.Empty)
-            {
-                var emptyOrder = new Order
-                {
-                    Reference = await GenerateOrderReference(),
-                    CustomerId = reservation.CustomerId,
-                    ReservationId = reservation.Id,
-                    OrderStatusId = OrderStatus.Pending
-                };
-                await Repo.CreateAsync(emptyOrder);
-                foreach (var session in sessions)
-                {
-                    session.CurrentOrderId = emptyOrder.Id;
-                    Repo.Update(session, userId);
-                }
-            }
+            //if (!currentOrder.HasValue || currentOrder == Guid.Empty)
+            //{
+            //    var emptyOrder = new Order
+            //    {
+            //        Reference = await GenerateOrderReference(),
+            //        CustomerId = reservation.CustomerId,
+            //        ReservationId = reservation.Id,
+            //        OrderStatusId = OrderStatus.Pending
+            //    };
+            //    await Repo.CreateAsync(emptyOrder);
+            //    foreach (var session in sessions)
+            //    {
+            //        session.CurrentOrderId = emptyOrder.Id;
+            //        Repo.Update(session, userId);
+            //    }
+            //}
 
             await Repo.SaveAsync();
         }
@@ -687,7 +678,7 @@ namespace RestX.BLL.Services
                         includeProperties: "OrderDetails");
                     if (order != null && !order.OrderDetails.Any())
                     {
-                        order.OrderStatusId = OrderStatus.Cancelled;
+                        order.OrderStatusId = (int)OrderStatus.Cancelled;
                         order.CancelledAt = VnNow;
                         Repo.Update(order, userId);
                     }
@@ -729,40 +720,6 @@ namespace RestX.BLL.Services
 
         private static string GenerateConfirmationCode(Guid id)
             => id.ToString("N")[..6].ToUpper();
-
-        private async Task<string> GenerateOrderReference()
-        {
-            var tenantPrefix = CurrentTenant.Prefix;
-            var reference = $"{tenantPrefix}{DateTime.UtcNow.AddHours(7):yMdsff}";
-
-            var exists = await Repo.GetExistsAsync<Order>(o => o.Reference == reference);
-            var count = 0;
-
-            while (exists && count < 20)
-            {
-                if (count < 1)
-                {
-                    reference = $"{tenantPrefix}{DateTime.UtcNow.AddHours(7):yMdsff}";
-                }
-                else if (count < 2)
-                {
-                    reference = $"{tenantPrefix}{DateTime.UtcNow.AddHours(7):yMdsfff}";
-                }
-                else if (count < 10)
-                {
-                    reference = $"{tenantPrefix}{DateTime.UtcNow.AddHours(7):yMdsHHfff}";
-                }
-                else
-                {
-                    reference = $"{tenantPrefix}{DateTime.UtcNow.AddHours(7):yMdsHHmmfff}";
-                }
-
-                exists = await Repo.GetExistsAsync<Order>(o => o.Reference == reference);
-                count++;
-            }
-
-            return reference;
-        }
 
         #endregion
 

@@ -24,7 +24,7 @@ namespace RestX.Models.Orders
         public Guid? CustomerId { get; set; }
         public Guid? ReservationId { get; set; }
         [TriggerProperty(DisplayName = "Status")]
-        public OrderStatus OrderStatusId { get; set; }
+        public int OrderStatusId { get; set; }
 
         [Column(TypeName = "decimal(18,2)")]
         [Range(0, 999999999.99)]

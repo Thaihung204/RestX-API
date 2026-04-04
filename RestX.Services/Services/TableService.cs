@@ -166,13 +166,13 @@ namespace RestX.BLL.Services
         {
             DateTime now = DateTime.UtcNow.AddHours(7);
 
-            Table table = await Repo.GetByIdAsync<Table>(tableId);
-            if (table.TableStatusId == TableStatus.Occupied)
-            {
-                throw new AppException($"Bàn {table.Code} đang phục vụ, không thể khởi tạo phiên mới.");
-            }
+            //Table table = await Repo.GetByIdAsync<Table>(tableId);
+            //if (table.TableStatusId == TableStatus.Occupied)
+            //{
+            //    throw new AppException($"Bàn {table.Code} đang phục vụ, không thể khởi tạo phiên mới.");
+            //}
 
-            await ChangeTableStatus(tableId, TableStatus.Occupied);
+            //await ChangeTableStatus(tableId, TableStatus.Occupied);
 
             TableSession newSession = new TableSession
             {

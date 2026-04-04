@@ -177,14 +177,15 @@ namespace RestX.BLL.Services
             TableSession newSession = new TableSession
             {
                 TableId = tableId,
+                ReservationId = reservationId,
                 IsActive = true,
                 StartedAt = now,
-                CurrentOrder = new Order
-                {
-                    Reference = await GetNextOrderReference(),
-                    CustomerId = customerId,
-                    ReservationId = reservationId,
-                }
+                //CurrentOrder = new Order
+                //{
+                //    Reference = await GetNextOrderReference(),
+                //    CustomerId = customerId,
+                //    ReservationId = reservationId,
+                //}
             };
 
             await Repo.CreateAsync(newSession, userId);

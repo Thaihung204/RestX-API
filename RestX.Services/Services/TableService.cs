@@ -1,12 +1,15 @@
-using AutoMapper;
+﻿using AutoMapper;
 using Microsoft.AspNetCore.Http;
 using QRCoder;
 using RestX.BLL.DataTranferObjects.Table;
+using RestX.BLL.Exceptionhandling;
 using RestX.BLL.Extensions;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Tables;
 using RestX.Models.Enum;
 using RestX.Models.Menu;
+using RestX.Models.Orders;
+using RestX.Models.Reservations;
 using RestX.Models.Tables;
 using RestX.Models.Tenants;
 
@@ -157,6 +160,70 @@ namespace RestX.BLL.Services
             await Repo.SaveAsync();
 
             return mapper.Map<TableItem>(table);
+        }
+
+        public async Task<TableSession> CreateTableSession(Guid tableId, string userId, Guid? customerId = null, Guid? reservationId = null)
+        {
+            DateTime now = DateTime.UtcNow.AddHours(7);
+
+            Table table = await Repo.GetByIdAsync<Table>(tableId);
+            if (table.TableStatusId == TableStatus.Occupied)
+            {
+                throw new AppException($"Bàn {table.Code} đang phục vụ, không thể khởi tạo phiên mới.");
+            }
+
+            await ChangeTableStatus(tableId, TableStatus.Occupied);
+
+            TableSession newSession = new TableSession
+            {
+                TableId = tableId,
+                IsActive = true,
+                StartedAt = now,
+                CurrentOrder = new Order
+                {
+                    Reference = await GetNextOrderReference(),
+                    CustomerId = customerId,
+                    ReservationId = reservationId,
+                }
+            };
+
+            await Repo.CreateAsync(newSession, userId);
+
+            return newSession;
+        }
+
+        private async Task<string> GetNextOrderReference()
+        {
+            string tenantPrefix = CurrentTenant.Prefix;
+            string reference = $"{tenantPrefix}{DateTime.UtcNow.AddHours(7):yMdsff}";
+
+            bool exists = await Repo.GetExistsAsync<Order>(o => o.Reference == reference);
+            int count = 0;
+
+            while (exists && count < 20)
+            {
+                if (count < 1)
+                {
+                    reference = $"{tenantPrefix}{DateTime.UtcNow.AddHours(7):yMdsff}";
+                }
+                else if (count < 2)
+                {
+                    reference = $"{tenantPrefix}{DateTime.UtcNow.AddHours(7):yMdsfff}";
+                }
+                else if (count < 10)
+                {
+                    reference = $"{tenantPrefix}{DateTime.UtcNow.AddHours(7):yMdsHHfff}";
+                }
+                else
+                {
+                    reference = $"{tenantPrefix}{DateTime.UtcNow.AddHours(7):yMdsHHmmfff}";
+                }
+
+                exists = await Repo.GetExistsAsync<Order>(o => o.Reference == reference);
+                count++;
+            }
+
+            return reference;
         }
 
         #region QR Code Generation

@@ -27,7 +27,6 @@ namespace RestX.BLL.Services
         public async Task<IEnumerable<StatusValues>> GetStatuses(string typeCode)
         {
             var cacheKey = GetCacheKey(typeCode);
-            await RedisService.RemoveAsync(cacheKey);
             var cached = await RedisService.GetAsync<List<StatusValues>>(cacheKey);
             if (cached != null)
                 return cached;

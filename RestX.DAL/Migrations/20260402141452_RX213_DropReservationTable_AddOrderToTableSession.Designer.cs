@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using RestX.DAL.Context;
 
@@ -11,9 +12,11 @@ using RestX.DAL.Context;
 namespace RestX.DAL.Migrations
 {
     [DbContext(typeof(TenantDbContext))]
-    partial class TenantDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260402141452_RX213_DropReservationTable_AddOrderToTableSession")]
+    partial class RX213_DropReservationTable_AddOrderToTableSession
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1488,9 +1491,7 @@ namespace RestX.DAL.Migrations
                     b.HasIndex("Reference")
                         .IsUnique();
 
-                    b.HasIndex("ReservationId")
-                        .IsUnique()
-                        .HasFilter("[ReservationId] IS NOT NULL");
+                    b.HasIndex("ReservationId");
 
                     b.ToTable("Orders", (string)null);
                 });
@@ -1543,6 +1544,45 @@ namespace RestX.DAL.Migrations
                     b.HasIndex("OrderId");
 
                     b.ToTable("OrderDetails", (string)null);
+                });
+
+            modelBuilder.Entity("RestX.Models.Orders.OrderTable", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("ModifiedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("PropertiesJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("TableId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TableId");
+
+                    b.HasIndex("OrderId", "TableId")
+                        .IsUnique();
+
+                    b.ToTable("OrderTables", (string)null);
                 });
 
             modelBuilder.Entity("RestX.Models.Orders.Payment", b =>
@@ -1869,6 +1909,9 @@ namespace RestX.DAL.Migrations
                     b.Property<DateTime>("CreatedDate")
                         .HasColumnType("datetime2");
 
+                    b.Property<Guid?>("CurrentOrderId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTime?>("EndedAt")
                         .HasColumnType("datetime2");
 
@@ -1881,9 +1924,6 @@ namespace RestX.DAL.Migrations
 
                     b.Property<DateTime?>("ModifiedDate")
                         .HasColumnType("datetime2");
-
-                    b.Property<Guid?>("OrderId")
-                        .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("PropertiesJson")
                         .HasColumnType("nvarchar(max)");
@@ -1899,7 +1939,7 @@ namespace RestX.DAL.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("OrderId");
+                    b.HasIndex("CurrentOrderId");
 
                     b.HasIndex("ReservationId");
 
@@ -2641,8 +2681,9 @@ namespace RestX.DAL.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("RestX.Models.Reservations.Reservation", "Reservation")
-                        .WithOne("Order")
-                        .HasForeignKey("RestX.Models.Orders.Order", "ReservationId");
+                        .WithMany("Orders")
+                        .HasForeignKey("ReservationId")
+                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("Customer");
 
@@ -2676,6 +2717,25 @@ namespace RestX.DAL.Migrations
                     b.Navigation("ItemStatus");
 
                     b.Navigation("Order");
+                });
+
+            modelBuilder.Entity("RestX.Models.Orders.OrderTable", b =>
+                {
+                    b.HasOne("RestX.Models.Orders.Order", "Order")
+                        .WithMany("OrderTables")
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("RestX.Models.Tables.Table", "Table")
+                        .WithMany("OrderTables")
+                        .HasForeignKey("TableId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Order");
+
+                    b.Navigation("Table");
                 });
 
             modelBuilder.Entity("RestX.Models.Orders.Payment", b =>
@@ -2773,10 +2833,10 @@ namespace RestX.DAL.Migrations
 
             modelBuilder.Entity("RestX.Models.Reservations.TableSession", b =>
                 {
-                    b.HasOne("RestX.Models.Orders.Order", "Order")
-                        .WithMany("TableSessions")
-                        .HasForeignKey("OrderId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                    b.HasOne("RestX.Models.Orders.Order", "CurrentOrder")
+                        .WithMany()
+                        .HasForeignKey("CurrentOrderId")
+                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("RestX.Models.Reservations.Reservation", "Reservation")
                         .WithMany("TableSessions")
@@ -2789,7 +2849,7 @@ namespace RestX.DAL.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.Navigation("Order");
+                    b.Navigation("CurrentOrder");
 
                     b.Navigation("Reservation");
 
@@ -2948,13 +3008,13 @@ namespace RestX.DAL.Migrations
 
                     b.Navigation("OrderDetails");
 
+                    b.Navigation("OrderTables");
+
                     b.Navigation("Payments");
 
                     b.Navigation("PointsTransactions");
 
                     b.Navigation("PromotionHistories");
-
-                    b.Navigation("TableSessions");
                 });
 
             modelBuilder.Entity("RestX.Models.Promotions.Promotion", b =>
@@ -2966,7 +3026,7 @@ namespace RestX.DAL.Migrations
 
             modelBuilder.Entity("RestX.Models.Reservations.Reservation", b =>
                 {
-                    b.Navigation("Order");
+                    b.Navigation("Orders");
 
                     b.Navigation("Payments");
 
@@ -2980,6 +3040,8 @@ namespace RestX.DAL.Migrations
 
             modelBuilder.Entity("RestX.Models.Tables.Table", b =>
                 {
+                    b.Navigation("OrderTables");
+
                     b.Navigation("Table3DModel");
 
                     b.Navigation("TableSessions");

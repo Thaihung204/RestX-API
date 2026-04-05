@@ -265,6 +265,11 @@ namespace RestX.BLL.Services
                 {
                     order.Id = activeSession.OrderId;
                 }
+                else
+                {
+                    order.ReservationId = activeSession.ReservationId;
+                }
+
                 var updatedOrder = await UpsertOrder(order, userId);
 
                 if (!isOrderSession)
@@ -307,6 +312,7 @@ namespace RestX.BLL.Services
                 {
                     Reference = await GetNextOrderReference(),
                     CustomerId = order.CustomerId,
+                    ReservationId = order.ReservationId,
                     OrderDetails = new List<Models.Orders.OrderDetail>(),
                     SubTotal = 0
                 };

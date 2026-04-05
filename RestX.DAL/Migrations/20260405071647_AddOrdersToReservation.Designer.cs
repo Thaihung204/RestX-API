@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using RestX.DAL.Context;
 
@@ -11,9 +12,11 @@ using RestX.DAL.Context;
 namespace RestX.DAL.Migrations
 {
     [DbContext(typeof(TenantDbContext))]
-    partial class TenantDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260405071647_AddOrdersToReservation")]
+    partial class AddOrdersToReservation
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1488,9 +1491,7 @@ namespace RestX.DAL.Migrations
                     b.HasIndex("Reference")
                         .IsUnique();
 
-                    b.HasIndex("ReservationId")
-                        .IsUnique()
-                        .HasFilter("[ReservationId] IS NOT NULL");
+                    b.HasIndex("ReservationId");
 
                     b.ToTable("Orders", (string)null);
                 });
@@ -2641,8 +2642,8 @@ namespace RestX.DAL.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("RestX.Models.Reservations.Reservation", "Reservation")
-                        .WithOne("Order")
-                        .HasForeignKey("RestX.Models.Orders.Order", "ReservationId");
+                        .WithMany("Orders")
+                        .HasForeignKey("ReservationId");
 
                     b.Navigation("Customer");
 
@@ -2966,7 +2967,7 @@ namespace RestX.DAL.Migrations
 
             modelBuilder.Entity("RestX.Models.Reservations.Reservation", b =>
                 {
-                    b.Navigation("Order");
+                    b.Navigation("Orders");
 
                     b.Navigation("Payments");
 

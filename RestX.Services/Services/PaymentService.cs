@@ -8,6 +8,7 @@ using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Reservations;
 using RestX.Models.Customers;
 using RestX.Models.Enum;
+using RestX.Models.HR;
 using RestX.Models.Loyalty;
 using RestX.Models.Orders;
 using RestX.Models.Reservations;
@@ -85,6 +86,8 @@ namespace RestX.BLL.Services
 
             var cashback = request.CashReceive - amountDue;
 
+            var employee = await Repo.GetOneAsync<Employee>(e => e.ApplicationUser.Id.ToString() == createdBy);
+
             var payment = new Payment
             {
                 OrderId = orderId,
@@ -94,7 +97,8 @@ namespace RestX.BLL.Services
                 Cashback = cashback,
                 Status = PaymentStatus.Success,
                 Purpose = PaymentPurpose.Order,
-                PaymentDate = DateTime.UtcNow.AddHours(7)
+                PaymentDate = DateTime.UtcNow.AddHours(7),
+                ProcessedBy = employee != null ? Guid.Parse(employee.Id.ToString()) : null
             };
 
             await Repo.CreateAsync(payment, createdBy);
@@ -156,6 +160,7 @@ namespace RestX.BLL.Services
             };
 
             var link = await gatewayClient.PaymentRequests.CreateAsync(linkRequest);
+            var employee = await Repo.GetOneAsync<Employee>(e => e.ApplicationUser.Id.ToString() == createdBy);
 
             var payment = new Payment
             {
@@ -166,7 +171,8 @@ namespace RestX.BLL.Services
                 CheckoutUrl = link.CheckoutUrl,
                 Status = PaymentStatus.Pending,
                 Purpose = PaymentPurpose.Order,
-                PaymentDate = DateTime.UtcNow.AddHours(7)
+                PaymentDate = DateTime.UtcNow.AddHours(7),
+                ProcessedBy = employee != null ? Guid.Parse(employee.Id.ToString()) : null
             };
 
             await Repo.CreateAsync(payment, createdBy);

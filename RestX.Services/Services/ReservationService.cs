@@ -519,24 +519,27 @@ namespace RestX.BLL.Services
 
         private async Task ValidateTableNotOccupied(List<Table> tables, DateTime reservationDateTime)
         {
-            var occupiedTables = tables.Where(t => t.TableStatusId == TableStatus.Occupied).ToList();
-            if (!occupiedTables.Any()) return;
-
-            var occupiedTableIds = occupiedTables.Select(t => t.Id).ToList();
+            var tableIds = tables.Select(t => t.Id).ToList();
             var activeSessions = (await Repo.GetAsync<TableSession>(
-                filter: ts => occupiedTableIds.Contains(ts.TableId) && ts.IsActive
+                filter: ts => tableIds.Contains(ts.TableId)
+                           && ts.IsActive
+                           && ts.ReservationId.HasValue,  // ← Only check reservation sessions
+                includeProperties: "Reservation"
             )).ToList();
 
-            foreach (var table in occupiedTables)
+            foreach (var session in activeSessions)
             {
-                var session = activeSessions.FirstOrDefault(s => s.TableId == table.Id);
-                var estimatedEnd = session != null
-                    ? session.StartedAt.AddMinutes(ReservationBufferMinutes)
-                    : VnNow.AddMinutes(ReservationBufferMinutes);
+                var reservation = session.Reservation;
+                if (reservation == null) continue;
 
-                if (reservationDateTime < estimatedEnd)
+                var reservationStart = reservation.Time;
+                var reservationEnd = reservation.Time.AddMinutes(ReservationBufferMinutes);
+                if (reservationDateTime >= reservationStart && reservationDateTime < reservationEnd)
+                {
+                    var table = tables.FirstOrDefault(t => t.Id == session.TableId);
                     throw new InvalidOperationException(
-                        $"Table '{table.Code}' is currently occupied. Estimated available after {estimatedEnd:HH:mm}");
+                        $"Table '{table?.Code}' is reserved from {reservationStart:dd/MM HH:mm} to {reservationEnd:dd/MM HH:mm}");
+                }
             }
         }
 
@@ -855,7 +858,8 @@ namespace RestX.BLL.Services
         {
             var now = VnNow;
             var confirmedReservations = await Repo.GetAsync<Reservation>(
-                filter: r => r.ReservationStatus.Code == ConfirmedCode
+                filter: r => r.ReservationStatus != null
+                          && r.ReservationStatus.Code == ConfirmedCode
                           && r.CheckedInAt == null
                           && r.Time.AddMinutes(ReservationBufferMinutes) < now,
                 includeProperties: "ReservationStatus,TableSessions.Table");

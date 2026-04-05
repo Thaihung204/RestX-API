@@ -18,7 +18,6 @@ namespace RestX.DAL.Migrations
                 name: "IX_Orders_ReservationId",
                 table: "Orders",
                 column: "ReservationId",
-                unique: true,
                 filter: "[ReservationId] IS NOT NULL");
         }
 

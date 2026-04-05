@@ -565,10 +565,10 @@ namespace RestX.DAL.Context
                     .HasForeignKey(e => e.ReservationId)
                     .OnDelete(DeleteBehavior.SetNull);
 
-                entity.HasOne<Order>(e => e.CurrentOrder)
-                    .WithMany()
-                    .HasForeignKey(e => e.CurrentOrderId)
-                    .OnDelete(DeleteBehavior.SetNull);
+                entity.HasOne<Order>(e => e.Order)
+                    .WithMany(o => o.TableSessions)
+                    .HasForeignKey(e => e.OrderId)
+                    .OnDelete(DeleteBehavior.Cascade);
             });
         }
 

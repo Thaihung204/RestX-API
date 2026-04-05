@@ -13,7 +13,7 @@ namespace RestX.Models.Reservations
     {
         public Guid TableId { get; set; }
         public Guid? ReservationId { get; set; }
-        public Guid? CurrentOrderId { get; set; }
+        public Guid? OrderId { get; set; }
 
         public DateTime StartedAt { get; set; } = DateTime.UtcNow.AddHours(7);
 
@@ -23,6 +23,6 @@ namespace RestX.Models.Reservations
 
         public virtual Table Table { get; set; } = null!;
         public virtual Reservation? Reservation { get; set; }
-        public virtual Order? CurrentOrder { get; set; }
+        public virtual Order? Order { get; set; }
     }
 }

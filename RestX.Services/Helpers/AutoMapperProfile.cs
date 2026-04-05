@@ -175,6 +175,10 @@ namespace RestX.BLL.Helpers
                 .ForMember(dest => dest.Groups, opt => opt.Ignore()).ReverseMap();
             CreateMap<RestX.Models.Triggers.TriggerCriteria, RestX.BLL.DataTransferObjects.Triggers.TriggerCriteria>().ReverseMap();
             CreateMap<RestX.Models.Triggers.TriggerGroup, RestX.BLL.DataTransferObjects.Triggers.TriggerGroup>();
+            CreateMap<Models.Reservations.TableSession, TableSessionInfo>()
+                .ForMember(dest => dest.OrderReference, opt => opt.MapFrom(src => src.Order != null ? src.Order.Reference : null))
+                .ForMember(dest => dest.OrderTotalAmount, opt => opt.MapFrom(src => src.Order != null ? src.Order.TotalAmount : (decimal?)null));
+
         }
     }
 }

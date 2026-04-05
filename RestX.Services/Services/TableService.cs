@@ -19,6 +19,8 @@ namespace RestX.BLL.Services
     {
         private readonly IMapper mapper;
         private readonly ICloudinaryService cloudinaryService;
+        private const int ReservationBufferMinutes = 120;
+
         public TableService(
             IMapper mapper,
             ICloudinaryService cloudinaryService,
@@ -166,26 +168,13 @@ namespace RestX.BLL.Services
         {
             DateTime now = DateTime.UtcNow.AddHours(7);
 
-            //Table table = await Repo.GetByIdAsync<Table>(tableId);
-            //if (table.TableStatusId == TableStatus.Occupied)
-            //{
-            //    throw new AppException($"Bàn {table.Code} đang phục vụ, không thể khởi tạo phiên mới.");
-            //}
-
-            //await ChangeTableStatus(tableId, TableStatus.Occupied);
-            var reservation = reservationId.HasValue ? await Repo.GetOneAsync<Reservation>(r => r.Id == reservationId.Value) : null;
             TableSession newSession = new TableSession
             {
                 TableId = tableId,
                 ReservationId = reservationId,
                 IsActive = true,
-                StartedAt = reservation?.Time ?? now,
-                //CurrentOrder = new Order
-                //{
-                //    Reference = await GetNextOrderReference(),
-                //    CustomerId = customerId,
-                //    ReservationId = reservationId,
-                //}
+                StartedAt = now,
+                EndedAt = now.AddHours(ReservationBufferMinutes)
             };
 
             await Repo.CreateAsync(newSession, userId);
@@ -193,38 +182,18 @@ namespace RestX.BLL.Services
             return newSession;
         }
 
-        private async Task<string> GetNextOrderReference()
+        public async Task<TableSession?> GetActiveTableSession(Guid tableId)
         {
-            string tenantPrefix = CurrentTenant.Prefix;
-            string reference = $"{tenantPrefix}{DateTime.UtcNow.AddHours(7):yMdsff}";
+            var now = DateTime.UtcNow.AddHours(7);
 
-            bool exists = await Repo.GetExistsAsync<Order>(o => o.Reference == reference);
-            int count = 0;
+            var session = await Repo.GetOneAsync<TableSession>(
+                filter: ts => ts.TableId == tableId && ts.IsActive
+                           && ts.IsActive
+                           && ts.StartedAt <= now
+                           && (ts.EndedAt == null || ts.EndedAt > now)
+            );
 
-            while (exists && count < 20)
-            {
-                if (count < 1)
-                {
-                    reference = $"{tenantPrefix}{DateTime.UtcNow.AddHours(7):yMdsff}";
-                }
-                else if (count < 2)
-                {
-                    reference = $"{tenantPrefix}{DateTime.UtcNow.AddHours(7):yMdsfff}";
-                }
-                else if (count < 10)
-                {
-                    reference = $"{tenantPrefix}{DateTime.UtcNow.AddHours(7):yMdsHHfff}";
-                }
-                else
-                {
-                    reference = $"{tenantPrefix}{DateTime.UtcNow.AddHours(7):yMdsHHmmfff}";
-                }
-
-                exists = await Repo.GetExistsAsync<Order>(o => o.Reference == reference);
-                count++;
-            }
-
-            return reference;
+            return session;
         }
 
         #region QR Code Generation

@@ -166,6 +166,10 @@ namespace RestX.BLL.Services
 
         public async Task<TableSession> CreateTableSession(Guid tableId, string userId, Guid? customerId = null, Guid? reservationId = null)
         {
+            var isExistTable = await Repo.GetExistsAsync<Table>(filter: t => t.Id == tableId && t.IsActive);
+            if (!isExistTable)
+                throw new AppException("Table not found");
+
             DateTime now = DateTime.UtcNow.AddHours(7);
             DateTime startedAt = now;
             DateTime endedAt = now.AddMinutes(ReservationBufferMinutes);

@@ -266,7 +266,7 @@ namespace RestX.BLL.Services
                 var removedTableIds = currentTableIds.Except(newTableIds).ToList();
                 var addedTableIds = newTableIds.Except(currentTableIds).ToList();
 
-                var sharedOrderId = currentSessions.FirstOrDefault()?.CurrentOrderId;
+                var sharedOrderId = currentSessions.FirstOrDefault()?.OrderId;
 
                 foreach (var session in currentSessions.Where(ts => removedTableIds.Contains(ts.TableId)))
                 {
@@ -329,26 +329,6 @@ namespace RestX.BLL.Services
                 reservation.ReservationStatusId = confirmedStatus.Id;
                 Repo.Update(reservation, userId);
             }
-            //var sessions = reservation.TableSessions.ToList();
-            //var currentOrder = sessions.FirstOrDefault()?.CurrentOrderId;
-
-            //if (!currentOrder.HasValue || currentOrder == Guid.Empty)
-            //{
-            //    var emptyOrder = new Order
-            //    {
-            //        Reference = await GenerateOrderReference(),
-            //        CustomerId = reservation.CustomerId,
-            //        ReservationId = reservation.Id,
-            //        OrderStatusId = OrderStatus.Pending
-            //    };
-            //    await Repo.CreateAsync(emptyOrder);
-            //    foreach (var session in sessions)
-            //    {
-            //        session.CurrentOrderId = emptyOrder.Id;
-            //        Repo.Update(session, userId);
-            //    }
-            //}
-
             await Repo.SaveAsync();
         }
 
@@ -672,7 +652,7 @@ namespace RestX.BLL.Services
             }
             if (newStatusCode == CancelledCode)
             {
-                var sharedOrderId = sessions.FirstOrDefault()?.CurrentOrderId;
+                var sharedOrderId = sessions.FirstOrDefault()?.OrderId;
                 if (sharedOrderId.HasValue)
                 {
                     var order = await Repo.GetOneAsync<Order>(
@@ -869,6 +849,21 @@ namespace RestX.BLL.Services
                 return;
 
             await CancelReservation(reservationId, null);
+        }
+
+        public async Task AutoMarkNoShow()
+        {
+            var now = VnNow;
+            var confirmedReservations = await Repo.GetAsync<Reservation>(
+                filter: r => r.ReservationStatus.Code == ConfirmedCode
+                          && r.CheckedInAt == null
+                          && r.Time.AddMinutes(ReservationBufferMinutes) < now,
+                includeProperties: "ReservationStatus,TableSessions.Table");
+
+            foreach (var reservation in confirmedReservations)
+            {
+                await NoShowReservation(reservation.Id, null);
+            }
         }
 
         private async Task<(PayOSClient client, DataTranferObjects.Common.PaymentGatewaySettings settings)> GetDepositGateway()

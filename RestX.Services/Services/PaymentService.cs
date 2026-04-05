@@ -224,7 +224,13 @@ namespace RestX.BLL.Services
 
             if (payment.Purpose == PaymentPurpose.Deposit && payment.ReservationId.HasValue)
             {
-                await reservationService.ConfirmReservation(payment.ReservationId.Value);
+                var reservation = await Repo.GetOneAsync<Reservation>(
+                    r => r.Id == payment.ReservationId,
+                    includeProperties: "ReservationStatus");
+                if (reservation?.ReservationStatus?.Code == "DEPOSIT_PENDING")
+                {
+                    await reservationService.ConfirmReservation(payment.ReservationId.Value);
+                }
             }
             else if (payment.Purpose == PaymentPurpose.Order && payment.OrderId.HasValue)
             {

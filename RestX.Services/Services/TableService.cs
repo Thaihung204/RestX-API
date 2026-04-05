@@ -167,14 +167,25 @@ namespace RestX.BLL.Services
         public async Task<TableSession> CreateTableSession(Guid tableId, string userId, Guid? customerId = null, Guid? reservationId = null)
         {
             DateTime now = DateTime.UtcNow.AddHours(7);
+            DateTime startedAt = now;
+            DateTime endedAt = now.AddMinutes(ReservationBufferMinutes);
+            if (reservationId.HasValue)
+            {
+                var reservation = await Repo.GetByIdAsync<Reservation>(reservationId.Value);
+                if (reservation != null)
+                {
+                    startedAt = reservation.Time;
+                    endedAt = reservation.Time.AddMinutes(ReservationBufferMinutes);
+                }
+            }
 
             TableSession newSession = new TableSession
             {
                 TableId = tableId,
                 ReservationId = reservationId,
                 IsActive = true,
-                StartedAt = now,
-                EndedAt = now.AddHours(ReservationBufferMinutes)
+                StartedAt = startedAt,
+                EndedAt = endedAt
             };
 
             await Repo.CreateAsync(newSession, userId);
@@ -188,7 +199,6 @@ namespace RestX.BLL.Services
 
             var session = await Repo.GetOneAsync<TableSession>(
                 filter: ts => ts.TableId == tableId && ts.IsActive
-                           && ts.IsActive
                            && ts.StartedAt <= now
                            && (ts.EndedAt == null || ts.EndedAt > now)
             );

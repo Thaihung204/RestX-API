@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using RestX.BLL.DataTranferObjects.Common;
+using RestX.BLL.DataTranferObjects.Payments;
 using RestX.BLL.DataTranferObjects.Reservation;
 using RestX.BLL.DataTranferObjects.Tenants;
 using RestX.BLL.Exceptionhandling;
@@ -353,12 +354,12 @@ namespace RestX.WebApp.Controllers
 
         [HttpPost("{id:guid}/deposit/confirm-cash")]
         [Authorize(Roles = "Admin,System Admin,Staff")]
-        public async Task<IActionResult> ConfirmCashDeposit(Guid id)
+        public async Task<IActionResult> ConfirmCashDeposit(Guid id, [FromBody] CashPaymentRequest request)
         {
             try
             {
                 var user = await GetCurrentUserAsync();
-                await reservationService.ConfirmCashDeposit(id, user?.Id.ToString());
+                await reservationService.ConfirmCashDeposit(id,request, user?.Id.ToString());
                 return Ok(new { success = true, message = "Cash deposit confirmed" });
             }
             catch (AppException ex)

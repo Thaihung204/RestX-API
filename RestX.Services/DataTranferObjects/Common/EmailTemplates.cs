@@ -57,10 +57,29 @@ namespace RestX.BLL.DataTranferObjects.Common
             DateTime reservationDateTime,
             int numberOfGuests,
             string tableList,
-            string? specialRequests)
+            string? specialRequests,
+            decimal? depositAmount = null,
+            DateTime? paymentDeadline = null,
+            string? paymentLink = null)
         {
             var specialRequestsSection = !string.IsNullOrWhiteSpace(specialRequests)
                 ? $"<p><strong>Special Requests:</strong> {specialRequests}</p>"
+                : string.Empty;
+
+            var depositSection = (depositAmount.HasValue && paymentDeadline.HasValue && !string.IsNullOrWhiteSpace(paymentLink))
+                ? $@"
+                        <hr style='border:none;border-top:1px solid #ddd;margin:12px 0' />
+                        <p style='color:#d9534f;margin-top:12px'><strong>⚠️ Deposit Payment Required</strong></p>
+                        <p><strong>Amount:</strong> {depositAmount:N0} VND</p>
+                        <p><strong>Deadline:</strong> {paymentDeadline:dd/MM/yyyy HH:mm}</p>
+                        <p style='margin-top:12px'>
+                            <a href='{paymentLink}'
+                               style='display:inline-block;padding:10px 20px;
+                               background:#d9534f;color:#fff;text-decoration:none;
+                               border-radius:4px;font-weight:bold'>
+                                Pay Deposit Now
+                            </a>
+                        </p>"
                 : string.Empty;
 
             return $@"
@@ -75,7 +94,7 @@ namespace RestX.BLL.DataTranferObjects.Common
                         <p><strong>Date &amp; Time:</strong> {reservationDateTime:dddd, dd MMMM yyyy} at {reservationDateTime:HH:mm}</p>
                         <p><strong>Number of Guests:</strong> {numberOfGuests}</p>
                         <p><strong>Table(s):</strong> {tableList}</p>
-                        {specialRequestsSection}
+                        {specialRequestsSection}{depositSection}
                     </div>
                     <p>Please keep your confirmation code — you will need it to manage or look up your reservation.</p>
                     <p>If you need to cancel or make changes, please contact us with your confirmation code and phone number.</p>

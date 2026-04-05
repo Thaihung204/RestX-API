@@ -134,8 +134,13 @@ namespace RestX.BLL.Services
             }
             await Repo.SaveAsync();
 
+            var saved = await LoadReservation(reservation.Id);
+            var detail = mapper.Map<ReservationDetail>(saved!);
+
             if (requiresDeposit)
             {
+                var paymentLink = await CreateDepositPaymentLink(reservation.Id);
+                await SendConfirmationEmail(request.Email, request.Name, detail, tables, paymentLink);
                 BackgroundJob.Schedule<IReservationService>(
                     s => s.AutoCancelDepositReservation(reservation.Id),
                     paymentDeadline!.Value);
@@ -143,11 +148,9 @@ namespace RestX.BLL.Services
             else
             {
                 await ConfirmReservation(reservation.Id);
+                await SendConfirmationEmail(request.Email, request.Name, detail, tables);
             }
 
-            var saved = await LoadReservation(reservation.Id);
-            var detail = mapper.Map<ReservationDetail>(saved!);
-            await SendConfirmationEmail(request.Email, request.Name, detail, tables);
             return detail;
         }
 
@@ -357,10 +360,8 @@ namespace RestX.BLL.Services
                 ?? throw new KeyNotFoundException("Reservation not found");
 
             var statusCode = reservation.ReservationStatus?.Code;
-            if (statusCode == CancelledCode || statusCode == CompletedCode)
-                throw new InvalidOperationException("Cannot check in a reservation that is cancelled or completed");
-            if (statusCode == DepositPendingCode)
-                throw new InvalidOperationException("Cannot check in a reservation that has an unpaid deposit");
+            if (statusCode != ConfirmedCode)
+                throw new InvalidOperationException("Only confirmed reservations can be checked in");
 
             if (reservation.CheckedInAt.HasValue)
                 throw new InvalidOperationException("Reservation has already been checked in");
@@ -484,7 +485,7 @@ namespace RestX.BLL.Services
         }
 
         private async Task SendConfirmationEmail(
-            string email, string name, ReservationDetail detail, List<Table> tables)
+            string email, string name, ReservationDetail detail, List<Table> tables, string? paymentLink = null)
         {
             try
             {
@@ -495,7 +496,11 @@ namespace RestX.BLL.Services
                     detail.ReservationDateTime,
                     detail.NumberOfGuests,
                     tableList,
-                    detail.SpecialRequests);
+                    detail.SpecialRequests,
+                    detail.DepositAmount > 0 ? detail.DepositAmount : null,
+                    detail.PaymentDeadline,
+                    paymentLink);
+
                 await emailService.SendEmailAsync(email, "Reservation Confirmation – " + detail.ConfirmationCode, body);
             }
             catch

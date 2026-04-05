@@ -52,6 +52,7 @@ namespace RestX.BLL.Helpers
             services.AddScoped<IFormListHelper, FormListHelper>();
             services.AddScoped<IPromotionService, PromotionService>();
             services.AddScoped<IAIService, AIService>();
+            services.AddScoped<IDashboardService, DashboardService>();
         }
     }
 }

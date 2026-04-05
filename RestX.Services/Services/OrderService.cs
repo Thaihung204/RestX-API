@@ -593,11 +593,15 @@ namespace RestX.BLL.Services
             if (!orders.Any())
                 return ExcelHelper.CreateEmptyWorkbook("Orders");
 
+            // Fetch status names
+            var statuses = await statusValueService.GetStatuses("order");
+            var statusById = statuses.ToDictionary(s => s.Id, s => s.Name);
+
             using var package = new ExcelPackage();
             var sheet = package.Workbook.Worksheets.Add("Orders");
             var headers = new[]
             {
-                "Reference", "Order Status", "Sub Total", "Discount",
+                "Reference", "Customer Name", "Customer Email", "Order Status", "Sub Total", "Discount",
                 "Tax", "Service Charge", "Total Amount", "Payment Status",
                 "Item Count", "Created Date", "Completed At", "Cancelled At"
             };
@@ -607,18 +611,20 @@ namespace RestX.BLL.Services
             foreach (var o in orders)
             {
                 sheet.Cells[row, 1].Value = o.Reference;
-                sheet.Cells[row, 2].Value = o.OrderStatusId.ToString();
-                sheet.Cells[row, 3].Value = o.SubTotal ?? 0;
-                sheet.Cells[row, 4].Value = o.DiscountAmount ?? 0;
-                sheet.Cells[row, 5].Value = o.TaxAmount ?? 0;
-                sheet.Cells[row, 6].Value = o.ServiceCharge ?? 0;
-                sheet.Cells[row, 7].Value = o.TotalAmount;
-                sheet.Cells[row, 8].Value = o.PaymentStatusName;
-                sheet.Cells[row, 9].Value = o.OrderDetails?.Sum(d => d.Quantity) ?? 0;
-                sheet.Cells[row, 10].Value = o.CreatedDate.HasValue ? o.CreatedDate.Value.ToString("dd/MM/yyyy HH:mm") : "";
-                sheet.Cells[row, 11].Value = o.CompletedAt.HasValue ? o.CompletedAt.Value.ToString("dd/MM/yyyy HH:mm") : "";
-                sheet.Cells[row, 12].Value = o.CancelledAt.HasValue ? o.CancelledAt.Value.ToString("dd/MM/yyyy HH:mm") : "";
-                foreach (var col in new[] { 3, 4, 5, 6, 7 })
+                sheet.Cells[row, 2].Value = o.Customer?.FullName ?? "";
+                sheet.Cells[row, 3].Value = o.Customer?.Email ?? "";
+                sheet.Cells[row, 4].Value = statusById.TryGetValue((int)o.OrderStatusId, out var statusName) ? statusName : o.OrderStatusId.ToString();
+                sheet.Cells[row, 5].Value = o.SubTotal ?? 0;
+                sheet.Cells[row, 6].Value = o.DiscountAmount ?? 0;
+                sheet.Cells[row, 7].Value = o.TaxAmount ?? 0;
+                sheet.Cells[row, 8].Value = o.ServiceCharge ?? 0;
+                sheet.Cells[row, 9].Value = o.TotalAmount;
+                sheet.Cells[row, 10].Value = o.PaymentStatusName;
+                sheet.Cells[row, 11].Value = o.OrderDetails?.Sum(d => d.Quantity) ?? 0;
+                sheet.Cells[row, 12].Value = o.CreatedDate.HasValue ? o.CreatedDate.Value.ToString("dd/MM/yyyy HH:mm") : "";
+                sheet.Cells[row, 13].Value = o.CompletedAt.HasValue ? o.CompletedAt.Value.ToString("dd/MM/yyyy HH:mm") : "";
+                sheet.Cells[row, 14].Value = o.CancelledAt.HasValue ? o.CancelledAt.Value.ToString("dd/MM/yyyy HH:mm") : "";
+                foreach (var col in new[] { 5, 6, 7, 8, 9 })
                     sheet.Cells[row, col].Style.Numberformat.Format = "#,##0";
                 row++;
             }

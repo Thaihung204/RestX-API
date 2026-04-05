@@ -274,11 +274,12 @@ namespace RestX.BLL.Services
                 sheet.Cells[row, 5].Value = c.LoyaltyPoints;
                 sheet.Cells[row, 6].Value = stats?.TotalOrders ?? 0;
                 sheet.Cells[row, 7].Value = stats?.TotalSpent ?? 0;
-                sheet.Cells[row, 7].Style.Numberformat.Format = "#,##0";
                 sheet.Cells[row, 8].Value = stats?.LastVisit.HasValue == true
                     ? stats.LastVisit.Value.ToString("dd/MM/yyyy HH:mm") : "";
                 sheet.Cells[row, 9].Value = c.CreatedDate.ToString("dd/MM/yyyy");
                 sheet.Cells[row, 10].Value = c.IsActive ? "Active" : "Inactive";
+                foreach (var col in new[] { 5, 7 })
+                    sheet.Cells[row, col].Style.Numberformat.Format = "#,##0";
                 row++;
             }
 

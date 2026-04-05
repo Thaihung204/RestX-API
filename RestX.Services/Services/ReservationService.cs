@@ -922,8 +922,8 @@ namespace RestX.BLL.Services
                 sheet.Cells[row, 5].Value = r.NumberOfGuests;
                 sheet.Cells[row, 6].Value = r.Status.Name;
                 sheet.Cells[row, 7].Value = r.DepositAmount;
-                sheet.Cells[row, 7].Style.Numberformat.Format = "#,##0";
                 sheet.Cells[row, 8].Value = r.CreatedAt.ToString("dd/MM/yyyy HH:mm");
+                sheet.Cells[row, 7].Style.Numberformat.Format = "#,##0";
                 row++;
             }
 

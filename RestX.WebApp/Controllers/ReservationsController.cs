@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using RestX.BLL.DataTranferObjects.Common;
+using RestX.BLL.DataTranferObjects.Payments;
 using RestX.BLL.DataTranferObjects.Reservation;
 using RestX.BLL.DataTranferObjects.Tenants;
 using RestX.BLL.Exceptionhandling;
@@ -27,14 +28,11 @@ namespace RestX.WebApp.Controllers
         private readonly ITableService tableService;
         private readonly IDepositConfigService depositConfigService;
         private readonly IHubContext<SignalrServer> hub;
-        private readonly IExportService exportService;
-
         public ReservationsController(
             IReservationService reservationService,
             ITableService tableService,
             IDepositConfigService depositConfigService,
             IHubContext<SignalrServer> hub,
-            IExportService exportService,
             IMapper mapper,
             UserManager<ApplicationUser> userManager,
             IExceptionHandler exceptionHandler,
@@ -44,7 +42,6 @@ namespace RestX.WebApp.Controllers
             this.tableService = tableService;
             this.depositConfigService = depositConfigService;
             this.hub = hub;
-            this.exportService = exportService;
         }
 
         [HttpPost]
@@ -88,7 +85,7 @@ namespace RestX.WebApp.Controllers
         {
             try
             {
-                var bytes = await exportService.ExportReservationsAsync(filter);
+                var bytes = await reservationService.ExportAsync(filter);
                 var fileName = $"reservations_{DateTime.UtcNow.AddHours(7):yyyyMMdd_HHmmss}.xlsx";
                 return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
             }
@@ -373,12 +370,12 @@ namespace RestX.WebApp.Controllers
 
         [HttpPost("{id:guid}/deposit/confirm-cash")]
         [Authorize(Roles = "Admin,System Admin,Staff")]
-        public async Task<IActionResult> ConfirmCashDeposit(Guid id)
+        public async Task<IActionResult> ConfirmCashDeposit(Guid id, [FromBody] CashPaymentRequest request)
         {
             try
             {
                 var user = await GetCurrentUserAsync();
-                await reservationService.ConfirmCashDeposit(id, user?.Id.ToString());
+                await reservationService.ConfirmCashDeposit(id,request, user?.Id.ToString());
                 return Ok(new { success = true, message = "Cash deposit confirmed" });
             }
             catch (AppException ex)

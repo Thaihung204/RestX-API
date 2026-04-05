@@ -5,8 +5,10 @@ using RestX.BLL.DataTranferObjects.Common;
 using RestX.BLL.DataTranferObjects.Payments;
 using RestX.BLL.Helpers;
 using RestX.BLL.Interfaces;
+using RestX.BLL.Interfaces.Reservations;
 using RestX.Models.Customers;
 using RestX.Models.Enum;
+using RestX.Models.HR;
 using RestX.Models.Loyalty;
 using RestX.Models.Orders;
 using RestX.Models.Reservations;
@@ -17,17 +19,20 @@ namespace RestX.BLL.Services
     public class PaymentService : BaseService, IPaymentService
     {
         private readonly IPaymentSettingService paymentSettingService;
+        private readonly IReservationService reservationService;
         private readonly IMapper mapper;
 
         public PaymentService(
             IRepository repo,
             IRedisService redisService,
             IPaymentSettingService paymentSettingService,
+            IReservationService reservationService,
             IMapper mapper,
             IEnumerable<ActiveTenant> tenant = null
         ) : base(repo, redisService, tenant)
         {
             this.paymentSettingService = paymentSettingService;
+            this.reservationService = reservationService;
             this.mapper = mapper;
         }
 
@@ -81,6 +86,8 @@ namespace RestX.BLL.Services
 
             var cashback = request.CashReceive - amountDue;
 
+            var employee = await Repo.GetOneAsync<Employee>(e => e.ApplicationUser.Id.ToString() == createdBy);
+
             var payment = new Payment
             {
                 OrderId = orderId,
@@ -90,11 +97,18 @@ namespace RestX.BLL.Services
                 Cashback = cashback,
                 Status = PaymentStatus.Success,
                 Purpose = PaymentPurpose.Order,
-                PaymentDate = DateTime.UtcNow.AddHours(7)
+                PaymentDate = DateTime.UtcNow.AddHours(7),
+                ProcessedBy = employee != null ? Guid.Parse(employee.Id.ToString()) : null
             };
 
             await Repo.CreateAsync(payment, createdBy);
             await AwardLoyaltyPointsAsync(order);
+
+            if (order.ReservationId.HasValue)
+            {
+                await reservationService.CompleteReservation(order.ReservationId.Value, createdBy);
+            }
+
             await Repo.SaveAsync();
 
             return new CashPaymentResponse
@@ -146,6 +160,7 @@ namespace RestX.BLL.Services
             };
 
             var link = await gatewayClient.PaymentRequests.CreateAsync(linkRequest);
+            var employee = await Repo.GetOneAsync<Employee>(e => e.ApplicationUser.Id.ToString() == createdBy);
 
             var payment = new Payment
             {
@@ -156,7 +171,8 @@ namespace RestX.BLL.Services
                 CheckoutUrl = link.CheckoutUrl,
                 Status = PaymentStatus.Pending,
                 Purpose = PaymentPurpose.Order,
-                PaymentDate = DateTime.UtcNow.AddHours(7)
+                PaymentDate = DateTime.UtcNow.AddHours(7),
+                ProcessedBy = employee != null ? Guid.Parse(employee.Id.ToString()) : null
             };
 
             await Repo.CreateAsync(payment, createdBy);
@@ -214,36 +230,30 @@ namespace RestX.BLL.Services
 
             if (payment.Purpose == PaymentPurpose.Deposit && payment.ReservationId.HasValue)
             {
-                await ConfirmReservationAfterDeposit(payment.ReservationId.Value);
+                var reservation = await Repo.GetOneAsync<Reservation>(
+                    r => r.Id == payment.ReservationId,
+                    includeProperties: "ReservationStatus");
+                if (reservation?.ReservationStatus?.Code == "DEPOSIT_PENDING")
+                {
+                    await reservationService.ConfirmReservation(payment.ReservationId.Value);
+                }
             }
-            else if (payment.OrderId.HasValue)
+            else if (payment.Purpose == PaymentPurpose.Order && payment.OrderId.HasValue)
             {
                 var order = await Repo.GetByIdAsync<Order>(payment.OrderId.Value);
                 if (order != null)
+                {
                     await AwardLoyaltyPointsAsync(order);
+                    if (order.ReservationId.HasValue)
+                    {
+                        await reservationService.CompleteReservation(order.ReservationId.Value);
+                    }
+                }
             }
 
             await Repo.SaveAsync();
         }
 
-        private async Task ConfirmReservationAfterDeposit(Guid reservationId)
-        {
-            var reservation = await Repo.GetOneAsync<Reservation>(
-                filter: r => r.Id == reservationId,
-                includeProperties: "ReservationStatus,ReservationTables")
-                ?? throw new KeyNotFoundException("Reservation not found");
-
-            if (reservation.ReservationStatus?.Code != "DEPOSIT_PENDING")
-                return;
-
-            var confirmedStatus = await Repo.GetOneAsync<RestX.Models.Common.StatusValue>(
-                s => s.Code == "CONFIRMED" && s.StatusType.Code == "RESERVATION",
-                includeProperties: "StatusType")
-                ?? throw new InvalidOperationException("CONFIRMED status not configured");
-
-            reservation.ReservationStatusId = confirmedStatus.Id;
-            Repo.Update(reservation);
-        }
 
         private async Task<(PayOSClient client, PaymentGatewaySettings settings)> GetTenantGateway()
         {

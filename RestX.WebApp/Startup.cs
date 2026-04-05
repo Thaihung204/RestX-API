@@ -24,6 +24,7 @@ using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Auth;
 using RestX.BLL.Interfaces.Customers;
 using RestX.BLL.Interfaces.Employees;
+using RestX.BLL.Interfaces.Reservations;
 using RestX.BLL.MultiTenancy;
 using RestX.BLL.Services;
 using RestX.DAL.Context;
@@ -349,6 +350,10 @@ namespace RestX.WebApp
             RecurringJob.AddOrUpdate<IAIService>(
                 "cleanup-ai-sessions",
                 s => s.CleanupExpiredSessions(),
+                Cron.Hourly);
+            RecurringJob.AddOrUpdate<IReservationService>(
+                "auto-mark-noshow",
+                r => r.AutoMarkNoShow(),
                 Cron.Hourly);
 
             app.UseEndpoints(endpoints =>

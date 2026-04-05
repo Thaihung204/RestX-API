@@ -1,4 +1,5 @@
 using RestX.BLL.DataTranferObjects.Common;
+using RestX.BLL.DataTranferObjects.Payments;
 using RestX.BLL.DataTranferObjects.Reservation;
 
 namespace RestX.BLL.Interfaces.Reservations
@@ -12,15 +13,18 @@ namespace RestX.BLL.Interfaces.Reservations
         Task<ReservationDetail?> GetReservationByCode(string confirmationCode);
         Task<ReservationDetail> UpdateReservation(Guid id, UpdateReservationRequest request);
         Task ChangeStatus(Guid id, int statusId, string? userId);
+        Task ConfirmReservation(Guid id,string? userId = null);
+        Task CompleteReservation(Guid id,string? userId = null);
         Task CheckIn(string confirmationCode, string userId);
-        Task CancelReservation(Guid id);
+        Task CancelReservation(Guid id,string? userId);
         Task<CheckAvailabilityResponse> CheckAvailabilityReservation(CheckAvailabilityParams request);
 
         // Deposit
         Task<DepositStatusResponse> GetDepositStatus(Guid reservationId);
         Task<string> CreateDepositPaymentLink(Guid reservationId);
-        Task ConfirmCashDeposit(Guid reservationId, string userId);
+        Task ConfirmCashDeposit(Guid reservationId, CashPaymentRequest request, string userId);
         Task AutoCancelDepositReservation(Guid reservationId);
+        Task AutoMarkNoShow();
         Task<byte[]> ExportAsync(ReservationFilterParams filter);
     }
 }

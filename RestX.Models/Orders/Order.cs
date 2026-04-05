@@ -24,7 +24,7 @@ namespace RestX.Models.Orders
         public Guid? CustomerId { get; set; }
         public Guid? ReservationId { get; set; }
         [TriggerProperty(DisplayName = "Status")]
-        public OrderStatus OrderStatusId { get; set; }
+        public int OrderStatusId { get; set; }
 
         [Column(TypeName = "decimal(18,2)")]
         [Range(0, 999999999.99)]
@@ -61,6 +61,7 @@ namespace RestX.Models.Orders
         public virtual ICollection<PromotionHistory> PromotionHistories { get; set; } = new HashSet<PromotionHistory>();
         public virtual ICollection<PointsTransaction> PointsTransactions { get; set; } = new HashSet<PointsTransaction>();
         public virtual ICollection<Feedback> Feedbacks { get; set; } = new HashSet<Feedback>();
+        public virtual ICollection<TableSession> TableSessions { get; set; } = new HashSet<TableSession>();
 
         public void CalculateTotalAmount()
         {

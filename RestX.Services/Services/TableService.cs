@@ -1,12 +1,15 @@
-using AutoMapper;
+﻿using AutoMapper;
 using Microsoft.AspNetCore.Http;
 using QRCoder;
 using RestX.BLL.DataTranferObjects.Table;
+using RestX.BLL.Exceptionhandling;
 using RestX.BLL.Extensions;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Tables;
 using RestX.Models.Enum;
 using RestX.Models.Menu;
+using RestX.Models.Orders;
+using RestX.Models.Reservations;
 using RestX.Models.Tables;
 using RestX.Models.Tenants;
 
@@ -16,6 +19,8 @@ namespace RestX.BLL.Services
     {
         private readonly IMapper mapper;
         private readonly ICloudinaryService cloudinaryService;
+        private const int ReservationBufferMinutes = 120;
+
         public TableService(
             IMapper mapper,
             ICloudinaryService cloudinaryService,
@@ -157,6 +162,38 @@ namespace RestX.BLL.Services
             await Repo.SaveAsync();
 
             return mapper.Map<TableItem>(table);
+        }
+
+        public async Task<TableSession> CreateTableSession(Guid tableId, string userId, Guid? customerId = null, Guid? reservationId = null)
+        {
+            DateTime now = DateTime.UtcNow.AddHours(7);
+
+            TableSession newSession = new TableSession
+            {
+                TableId = tableId,
+                ReservationId = reservationId,
+                IsActive = true,
+                StartedAt = now,
+                EndedAt = now.AddHours(ReservationBufferMinutes)
+            };
+
+            await Repo.CreateAsync(newSession, userId);
+
+            return newSession;
+        }
+
+        public async Task<TableSession?> GetActiveTableSession(Guid tableId)
+        {
+            var now = DateTime.UtcNow.AddHours(7);
+
+            var session = await Repo.GetOneAsync<TableSession>(
+                filter: ts => ts.TableId == tableId && ts.IsActive
+                           && ts.IsActive
+                           && ts.StartedAt <= now
+                           && (ts.EndedAt == null || ts.EndedAt > now)
+            );
+
+            return session;
         }
 
         #region QR Code Generation

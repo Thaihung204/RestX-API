@@ -602,7 +602,7 @@ namespace RestX.BLL.Services
                 }).ToList()
             };
 
-            return await _orderService.CreateOrder(order, userId);
+            return (Guid)(await _orderService.CheckSessionBeforeOrder(order, userId)).Id;
         }
 
         private static List<AIAction> BuildActions(Guid dishId)

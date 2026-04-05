@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
 using RestX.BLL.DataTranferObjects.Orders;
 using RestX.BLL.Exceptionhandling;
 using RestX.BLL.Interfaces;
@@ -89,19 +90,26 @@ namespace RestX.WebApp.Controllers
                     userId = currentUser.MemberId.ToString();
                 else userId = order.CustomerId.ToString();
 
-                var id = await orderService.CreateOrder(order, userId);
-                if (id == Guid.Empty)
-                    return BadRequest(new { success = false, message = "Create order failed" });
-                var createdOrder = await orderService.GetOrderById(id);
+                var result = await orderService.CheckSessionBeforeOrder(order, userId);
 
-                await BroadcastToTenant(SignalrServer.OrderCreated, new { id, order = createdOrder });
+                await hubContext.BroadcastToTenant(CurrentTenant.Id, SignalrServer.OrderCreated, new { id = result.Id, result });
 
-                return Ok(id);
+                return Ok(result);
             }
             catch (AppException ex)
             {
                 return this.BadRequest(ex.Message);
             }
+            //catch (DbUpdateConcurrencyException ex)
+            //{
+            //    foreach (var entry in ex.Entries)
+            //    {
+            //        // entry.Entity sẽ cho bạn biết class nào (Order, Session, v.v.) đang lỗi
+            //        var entityType = entry.Entity.GetType().Name;
+            //        Console.WriteLine($"Lỗi đồng thời xảy ra ở bảng/thực thể: {entityType}");
+            //    }
+            //    return BadRequest("Dữ liệu đã bị thay đổi bởi người khác, vui lòng thử lại.");
+            //}
             catch (Exception ex)
             {
                 ExceptionHandler.RaiseException(ex);
@@ -121,12 +129,12 @@ namespace RestX.WebApp.Controllers
                     userId = currentUser.MemberId.ToString();
                 else userId = order.CustomerId.ToString();
 
-                    var updatedId = await orderService.UpdateOrder(id, order, userId);
+                var updatedId = await orderService.UpdateOrder(id, order, userId);
                 if (updatedId == Guid.Empty)
                     return NotFound(new { success = false, message = "Order not found" });
                 var updatedOrder = await orderService.GetOrderById(id);
 
-                await BroadcastToTenant(SignalrServer.OrderUpdated, new { id = updatedId, order = updatedOrder });
+                await hubContext.BroadcastToTenant(CurrentTenant.Id, SignalrServer.OrderUpdated, new { id = updatedId, order = updatedOrder });
 
                 return Ok(updatedId);
             }
@@ -148,7 +156,7 @@ namespace RestX.WebApp.Controllers
             try
             {
                 await orderService.DeleteOrder(id);
-                await BroadcastToTenant(SignalrServer.OrderDeleted, new { id });
+                await hubContext.BroadcastToTenant(CurrentTenant.Id, SignalrServer.OrderDeleted, new { id });
                 return Ok();
             }
             catch (AppException ex)
@@ -177,7 +185,7 @@ namespace RestX.WebApp.Controllers
 
                 var updatedOrder = await orderService.GetOrderById(id);
 
-                await BroadcastToTenant(SignalrServer.OrderUpdated, new { id, order = updatedOrder });
+                await hubContext.BroadcastToTenant(CurrentTenant.Id, SignalrServer.OrderUpdated, new { id, order = updatedOrder });
 
                 return Ok(result);
             }
@@ -206,7 +214,7 @@ namespace RestX.WebApp.Controllers
                     return NotFound(new { success = false, message = "Order detail not found" });
 
                 var updatedOrder = await orderService.GetOrderById(orderId);
-                await BroadcastToTenant(SignalrServer.OrderUpdated, new { id = orderId, order = updatedOrder });
+                await hubContext.BroadcastToTenant(CurrentTenant.Id, SignalrServer.OrderUpdated, new { id = orderId, order = updatedOrder });
 
                 return Ok(result);
             }
@@ -219,15 +227,6 @@ namespace RestX.WebApp.Controllers
                 ExceptionHandler.RaiseException(ex);
                 return BadRequest("An internal error occurred");
             }
-        }
-
-        private Task BroadcastToTenant(string eventName, object payload)
-        {
-            var group = CurrentTenant?.Id != Guid.Empty
-                ? $"tenant_{CurrentTenant!.Id}"
-                : "tenant_default";
-
-            return hubContext.Clients.Group(group).SendAsync(eventName, payload);
         }
     }
 }

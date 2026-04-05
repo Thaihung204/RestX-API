@@ -239,10 +239,18 @@ namespace RestX.BLL.Services
         {
             var order = await Repo.GetOneAsync<Models.Orders.Order>(
                 filter: o => o.Id == id,
-                includeProperties: "OrderDetails,OrderDetails.ItemStatus,Payments,Customer,Reservation"
-            );
+                includeProperties: "OrderDetails,OrderDetails.ItemStatus,Payments,Customer,Customer.ApplicationUser,Reservation"
+            ); 
 
-            return mapper.Map<DataTranferObjects.Orders.Order>(order);
+            var mappedOrder = mapper.Map<DataTranferObjects.Orders.Order>(order);
+            mappedOrder.Customer.TotalOrders = await Repo.ExecuteSqlCommandAsync<int>(
+                            "SELECT COUNT(*) FROM Orders WHERE CustomerId = @CustomerId",
+                            new SqlParameter("CustomerId", order.CustomerId));
+            mappedOrder.Customer.TotalReservations = await Repo.ExecuteSqlCommandAsync<int>(
+                "SELECT COUNT(*) FROM Reservations WHERE CustomerId = @CustomerId",
+                new SqlParameter("CustomerId", order.CustomerId));
+
+            return mappedOrder;
         }
 
         public async Task<DataTranferObjects.Orders.Order> CheckSessionBeforeOrder(DataTranferObjects.Orders.Order order, string userId)
@@ -390,6 +398,7 @@ namespace RestX.BLL.Services
                 orderEntity.SubTotal += additionalSubTotal;
                 orderEntity.CalculateTotalAmount();
 
+                Repo.Update(orderEntity, userId);
                 await Repo.SaveAsync();
             }
 

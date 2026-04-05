@@ -54,9 +54,7 @@ namespace RestX.WebApp.Controllers
             {
                 var customer = await customerService.GetCustomerById(id);
                 if (customer == null)
-                {
                     return NotFound(new { success = false, message = "Customer not found" });
-                }
                 return Ok(new { success = true, data = customer });
             }
             catch (Exception ex)
@@ -72,9 +70,7 @@ namespace RestX.WebApp.Controllers
             try
             {
                 if (!ModelState.IsValid)
-                {
                     return BadRequest(new { success = false, message = "Invalid data", errors = ModelState });
-                }
                 var result = await customerService.CreateCustomer(dto);
                 return Ok(new { success = true, message = "Customer created successfully", data = result });
             }
@@ -99,14 +95,10 @@ namespace RestX.WebApp.Controllers
             try
             {
                 if (!ModelState.IsValid)
-                {
                     return BadRequest(new { success = false, message = "Invalid data", errors = ModelState });
-                }
                 var result = await customerService.UpdateCustomer(id, dto);
                 if (result == null)
-                {
                     return NotFound(new { success = false, message = "Customer not found" });
-                }
                 return Ok(new { success = true, message = "Customer updated successfully", data = result });
             }
             catch (AppException ex)
@@ -123,6 +115,22 @@ namespace RestX.WebApp.Controllers
                 return BadRequest(new { success = false, message = "An internal error occurred" });
             }
         }
+        [HttpGet("export/csv")]
+        [Authorize(Roles = "Admin,System Admin")]
+        public async Task<IActionResult> ExportCustomers([FromQuery] CustomerFilterParams filter)
+        {
+            try
+            {
+                var bytes = await customerService.ExportAsync(filter);
+                var fileName = $"customers_{DateTime.UtcNow.AddHours(7):yyyyMMdd_HHmmss}.xlsx";
+                return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+            }
+            catch (Exception ex)
+            {
+                this.ExceptionHandler.RaiseException(ex);
+                return BadRequest(new { success = false, message = "An internal error occurred" });
+            }
+        }
         [HttpDelete("{id}")]
         [Authorize(Roles = "Admin,System Admin")]
         public async Task<IActionResult> DeleteCustomer([Required] Guid id)
@@ -131,9 +139,7 @@ namespace RestX.WebApp.Controllers
             {
                 var success = await customerService.DeleteCustomer(id);
                 if (!success)
-                {
                     return NotFound(new { success = false, message = "Customer not found" });
-                }
                 return Ok(new { success = true, message = "Customer deleted successfully" });
             }
             catch (AppException ex)

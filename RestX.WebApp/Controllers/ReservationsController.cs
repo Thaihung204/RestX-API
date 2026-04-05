@@ -28,7 +28,6 @@ namespace RestX.WebApp.Controllers
         private readonly ITableService tableService;
         private readonly IDepositConfigService depositConfigService;
         private readonly IHubContext<SignalrServer> hub;
-
         public ReservationsController(
             IReservationService reservationService,
             ITableService tableService,
@@ -72,6 +71,23 @@ namespace RestX.WebApp.Controllers
             catch (InvalidOperationException ex)
             {
                 return Conflict(new { success = false, message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest(new { success = false, message = "An internal error occurred" });
+            }
+        }
+
+        [HttpGet("export/csv")]
+        [Authorize(Roles = "Admin,System Admin,Staff")]
+        public async Task<IActionResult> ExportReservationsCsv([FromQuery] ReservationFilterParams filter)
+        {
+            try
+            {
+                var bytes = await reservationService.ExportAsync(filter);
+                var fileName = $"reservations_{DateTime.UtcNow.AddHours(7):yyyyMMdd_HHmmss}.xlsx";
+                return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
             }
             catch (Exception ex)
             {

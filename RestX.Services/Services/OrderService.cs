@@ -263,7 +263,7 @@ namespace RestX.BLL.Services
                 {
                     var reservationId = activeSession.ReservationId;
                     var reservationSessions = await Repo.GetAsync<Models.Reservations.TableSession>(
-                            filter: ts => ts.ReservationId == reservationId.Value && ts.IsActive
+                            filter: ts => ts.ReservationId == reservationId && ts.IsActive
                         );
 
                     foreach (var session in reservationSessions)
@@ -344,8 +344,7 @@ namespace RestX.BLL.Services
             else
             {
                 orderEntity = await Repo.GetOneAsync<Models.Orders.Order>(
-                    filter: o => o.Id == order.Id,
-                    includeProperties: "OrderDetails,Payments"
+                    filter: o => o.Id == order.Id
                 );
 
                 if (orderEntity == null)
@@ -373,24 +372,25 @@ namespace RestX.BLL.Services
 
                         var dish = dishesById[d.DishId];
 
-                        additionalSubTotal += d.Quantity * dish.Price;
-
-                        orderEntity.OrderDetails.Add(new Models.Orders.OrderDetail
+                        var newDetail = new Models.Orders.OrderDetail
                         {
+                            OrderId = orderEntity.Id,
                             DishId = d.DishId,
                             Quantity = d.Quantity,
                             Note = d.Note,
                             ItemStatusId = itemDefaultStatusId
-                        });
+                        };
+
+                        additionalSubTotal += d.Quantity * dish.Price;
+
+                        await Repo.CreateAsync(newDetail, userId);
                     }
                 }
 
                 orderEntity.SubTotal += additionalSubTotal;
                 orderEntity.CalculateTotalAmount();
 
-                Repo.Update(orderEntity, userId);
                 await Repo.SaveAsync();
-
             }
 
             return orderEntity;

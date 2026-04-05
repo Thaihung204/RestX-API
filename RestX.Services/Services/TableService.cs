@@ -19,6 +19,8 @@ namespace RestX.BLL.Services
     {
         private readonly IMapper mapper;
         private readonly ICloudinaryService cloudinaryService;
+        private const int ReservationBufferMinutes = 120;
+
         public TableService(
             IMapper mapper,
             ICloudinaryService cloudinaryService,
@@ -166,26 +168,13 @@ namespace RestX.BLL.Services
         {
             DateTime now = DateTime.UtcNow.AddHours(7);
 
-            //Table table = await Repo.GetByIdAsync<Table>(tableId);
-            //if (table.TableStatusId == TableStatus.Occupied)
-            //{
-            //    throw new AppException($"Bàn {table.Code} đang phục vụ, không thể khởi tạo phiên mới.");
-            //}
-
-            //await ChangeTableStatus(tableId, TableStatus.Occupied);
-
             TableSession newSession = new TableSession
             {
                 TableId = tableId,
                 ReservationId = reservationId,
                 IsActive = true,
                 StartedAt = now,
-                //CurrentOrder = new Order
-                //{
-                //    Reference = await GetNextOrderReference(),
-                //    CustomerId = customerId,
-                //    ReservationId = reservationId,
-                //}
+                EndedAt = now.AddHours(ReservationBufferMinutes)
             };
 
             await Repo.CreateAsync(newSession, userId);
@@ -201,12 +190,12 @@ namespace RestX.BLL.Services
                 filter: ts => ts.TableId == tableId && ts.IsActive
                            && ts.IsActive
                            && ts.StartedAt <= now
-                           && (ts.EndedAt == null || ts.EndedAt > now),
-                includeProperties: "Order,Reservation"
+                           && (ts.EndedAt == null || ts.EndedAt > now)
             );
 
             return session;
         }
+
         #region QR Code Generation
         private string GenerateTableQRCode(Guid tableId, string tenantHostname)
         {

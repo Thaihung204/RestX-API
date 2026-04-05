@@ -238,7 +238,7 @@ namespace RestX.BLL.Services
         {
             var order = await Repo.GetOneAsync<Models.Orders.Order>(
                 filter: o => o.Id == id,
-                includeProperties: "OrderDetails,OrderDetails.ItemStatus,OrderTables,Payments"
+                includeProperties: "OrderDetails,OrderDetails.ItemStatus,Payments,Customer,Reservation"
             );
 
             return mapper.Map<DataTranferObjects.Orders.Order>(order);

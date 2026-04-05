@@ -64,7 +64,7 @@ namespace RestX.BLL.Services
                 }
                 else
                 {
-                    tenant = await adminRepo.GetOneAsync<Tenant>(t => t.Hostname == data);
+                    tenant = await adminRepo.GetOneAsync<Tenant>(t => t.Hostname == data && t.Status);
                 }
 
                 if (tenant != null)

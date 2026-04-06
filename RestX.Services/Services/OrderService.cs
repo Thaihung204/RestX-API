@@ -596,6 +596,32 @@ namespace RestX.BLL.Services
             return reference;
         }
 
+        private List<Models.Orders.OrderDetail> GroupOrderDetailsByDish(IEnumerable<Models.Orders.OrderDetail> orderDetails)
+        {
+            if (orderDetails == null || !orderDetails.Any())
+            {
+                return new List<Models.Orders.OrderDetail>();
+            }
+
+            return orderDetails
+                .GroupBy(d => new { d.DishId, d.ItemStatusId })
+                .Select(dishGroup =>
+                {
+                    var firstItem = dishGroup.First();
+
+                    firstItem.Quantity = dishGroup.Sum(x => x.Quantity);
+
+                    var notes = dishGroup
+                        .Where(x => !string.IsNullOrWhiteSpace(x.Note))
+                        .Select(x => x.Note.Trim())
+                        .Distinct();
+                    firstItem.Note = string.Join("; ", notes);
+
+                    return firstItem;
+                })
+                .ToList();
+        }
+
 
         public async Task<byte[]> ExportAsync(OrderSearch filter)
         {

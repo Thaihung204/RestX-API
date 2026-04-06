@@ -36,6 +36,27 @@ namespace RestX.WebApp.Controllers
             this.hubContext = hubContext;
         }
 
+        [HttpGet("export/csv")]
+        [Authorize(Roles = "System Admin,Admin,Staff")]
+        public async Task<IActionResult> ExportOrdersCsv([FromQuery] OrderSearch filter)
+        {
+            try
+            {
+                var bytes = await orderService.ExportAsync(filter);
+                var fileName = $"orders_{DateTime.UtcNow.AddHours(7):yyyyMMdd_HHmmss}.xlsx";
+                return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+        }
+        }
+
         [HttpGet]
         [Authorize(Roles = "System Admin,Admin,Staff,Customer")]
         public async Task<ActionResult<OrderSearchResult>> GetAllOrders([FromQuery] OrderSearch model)

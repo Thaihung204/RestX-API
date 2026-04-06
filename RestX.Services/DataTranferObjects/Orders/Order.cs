@@ -48,5 +48,6 @@ namespace RestX.BLL.DataTranferObjects.Orders
         public ReservationListItem? Reservation { get; set; }
 
         public List<OrderDetail> OrderDetails { get; set; }
+        public DateTime? CreatedDate { get; set; }
     }
 }

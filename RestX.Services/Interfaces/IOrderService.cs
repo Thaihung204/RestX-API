@@ -14,5 +14,6 @@ namespace RestX.BLL.Interfaces
         Task<bool> UpdateOrderDetailStatus(Guid orderDetailId, int statusId, string userId);
         Task<IEnumerable<OrderDetail>> GetAllOrderDetails();
 
+        Task<byte[]> ExportAsync(OrderSearch filter);
     }
 }

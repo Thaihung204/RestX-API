@@ -554,7 +554,13 @@ namespace RestX.BLL.Services
 
         public async Task<IEnumerable<DataTranferObjects.Orders.OrderDetail>> GetAllOrderDetails()
         {
+            var orderDetailStatuses = await statusValueService.GetStatuses("order-detail");
+
+            var initialStatusId = orderDetailStatuses.FirstOrDefault(x => x.IsDefault)?.Id
+                                  ?? orderDetailStatuses.FirstOrDefault()?.Id;
+
             var orderDetails = await Repo.GetAsync<Models.Orders.OrderDetail>(
+                filter: od => od.ItemStatusId == initialStatusId,
                 orderBy: query => query.OrderBy(od => od.CreatedDate),
                 includeProperties: "ItemStatus,Order,Dish"
             );

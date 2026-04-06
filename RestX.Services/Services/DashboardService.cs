@@ -287,7 +287,7 @@ namespace RestX.BLL.Services
                 new SqlParameter("from", SqlDbType.DateTime2) { Value = fromDate },
                 new SqlParameter("to", SqlDbType.DateTime2) { Value = toDate }
             };
-            var data = await Repo.ExecuteSqlSelectAsync<QueryResult.DishItem>(sql, @params.Cast<object>().ToArray());
+            var data = await Repo.ExecuteSqlSelectAsync<TopDish.DishItem>(sql, @params.Cast<object>().ToArray());
 
             if (data.Count == 0)
             {
@@ -302,19 +302,10 @@ namespace RestX.BLL.Services
                    JOIN Dishes d ON od.DishId = d.Id
                    GROUP BY d.Id, d.Name
                    ORDER BY {orderByClause} DESC, d.Name ASC";
-                data = await Repo.ExecuteSqlSelectAsync<QueryResult.DishItem>(fallbackSql, null);
+                data = await Repo.ExecuteSqlSelectAsync<TopDish.DishItem>(fallbackSql, null);
             }
 
-            foreach (var item in data)
-            {
-                dto.Dishes.Add(new TopDish.DishItem
-                {
-                    DishId = item.DishId,
-                    Name = item.Name,
-                    Quantity = item.Quantity,
-                    Revenue = item.Revenue
-                });
-            }
+            dto.Dishes.AddRange(data);
 
             return dto;
         }
@@ -396,7 +387,7 @@ namespace RestX.BLL.Services
                 });
 
             // Chỉ lấy customer có thực sự chi tiêu trong kỳ (TotalSpent > 0)
-            var topCustomersData = await Repo.ExecuteSqlSelectAsync<QueryResult.TopCustomer>(@"
+            var topCustomersData = await Repo.ExecuteSqlSelectAsync<CustomerStats.TopCustomer>(@"
                 SELECT TOP 5
                     c.Id AS CustomerId,
                     au.FullName AS CustomerName,
@@ -418,7 +409,7 @@ namespace RestX.BLL.Services
             if (topCustomersData.Count == 0)
             {
                 dto.IsTopCustomersFallback = true;
-                topCustomersData = await Repo.ExecuteSqlSelectAsync<QueryResult.TopCustomer>(@"
+                topCustomersData = await Repo.ExecuteSqlSelectAsync<CustomerStats.TopCustomer>(@"
                     SELECT TOP 5
                         c.Id AS CustomerId,
                         au.FullName AS CustomerName,
@@ -445,19 +436,7 @@ namespace RestX.BLL.Services
             if (totalCustomers > 0)
                 dto.AverageRevenuePerCustomer = (decimal)Math.Ceiling((double)(revenue?.TotalRevenue ?? 0) / totalCustomers);
 
-            var rank = 1;
-            foreach (var customer in topCustomersData)
-            {
-                dto.TopCustomers.Add(new CustomerStats.TopCustomer
-                {
-                    Rank = rank++,
-                    CustomerId = customer.CustomerId,
-                    CustomerName = customer.CustomerName,
-                    LoyaltyPoints = customer.LoyaltyPoints,
-                    MembershipLevel = customer.MembershipLevel,
-                    TotalSpent = customer.TotalSpent
-                });
-            }
+            dto.TopCustomers.AddRange(topCustomersData.Select((c, i) => { c.Rank = i + 1; return c; }));
 
             return dto;
         }

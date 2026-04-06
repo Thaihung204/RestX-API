@@ -26,14 +26,6 @@ namespace RestX.BLL.DataTranferObjects.Dashboard
             public int? Total { get; set; }
         }
 
-        public class DishItem
-        {
-            public Guid DishId { get; set; }
-            public string Name { get; set; } = string.Empty;
-            public int Quantity { get; set; }
-            public decimal Revenue { get; set; }
-        }
-
         public class TableCount
         {
             public int Total { get; set; }
@@ -53,13 +45,5 @@ namespace RestX.BLL.DataTranferObjects.Dashboard
             public decimal TotalRevenue { get; set; }
         }
 
-        public class TopCustomer
-        {
-            public Guid CustomerId { get; set; }
-            public string CustomerName { get; set; } = string.Empty;
-            public int LoyaltyPoints { get; set; }
-            public string MembershipLevel { get; set; } = string.Empty;
-            public decimal TotalSpent { get; set; }
-        }
     }
 }

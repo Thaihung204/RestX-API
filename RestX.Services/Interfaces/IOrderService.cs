@@ -1,10 +1,4 @@
 ﻿using RestX.BLL.DataTranferObjects.Orders;
-using RestX.Models.Enum;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace RestX.BLL.Interfaces
 {
@@ -18,6 +12,7 @@ namespace RestX.BLL.Interfaces
         Task DeleteOrder(Guid id);
         Task<bool> UpdateStatus(Guid orderId, int statusId, string userId);
         Task<bool> UpdateOrderDetailStatus(Guid orderDetailId, int statusId, string userId);
+        Task<IEnumerable<OrderDetail>> GetAllOrderDetails();
 
     }
 }

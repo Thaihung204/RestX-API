@@ -192,7 +192,10 @@ namespace RestX.BLL.Services
 
             var detailsByOrderId = orderDetails
                 .GroupBy(d => d.OrderId)
-                .ToDictionary(g => g.Key, g => g.ToList());
+                .ToDictionary(
+                    g => g.Key,
+                    g => GroupOrderDetailsByDish(g) 
+                );
 
             var statusById = itemStatuses
                 .GroupBy(s => s.Id)
@@ -240,7 +243,9 @@ namespace RestX.BLL.Services
             var order = await Repo.GetOneAsync<Models.Orders.Order>(
                 filter: o => o.Id == id,
                 includeProperties: "OrderDetails,OrderDetails.ItemStatus,Payments,Customer,Customer.ApplicationUser,Reservation"
-            ); 
+            );
+
+            order.OrderDetails = GroupOrderDetailsByDish(order.OrderDetails);
 
             var mappedOrder = mapper.Map<DataTranferObjects.Orders.Order>(order);
             mappedOrder.Customer.TotalOrders = await Repo.ExecuteSqlCommandAsync<int>(
@@ -545,6 +550,16 @@ namespace RestX.BLL.Services
             return true;
         }
 
+        public async Task<IEnumerable<DataTranferObjects.Orders.OrderDetail>> GetAllOrderDetails()
+        {
+            var orderDetails = await Repo.GetAsync<Models.Orders.OrderDetail>(
+                orderBy: query => query.OrderBy(od => od.CreatedDate),
+                includeProperties: "ItemStatus,Order,Dish"
+            );
+
+            return mapper.Map<IEnumerable<DataTranferObjects.Orders.OrderDetail>>(orderDetails);
+        }
+
         private async Task<string> GetNextOrderReference()
         {
             string tenantPrefix = CurrentTenant.Prefix;
@@ -577,6 +592,32 @@ namespace RestX.BLL.Services
             }
 
             return reference;
+        }
+
+        private List<Models.Orders.OrderDetail> GroupOrderDetailsByDish(IEnumerable<Models.Orders.OrderDetail> orderDetails)
+        {
+            if (orderDetails == null || !orderDetails.Any())
+            {
+                return new List<Models.Orders.OrderDetail>();
+            }
+
+            return orderDetails
+                .GroupBy(d => d.DishId)
+                .Select(dishGroup =>
+                {
+                    var firstItem = dishGroup.First();
+
+                    firstItem.Quantity = dishGroup.Sum(x => x.Quantity);
+
+                    var notes = dishGroup
+                        .Where(x => !string.IsNullOrWhiteSpace(x.Note))
+                        .Select(x => x.Note.Trim())
+                        .Distinct();
+                    firstItem.Note = string.Join("; ", notes);
+
+                    return firstItem;
+                })
+                .ToList();
         }
 
     }

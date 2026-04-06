@@ -228,5 +228,61 @@ namespace RestX.WebApp.Controllers
                 return BadRequest("An internal error occurred");
             }
         }
+
+        [HttpPut("{id:guid}/discount")]
+        [Authorize(Roles = "System Admin,Admin,Staff")]
+        public async Task<ActionResult<ApplyDiscountResponse>> ApplyDiscount([Required] Guid id, [FromBody] ApplyDiscountRequest request)
+        {
+            try
+            {
+                var result = await orderService.ApplyDiscount(id, request);
+                return Ok(result);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { success = false, message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
+        [HttpDelete("{id:guid}/discount")]
+        [Authorize(Roles = "System Admin,Admin,Staff")]
+        public async Task<IActionResult> RemoveDiscount([Required] Guid id)
+        {
+            try
+            {
+                await orderService.RemoveDiscount(id);
+                return Ok(new { success = true });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { success = false, message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
     }
 }

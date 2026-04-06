@@ -3,7 +3,10 @@ using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
 using RestX.BLL.Helpers;
 using RestX.BLL.Interfaces;
+using RestX.Models.Customers;
+using RestX.Models.Loyalty;
 using RestX.Models.Orders;
+using RestX.Models.Promotions;
 using RestX.Models.Tenants;
 
 namespace RestX.BLL.Services
@@ -27,10 +30,25 @@ namespace RestX.BLL.Services
 
             var order = await Repo.GetOneAsync<Order>(
                 filter: o => o.Id == payment.OrderId,
-                includeProperties: "OrderDetails.Dish")
+                includeProperties: "OrderDetails.Dish,PromotionHistories.Promotion,Customer")
                 ?? throw new KeyNotFoundException("Order not found");
 
             var tenant = CurrentTenant;
+
+            var promotionHistory = order.PromotionHistories?.FirstOrDefault();
+            decimal promotionDiscount = promotionHistory?.DiscountAmount ?? 0;
+            decimal membershipDiscount = 0;
+            string? membershipLevel = null;
+
+            if (order.DiscountAmount > 0 && order.CustomerId.HasValue)
+            {
+                membershipDiscount = order.DiscountAmount - promotionDiscount;
+                if (membershipDiscount > 0)
+                {
+                    var customer = order.Customer;
+                    membershipLevel = customer?.MembershipLevel;
+                }
+            }
 
             var document = Document.Create(container =>
             {
@@ -94,11 +112,33 @@ namespace RestX.BLL.Services
                                 row.RelativeItem().Text("Subtotal");
                                 row.RelativeItem().AlignRight().Text(FormatCurrency(order.SubTotal));
                             });
-                            col.Item().Row(row =>
+
+                            if (promotionDiscount > 0 && promotionHistory?.Promotion != null)
                             {
-                                row.RelativeItem().Text("Discount");
-                                row.RelativeItem().AlignRight().Text($"- {FormatCurrency(order.DiscountAmount)}");
-                            });
+                                col.Item().Row(row =>
+                                {
+                                    row.RelativeItem().Text($"Promotion ({promotionHistory.Promotion.Code})");
+                                    row.RelativeItem().AlignRight().Text($"- {FormatCurrency(promotionDiscount)}");
+                                });
+                            }
+
+                            if (membershipDiscount > 0 && !string.IsNullOrEmpty(membershipLevel))
+                            {
+                                col.Item().Row(row =>
+                                {
+                                    row.RelativeItem().Text($"Membership ({membershipLevel})");
+                                    row.RelativeItem().AlignRight().Text($"- {FormatCurrency(membershipDiscount)}");
+                                });
+                            }
+
+                            if (promotionDiscount == 0 && membershipDiscount == 0)
+                            {
+                                col.Item().Row(row =>
+                                {
+                                    row.RelativeItem().Text("Discount");
+                                    row.RelativeItem().AlignRight().Text($"- {FormatCurrency(order.DiscountAmount)}");
+                                });
+                            }
                         }
 
                         if (order.TaxAmount > 0)

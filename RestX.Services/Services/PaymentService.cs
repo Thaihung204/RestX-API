@@ -104,6 +104,10 @@ namespace RestX.BLL.Services
             await Repo.CreateAsync(payment, createdBy);
             await AwardLoyaltyPointsAsync(order);
 
+            order.OrderStatusId = (int)OrderStatus.Completed;
+            order.CompletedAt = DateTime.UtcNow.AddHours(7);
+            Repo.Update(order, createdBy);
+
             if (order.ReservationId.HasValue)
             {
                 await reservationService.CompleteReservation(order.ReservationId.Value, createdBy);
@@ -244,6 +248,11 @@ namespace RestX.BLL.Services
                 if (order != null)
                 {
                     await AwardLoyaltyPointsAsync(order);
+
+                    order.OrderStatusId = (int)OrderStatus.Completed;
+                    order.CompletedAt = DateTime.UtcNow.AddHours(7);
+                    Repo.Update(order);
+
                     if (order.ReservationId.HasValue)
                     {
                         await reservationService.CompleteReservation(order.ReservationId.Value);

@@ -166,6 +166,10 @@ namespace RestX.BLL.Services
 
         public async Task<TableSession> CreateTableSession(Guid tableId, string userId, Guid? customerId = null, Guid? reservationId = null)
         {
+            var isExistTable = await Repo.GetExistsAsync<Table>(filter: t => t.Id == tableId && t.IsActive);
+            if (!isExistTable)
+                throw new AppException("Table not found");
+
             DateTime now = DateTime.UtcNow.AddHours(7);
             DateTime startedAt = now;
             DateTime endedAt = now.AddMinutes(ReservationBufferMinutes);
@@ -197,13 +201,14 @@ namespace RestX.BLL.Services
         {
             var now = DateTime.UtcNow.AddHours(7);
 
-            var session = await Repo.GetOneAsync<TableSession>(
+            var session = await Repo.GetAsync<TableSession>(
                 filter: ts => ts.TableId == tableId && ts.IsActive
                            && ts.StartedAt <= now
-                           && (ts.EndedAt == null || ts.EndedAt > now)
+                           && (ts.EndedAt == null || ts.EndedAt > now), 
+                           orderBy: q => q.OrderByDescending(ts => ts.CreatedDate)
             );
 
-            return session;
+            return session.FirstOrDefault();
         }
 
         #region QR Code Generation

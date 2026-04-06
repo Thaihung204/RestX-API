@@ -1,7 +1,9 @@
 ﻿using AutoMapper;
 using Microsoft.Data.SqlClient;
+using OfficeOpenXml;
 using RestX.BLL.DataTranferObjects.Orders;
 using RestX.BLL.Exceptionhandling;
+using RestX.BLL.Helpers;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Inventory;
 using RestX.BLL.Interfaces.Status;
@@ -195,7 +197,10 @@ namespace RestX.BLL.Services
 
             var detailsByOrderId = orderDetails
                 .GroupBy(d => d.OrderId)
-                .ToDictionary(g => g.Key, g => g.ToList());
+                .ToDictionary(
+                    g => g.Key,
+                    g => GroupOrderDetailsByDish(g) 
+                );
 
             var statusById = itemStatuses
                 .GroupBy(s => s.Id)
@@ -242,8 +247,10 @@ namespace RestX.BLL.Services
         {
             var order = await Repo.GetOneAsync<Models.Orders.Order>(
                 filter: o => o.Id == id,
-                includeProperties: "OrderDetails,OrderDetails.ItemStatus,Payments,Customer,Customer.ApplicationUser,Reservation"
+                includeProperties: "OrderDetails,OrderDetails.Dish,OrderDetails.ItemStatus,Payments,Customer,Customer.ApplicationUser,Reservation,TableSessions,TableSessions.Table"
             ); 
+
+            order.OrderDetails = GroupOrderDetailsByDish(order.OrderDetails);
 
             var mappedOrder = mapper.Map<DataTranferObjects.Orders.Order>(order);
             mappedOrder.Customer.TotalOrders = await Repo.ExecuteSqlCommandAsync<int>(
@@ -548,6 +555,16 @@ namespace RestX.BLL.Services
             return true;
         }
 
+        public async Task<IEnumerable<DataTranferObjects.Orders.OrderDetail>> GetAllOrderDetails()
+        {
+            var orderDetails = await Repo.GetAsync<Models.Orders.OrderDetail>(
+                orderBy: query => query.OrderBy(od => od.CreatedDate),
+                includeProperties: "ItemStatus,Order,Dish"
+            );
+
+            return mapper.Map<IEnumerable<DataTranferObjects.Orders.OrderDetail>>(orderDetails);
+        }
+
         private async Task<string> GetNextOrderReference()
         {
             string tenantPrefix = CurrentTenant.Prefix;
@@ -582,6 +599,81 @@ namespace RestX.BLL.Services
             return reference;
         }
 
+        private List<Models.Orders.OrderDetail> GroupOrderDetailsByDish(IEnumerable<Models.Orders.OrderDetail> orderDetails)
+        {
+            if (orderDetails == null || !orderDetails.Any())
+            {
+                return new List<Models.Orders.OrderDetail>();
+            }
+
+            return orderDetails
+                .GroupBy(d => new { d.DishId, d.ItemStatusId })
+                .Select(dishGroup =>
+                {
+                    var firstItem = dishGroup.First();
+
+                    firstItem.Quantity = dishGroup.Sum(x => x.Quantity);
+
+                    var notes = dishGroup
+                        .Where(x => !string.IsNullOrWhiteSpace(x.Note))
+                        .Select(x => x.Note.Trim())
+                        .Distinct();
+                    firstItem.Note = string.Join("; ", notes);
+
+                    return firstItem;
+                })
+                .ToList();
+        }
+
+
+        public async Task<byte[]> ExportAsync(OrderSearch filter)
+        {
+            ExcelPackage.License.SetNonCommercialPersonal("RestX");
+            filter.Page = 1;
+            filter.ItemsPerPage = int.MaxValue;
+            var result = await GetAllOrders(filter);
+            var orders = result.Orders;
+
+            if (!orders.Any())
+                return ExcelHelper.CreateEmptyWorkbook("Orders");
+            var statuses = await statusValueService.GetStatuses("order");
+            var statusById = statuses.ToDictionary(s => s.Id, s => s.Name);
+
+            using var package = new ExcelPackage();
+            var sheet = package.Workbook.Worksheets.Add("Orders");
+            var headers = new[]
+            {
+                "Reference", "Customer Name", "Customer Email", "Order Status", "Sub Total", "Discount",
+                "Tax", "Service Charge", "Total Amount", "Payment Status",
+                "Item Count", "Created Date", "Completed At", "Cancelled At"
+            };
+            ExcelHelper.WriteHeaders(sheet, headers);
+
+            int row = 2;
+            foreach (var o in orders)
+            {
+                sheet.Cells[row, 1].Value = o.Reference;
+                sheet.Cells[row, 2].Value = o.Customer?.FullName ?? "";
+                sheet.Cells[row, 3].Value = o.Customer?.Email ?? "";
+                sheet.Cells[row, 4].Value = statusById.TryGetValue((int)o.OrderStatusId, out var statusName) ? statusName : o.OrderStatusId.ToString();
+                sheet.Cells[row, 5].Value = o.SubTotal ?? 0;
+                sheet.Cells[row, 6].Value = o.DiscountAmount ?? 0;
+                sheet.Cells[row, 7].Value = o.TaxAmount ?? 0;
+                sheet.Cells[row, 8].Value = o.ServiceCharge ?? 0;
+                sheet.Cells[row, 9].Value = o.TotalAmount;
+                sheet.Cells[row, 10].Value = o.PaymentStatusName;
+                sheet.Cells[row, 11].Value = o.OrderDetails?.Sum(d => d.Quantity) ?? 0;
+                sheet.Cells[row, 12].Value = o.CreatedDate.HasValue ? o.CreatedDate.Value.ToString("dd/MM/yyyy HH:mm") : "";
+                sheet.Cells[row, 13].Value = o.CompletedAt.HasValue ? o.CompletedAt.Value.ToString("dd/MM/yyyy HH:mm") : "";
+                sheet.Cells[row, 14].Value = o.CancelledAt.HasValue ? o.CancelledAt.Value.ToString("dd/MM/yyyy HH:mm") : "";
+                foreach (var col in new[] { 5, 6, 7, 8, 9 })
+                    sheet.Cells[row, col].Style.Numberformat.Format = "#,##0";
+                row++;
+            }
+
+            ExcelHelper.AutoFitAndStyle(sheet, headers.Length, row - 1);
+            return package.GetAsByteArray();
+        }
         public async Task<ApplyDiscountResponse> ApplyDiscount(Guid orderId, ApplyDiscountRequest request)
         {
             var order = await Repo.GetOneAsync<Models.Orders.Order>(

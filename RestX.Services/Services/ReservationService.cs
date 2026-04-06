@@ -1,11 +1,13 @@
 using AutoMapper;
 using Hangfire;
+using OfficeOpenXml;
 using PayOS;
 using PayOS.Models.Webhooks;
 using RestX.BLL.DataTranferObjects.Authentication;
 using RestX.BLL.DataTranferObjects.Common;
 using RestX.BLL.DataTranferObjects.Payments;
 using RestX.BLL.DataTranferObjects.Reservation;
+using RestX.BLL.Helpers;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Auth;
 using RestX.BLL.Interfaces.Reservations;
@@ -499,7 +501,9 @@ namespace RestX.BLL.Services
                     detail.SpecialRequests,
                     detail.DepositAmount > 0 ? detail.DepositAmount : null,
                     detail.PaymentDeadline,
-                    paymentLink);
+                    paymentLink,
+                    CurrentTenant?.Hostname,
+                    detail.Id);
 
                 await emailService.SendEmailAsync(email, "Reservation Confirmation – " + detail.ConfirmationCode, body);
             }
@@ -887,6 +891,46 @@ namespace RestX.BLL.Services
             var timestamp = DateTimeOffset.UtcNow.ToOffset(VietnamOffset).ToUnixTimeSeconds();
             var suffix = Random.Shared.Next(1000, 9999);
             return long.Parse($"9{timestamp}{suffix}");
+        }
+
+        public async Task<byte[]> ExportAsync(ReservationFilterParams filter)
+        {
+            ExcelPackage.License.SetNonCommercialPersonal("RestX");
+            filter.PageNumber = 1;
+            filter.PageSize = int.MaxValue;
+            var result = await GetReservations(filter);
+            var reservations = result.Items.ToList();
+
+            if (!reservations.Any())
+                return ExcelHelper.CreateEmptyWorkbook("Reservations");
+
+            using var package = new ExcelPackage();
+            var sheet = package.Workbook.Worksheets.Add("Reservations");
+            var headers = new[]
+            {
+                "Confirmation Code", "Contact Name", "Contact Phone",
+                "Reservation Date & Time", "Guests",
+                "Status", "Deposit Amount", "Created At"
+            };
+            ExcelHelper.WriteHeaders(sheet, headers);
+
+            int row = 2;
+            foreach (var r in reservations)
+            {
+                sheet.Cells[row, 1].Value = r.ConfirmationCode;
+                sheet.Cells[row, 2].Value = r.ContactName;
+                sheet.Cells[row, 3].Value = r.ContactPhone;
+                sheet.Cells[row, 4].Value = r.ReservationDateTime.ToString("dd/MM/yyyy HH:mm");
+                sheet.Cells[row, 5].Value = r.NumberOfGuests;
+                sheet.Cells[row, 6].Value = r.Status.Name;
+                sheet.Cells[row, 7].Value = r.DepositAmount;
+                sheet.Cells[row, 8].Value = r.CreatedAt.ToString("dd/MM/yyyy HH:mm");
+                sheet.Cells[row, 7].Style.Numberformat.Format = "#,##0";
+                row++;
+            }
+
+            ExcelHelper.AutoFitAndStyle(sheet, headers.Length, row - 1);
+            return package.GetAsByteArray();
         }
 
         #endregion

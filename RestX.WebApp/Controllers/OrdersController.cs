@@ -249,5 +249,21 @@ namespace RestX.WebApp.Controllers
                 return BadRequest("An internal error occurred");
             }
         }
+
+        [HttpGet("details")]
+        [Authorize(Roles = "System Admin,Admin,Staff,Customer")]
+        public async Task<ActionResult<IEnumerable<RestX.BLL.DataTranferObjects.Orders.OrderDetail>>> GetAllOrderDetails()
+        {
+            try
+            {
+                var details = await orderService.GetAllOrderDetails();
+                return Ok(details);
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
     }
 }

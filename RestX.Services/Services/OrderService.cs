@@ -194,7 +194,10 @@ namespace RestX.BLL.Services
 
             var detailsByOrderId = orderDetails
                 .GroupBy(d => d.OrderId)
-                .ToDictionary(g => g.Key, g => g.ToList());
+                .ToDictionary(
+                    g => g.Key,
+                    g => GroupOrderDetailsByDish(g) 
+                );
 
             var statusById = itemStatuses
                 .GroupBy(s => s.Id)
@@ -243,6 +246,8 @@ namespace RestX.BLL.Services
                 filter: o => o.Id == id,
                 includeProperties: "OrderDetails,OrderDetails.ItemStatus,Payments,Customer,Customer.ApplicationUser,Reservation,TableSessions"
             ); 
+
+            order.OrderDetails = GroupOrderDetailsByDish(order.OrderDetails);
 
             var mappedOrder = mapper.Map<DataTranferObjects.Orders.Order>(order);
             mappedOrder.Customer.TotalOrders = await Repo.ExecuteSqlCommandAsync<int>(
@@ -545,6 +550,16 @@ namespace RestX.BLL.Services
             await Repo.SaveAsync();
 
             return true;
+        }
+
+        public async Task<IEnumerable<DataTranferObjects.Orders.OrderDetail>> GetAllOrderDetails()
+        {
+            var orderDetails = await Repo.GetAsync<Models.Orders.OrderDetail>(
+                orderBy: query => query.OrderBy(od => od.CreatedDate),
+                includeProperties: "ItemStatus,Order,Dish"
+            );
+
+            return mapper.Map<IEnumerable<DataTranferObjects.Orders.OrderDetail>>(orderDetails);
         }
 
         private async Task<string> GetNextOrderReference()

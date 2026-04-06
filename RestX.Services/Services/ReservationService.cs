@@ -499,7 +499,9 @@ namespace RestX.BLL.Services
                     detail.SpecialRequests,
                     detail.DepositAmount > 0 ? detail.DepositAmount : null,
                     detail.PaymentDeadline,
-                    paymentLink);
+                    paymentLink,
+                    CurrentTenant?.Hostname,
+                    detail.Id);
 
                 await emailService.SendEmailAsync(email, "Reservation Confirmation – " + detail.ConfirmationCode, body);
             }

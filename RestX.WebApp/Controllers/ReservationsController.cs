@@ -28,7 +28,6 @@ namespace RestX.WebApp.Controllers
         private readonly ITableService tableService;
         private readonly IDepositConfigService depositConfigService;
         private readonly IHubContext<SignalrServer> hub;
-
         public ReservationsController(
             IReservationService reservationService,
             ITableService tableService,

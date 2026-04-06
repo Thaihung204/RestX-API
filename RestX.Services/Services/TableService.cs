@@ -201,14 +201,13 @@ namespace RestX.BLL.Services
         {
             var now = DateTime.UtcNow.AddHours(7);
 
-            var session = await Repo.GetAsync<TableSession>(
+            var session = await Repo.GetOneAsync<TableSession>(
                 filter: ts => ts.TableId == tableId && ts.IsActive
                            && ts.StartedAt <= now
-                           && (ts.EndedAt == null || ts.EndedAt > now), 
-                           orderBy: q => q.OrderByDescending(ts => ts.CreatedDate)
+                           && (ts.EndedAt == null || ts.EndedAt > now)
             );
 
-            return session.FirstOrDefault();
+            return session;
         }
 
         #region QR Code Generation

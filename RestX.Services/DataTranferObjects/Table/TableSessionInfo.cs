@@ -6,6 +6,7 @@ namespace RestX.BLL.DataTranferObjects.Table
     {
         public Guid Id { get; set; }
         public Guid TableId { get; set; }
+        public string TableCode { get; set; }
         public Guid? OrderId { get; set; } 
         public Guid? ReservationId { get; set; }
 

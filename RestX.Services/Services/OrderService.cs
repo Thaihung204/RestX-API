@@ -244,7 +244,7 @@ namespace RestX.BLL.Services
         {
             var order = await Repo.GetOneAsync<Models.Orders.Order>(
                 filter: o => o.Id == id,
-                includeProperties: "OrderDetails,OrderDetails.ItemStatus,Payments,Customer,Customer.ApplicationUser,Reservation,TableSessions"
+                includeProperties: "OrderDetails,OrderDetails.Dish,OrderDetails.ItemStatus,Payments,Customer,Customer.ApplicationUser,Reservation,TableSessions,TableSessions.Table"
             ); 
 
             order.OrderDetails = GroupOrderDetailsByDish(order.OrderDetails);

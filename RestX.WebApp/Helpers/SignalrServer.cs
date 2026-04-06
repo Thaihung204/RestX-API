@@ -11,6 +11,7 @@ namespace RestX.WebApp.Helpers
         public const string TableStatusChanged = "tables.status_changed";
         public const string TableLayoutUpdated = "tables.layout_updated";
 
+        public const string DashboardOverviewUpdated = "dashboard.overview_updated";
         public const string DashboardSummaryUpdated = "dashboard.summary_updated";
         public const string DashboardTableStatusUpdated = "dashboard.table_status_updated";
 

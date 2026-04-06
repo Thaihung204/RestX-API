@@ -1,12 +1,9 @@
 using Microsoft.Data.SqlClient;
 using RestX.BLL.DataTranferObjects.Dashboard;
 using RestX.BLL.Interfaces;
-using RestX.DAL.Context;
 using RestX.Models.Enum;
 using RestX.Models.Tenants;
-using System.Collections.Generic;
 using System.Data;
-using System.Linq;
 using TableStatusEnum = RestX.Models.Enum.TableStatus;
 
 namespace RestX.BLL.Services
@@ -18,11 +15,30 @@ namespace RestX.BLL.Services
         {
         }
 
+        public async Task<DashboardOverview> GetOverviewAsync(DashboardRequest request, int top = 5, string sortBy = "revenue")
+        {
+            var summary = await GetSummaryAsync(request);
+            var revenueTrend = await GetRevenueTrendAsync(request);
+            var orderTrend = await GetOrderTrendAsync(request);
+            var topDishes = await GetTopDishesAsync(request, top, sortBy);
+            var tableStatus = await GetTableStatusAsync();
+            var customerStats = await GetCustomerStatsAsync(request);
+
+            return new DashboardOverview
+            {
+                Summary = summary,
+                RevenueTrend = revenueTrend,
+                OrderTrend = orderTrend,
+                TopDishes = topDishes,
+                TableStatus = tableStatus,
+                CustomerStats = customerStats
+            };
+        }
+
         public async Task<DashboardSummary> GetSummaryAsync(DashboardRequest request)
         {
             var (fromDate, toDate) = CalculateDateRange(request);
-            var periodLength = (int)(toDate - fromDate).TotalDays;
-            var prevFromDate = fromDate.AddDays(-periodLength);
+            var prevFromDate = GetPreviousPeriodStart(fromDate, request.FilterType);
             var prevToDate = fromDate;
 
             var summary = new DashboardSummary
@@ -110,7 +126,7 @@ namespace RestX.BLL.Services
 
             // Revenue
             summary.Revenue.Total = currentRevenue ?? 0;
-            summary.Revenue.ChangePercent = CalculateChangePercent(prevRevenue ?? 0, currentRevenue ?? 0);
+            summary.Revenue.ChangePercent = CalculateChangePercent((double)(prevRevenue ?? 0), (double)(currentRevenue ?? 0));
 
             // Orders — Total comes from the same query, no extra round-trip
             var orderStat = orderStatsResult.FirstOrDefault();
@@ -273,6 +289,22 @@ namespace RestX.BLL.Services
             };
             var data = await Repo.ExecuteSqlSelectAsync<QueryResult.DishItem>(sql, @params.Cast<object>().ToArray());
 
+            if (data.Count == 0)
+            {
+                dto.IsFallback = true;
+                var fallbackSql = $@"SELECT TOP {safeTop}
+                       d.Id AS DishId,
+                       d.Name,
+                       SUM(od.Quantity) AS Quantity,
+                       CAST(SUM(od.Quantity * d.Price) AS DECIMAL(18,2)) AS Revenue
+                   FROM OrderDetails od
+                   JOIN Orders o ON od.OrderId = o.Id
+                   JOIN Dishes d ON od.DishId = d.Id
+                   GROUP BY d.Id, d.Name
+                   ORDER BY {orderByClause} DESC, d.Name ASC";
+                data = await Repo.ExecuteSqlSelectAsync<QueryResult.DishItem>(fallbackSql, null);
+            }
+
             foreach (var item in data)
             {
                 dto.Dishes.Add(new TopDish.DishItem
@@ -383,6 +415,25 @@ namespace RestX.BLL.Services
                     new SqlParameter("to", SqlDbType.DateTime2) { Value = toDate }
                 });
 
+            if (topCustomersData.Count == 0)
+            {
+                dto.IsTopCustomersFallback = true;
+                topCustomersData = await Repo.ExecuteSqlSelectAsync<QueryResult.TopCustomer>(@"
+                    SELECT TOP 5
+                        c.Id AS CustomerId,
+                        au.FullName AS CustomerName,
+                        ISNULL(c.LoyaltyPoints, 0) AS LoyaltyPoints,
+                        c.MembershipLevel,
+                        ISNULL(SUM(o.TotalAmount), 0) AS TotalSpent
+                    FROM Customers c
+                    JOIN AspNetUsers au ON c.ApplicationUserId = au.Id
+                    JOIN Orders o ON c.Id = o.CustomerId
+                    GROUP BY c.Id, au.FullName, c.LoyaltyPoints, c.MembershipLevel
+                    HAVING SUM(o.TotalAmount) > 0
+                    ORDER BY TotalSpent DESC",
+                    null);
+            }
+
             dto.NewCustomers = currentNewCustomers ?? 0;
             dto.ChangePercent = CalculateChangePercent(prevNewCustomers ?? 0, dto.NewCustomers);
             dto.ReturningCustomers = returningData.FirstOrDefault()?.Count ?? 0;
@@ -442,17 +493,11 @@ namespace RestX.BLL.Services
                 _ => fromDate.AddDays(-1)
             };
         }
-        private double CalculateChangePercent(decimal previous, decimal current)
+        private double CalculateChangePercent(double previous, double current)
         {
             if (previous == 0)
                 return current > 0 ? 100 : 0;
-            return Math.Round(((double)(current - previous) / (double)previous) * 100, 2);
-        }
-        private double CalculateChangePercent(int previous, int current)
-        {
-            if (previous == 0)
-                return current > 0 ? 100 : 0;
-            return Math.Round(((double)(current - previous) / (double)previous) * 100, 2);
+            return Math.Round((current - previous) / previous * 100, 2);
         }
         private int GetStatusCount(IEnumerable<QueryResult.StatusCount> stats, string statusCode)
         {

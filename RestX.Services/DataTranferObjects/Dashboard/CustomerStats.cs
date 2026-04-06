@@ -9,6 +9,7 @@ namespace RestX.BLL.DataTranferObjects.Dashboard
         public int TotalOrders { get; set; }
         public decimal AverageRevenuePerCustomer { get; set; }
         public double ChangePercent { get; set; }
+        public bool IsTopCustomersFallback { get; set; }
         public List<TopCustomer> TopCustomers { get; set; } = new();
 
         public class TopCustomer

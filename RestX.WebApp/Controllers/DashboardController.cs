@@ -34,6 +34,26 @@ namespace RestX.WebApp.Controllers
             _hub = hub;
         }
 
+        [HttpGet("overview")]
+        public async Task<IActionResult> GetOverview([FromQuery] DashboardRequest request, [FromQuery] int top = 5, [FromQuery] string sortBy = "revenue")
+        {
+            try
+            {
+                var result = await _dashboardService.GetOverviewAsync(request, top, sortBy);
+                await _hub.BroadcastToTenant(CurrentTenant.Id, SignalrServer.DashboardOverviewUpdated, result);
+                return Ok(result);
+            }
+            catch (AppException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
         [HttpGet("summary")]
         public async Task<IActionResult> GetSummary([FromQuery] DashboardRequest request)
         {

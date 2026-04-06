@@ -4,6 +4,7 @@ namespace RestX.BLL.DataTranferObjects.Dashboard
     {
         public DateTime FromDate { get; set; }
         public DateTime ToDate { get; set; }
+        public bool IsFallback { get; set; }
         public List<DishItem> Dishes { get; set; } = new();
 
         public class DishItem

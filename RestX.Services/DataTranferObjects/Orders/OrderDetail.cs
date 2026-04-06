@@ -9,6 +9,7 @@ namespace RestX.BLL.DataTranferObjects.Orders
         [Required]
         public Guid DishId { get; set; }
         public string? DishName { get; set; }
+        public decimal? DishPrice { get; set; }
 
         [Range(1, 1000)]
         public int Quantity { get; set; } = 1;

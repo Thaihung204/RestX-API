@@ -16,6 +16,7 @@ namespace RestX.BLL.DataTranferObjects.Dashboard
             public int? Serving { get; set; }
             public int? Completed { get; set; }
             public int? Cancelled { get; set; }
+            public int? Total { get; set; }
         }
 
         public class TrendPoint

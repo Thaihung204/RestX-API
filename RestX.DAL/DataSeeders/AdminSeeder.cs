@@ -15,7 +15,7 @@ namespace RestX.DAL.DataSeeders
         }
         public override int Order => 4;
         protected override string SeederName => "AdminSeeder";
-        protected override string Email => $"admin@{_sanitizedHostname}.restx.food";
+        protected override string Email => $"admin@{_sanitizedHostname}";
         protected override string Username => DEFAULT_USERNAME;
         protected override string Password => DEFAULT_PASSWORD;
         protected override string RoleName => DEFAULT_ROLE;
@@ -24,8 +24,16 @@ namespace RestX.DAL.DataSeeders
             if (string.IsNullOrWhiteSpace(hostname))
                 return "tenant";
             var normalized = RemoveVietnameseDiacritics(hostname);
-            var sanitized = Regex.Replace(normalized, @"[^a-zA-Z0-9]", "").ToLower();
-            return string.IsNullOrEmpty(sanitized) ? "tenant" : sanitized;
+            var parts = normalized.Split('.', StringSplitOptions.RemoveEmptyEntries);
+
+            var sanitizedParts = parts
+                .Select(part =>
+                {
+                    var clean = Regex.Replace(part, @"[^a-zA-Z0-9-]", "").ToLower();
+                    return string.IsNullOrEmpty(clean) ? "tenant" : clean;
+                });
+
+            return string.Join(".", sanitizedParts);
         }
         private static string RemoveVietnameseDiacritics(string text)
         {

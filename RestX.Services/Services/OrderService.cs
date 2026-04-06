@@ -239,7 +239,7 @@ namespace RestX.BLL.Services
         {
             var order = await Repo.GetOneAsync<Models.Orders.Order>(
                 filter: o => o.Id == id,
-                includeProperties: "OrderDetails,OrderDetails.ItemStatus,Payments,Customer,Customer.ApplicationUser,Reservation"
+                includeProperties: "OrderDetails,OrderDetails.ItemStatus,Payments,Customer,Customer.ApplicationUser,Reservation,TableSessions"
             ); 
 
             var mappedOrder = mapper.Map<DataTranferObjects.Orders.Order>(order);

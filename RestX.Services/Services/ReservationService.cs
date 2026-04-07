@@ -143,9 +143,10 @@ namespace RestX.BLL.Services
             {
                 var paymentLink = await CreateDepositPaymentLink(reservation.Id);
                 await SendConfirmationEmail(request.Email, request.Name, detail, tables, paymentLink);
+                var paymentDeadlineUtc = paymentDeadline!.Value.Subtract(VietnamOffset);
                 BackgroundJob.Schedule<IReservationService>(
                     s => s.AutoCancelDepositReservation(reservation.Id),
-                    paymentDeadline!.Value);
+                    paymentDeadlineUtc);
             }
             else
             {

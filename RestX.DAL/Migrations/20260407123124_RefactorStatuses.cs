@@ -155,10 +155,42 @@ namespace RestX.DAL.Migrations
             ");
 
             // ════════════════════════════════════════════════════════════════════════════
+            // RESERVATION: Remove COMPLETED status
+            // Completed state is now derived from CheckedInAt + TableSessions.EndedAt
+            // Migrate existing COMPLETED reservations → CONFIRMED
+            // ════════════════════════════════════════════════════════════════════════════
+
+            migrationBuilder.Sql(@"
+                IF EXISTS (
+                    SELECT 1 FROM StatusValues sv
+                    JOIN StatusTypes st ON sv.StatusTypeId = st.Id
+                    WHERE sv.Code = 'COMPLETED' AND st.Code = 'RESERVATION'
+                )
+                BEGIN
+                    DECLARE @ResCompletedId INT = (
+                        SELECT sv.Id FROM StatusValues sv
+                        JOIN StatusTypes st ON sv.StatusTypeId = st.Id
+                        WHERE sv.Code = 'COMPLETED' AND st.Code = 'RESERVATION'
+                    )
+                    DECLARE @ResConfirmedId2 INT = (
+                        SELECT sv.Id FROM StatusValues sv
+                        JOIN StatusTypes st ON sv.StatusTypeId = st.Id
+                        WHERE sv.Code = 'CONFIRMED' AND st.Code = 'RESERVATION'
+                    )
+                    IF @ResCompletedId IS NOT NULL AND @ResConfirmedId2 IS NOT NULL
+                    BEGIN
+                        UPDATE Reservations
+                        SET ReservationStatusId = @ResConfirmedId2
+                        WHERE ReservationStatusId = @ResCompletedId
+
+                        DELETE FROM StatusValues WHERE Id = @ResCompletedId
+                    END
+                END
+            ");
+
+            // ════════════════════════════════════════════════════════════════════════════
             // CLEANUP: Remove StatusTypes ORDER, TABLE, PAYMENT and all their values
             // (these use C# enums — DB rows no longer needed)
-            // Any FK references from other tables are not expected since these
-            // were already enum-backed, but migrate defensively just in case
             // ════════════════════════════════════════════════════════════════════════════
 
             migrationBuilder.Sql(@"

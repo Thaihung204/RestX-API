@@ -138,7 +138,6 @@ namespace RestX.BLL.Services
             summary.Reservations.Total = GetStatusCountTotal(reservationStatsResult);
             summary.Reservations.Pending = GetStatusCount(reservationStatsResult, "PENDING");
             summary.Reservations.Confirmed = GetStatusCount(reservationStatsResult, "CONFIRMED");
-            summary.Reservations.Completed = GetStatusCount(reservationStatsResult, "COMPLETED");
             summary.Reservations.Cancelled = GetStatusCount(reservationStatsResult, "CANCELLED");
             summary.Reservations.LiveServing = liveServingResult.FirstOrDefault()?.Count ?? 0;
 

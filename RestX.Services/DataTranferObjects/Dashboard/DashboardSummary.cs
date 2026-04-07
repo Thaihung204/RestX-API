@@ -29,7 +29,6 @@ namespace RestX.BLL.DataTranferObjects.Dashboard
             public int Total { get; set; }
             public int Pending { get; set; }
             public int Confirmed { get; set; }
-            public int Completed { get; set; }
             public int Cancelled { get; set; }
             public int LiveServing { get; set; }
         }

@@ -30,7 +30,6 @@ namespace RestX.BLL.Services
         private const string PendingCode = "PENDING";
         private const string ConfirmedCode = "CONFIRMED";
         private const string CancelledCode = "CANCELLED";
-        private const string CompletedCode = "COMPLETED";
         private const int ReservationBufferMinutes = 120;
 
         private static readonly TimeSpan VietnamOffset = TimeSpan.FromHours(7);
@@ -166,7 +165,7 @@ namespace RestX.BLL.Services
                 orderBy: filter.SortDescending
                     ? q => q.OrderByDescending(r => r.Time)
                     : q => q.OrderBy(r =>
-                                r.ReservationStatus.Code == CompletedCode || r.ReservationStatus.Code == CancelledCode ? 2 :
+                                r.ReservationStatus.Code == CancelledCode ? 2 :
                                 r.Time >= VnNow ? 0 : 1)
                             .ThenBy(r => r.Time)
                             .ThenBy(r => r.ReservationStatus.Code == ConfirmedCode ? 0 : r.ReservationStatus.Code == PendingCode ? 1 : 2),
@@ -219,8 +218,8 @@ namespace RestX.BLL.Services
             var reservation = await RequireReservation(id, TablesAndStatusIncludes);
 
             var currentStatusCode = reservation.ReservationStatus?.Code;
-            if (currentStatusCode == CancelledCode || currentStatusCode == CompletedCode)
-                throw new InvalidOperationException("Cannot update a reservation that is already cancelled or completed");
+            if (currentStatusCode == CancelledCode)
+                throw new InvalidOperationException("Cannot update a reservation that is already cancelled");
 
             if (request.ReservationDateTime.HasValue)
             {
@@ -254,8 +253,7 @@ namespace RestX.BLL.Services
                         ts.ReservationId != null &&
                         ts.Reservation.Time >= newDateTime.AddMinutes(-ReservationBufferMinutes) &&
                         ts.Reservation.Time <= newDateTime.AddMinutes(ReservationBufferMinutes) &&
-                        ts.Reservation.ReservationStatus.Code != CancelledCode &&
-                        ts.Reservation.ReservationStatus.Code != CompletedCode,
+                        ts.Reservation.ReservationStatus.Code != CancelledCode,
                     includeProperties: "Reservation.ReservationStatus"
                 )).ToList();
 
@@ -321,8 +319,8 @@ namespace RestX.BLL.Services
             var reservation = await RequireReservation(id, TablesAndStatusIncludes);
 
             var statusCode = reservation.ReservationStatus?.Code;
-            if (statusCode == CompletedCode || statusCode == CancelledCode)
-                throw new InvalidOperationException("Cannot confirm a reservation that is already cancelled or completed");
+            if (statusCode == CancelledCode)
+                throw new InvalidOperationException("Cannot confirm a reservation that is already cancelled");
             if (statusCode == PendingCode)
             {
                 var statuses = await statusValueService.GetStatuses(ReservationStatusTypeCode);
@@ -373,19 +371,13 @@ namespace RestX.BLL.Services
             var reservation = await RequireReservation(id, TablesIncludes);
 
             var statusCode = reservation.ReservationStatus?.Code;
-            if (statusCode == CancelledCode || statusCode == CompletedCode)
-                throw new InvalidOperationException("Reservation is already cancelled or completed");
+            if (statusCode == CancelledCode)
+                throw new InvalidOperationException("Reservation is already cancelled");
 
             if (!reservation.CheckedInAt.HasValue)
                 throw new InvalidOperationException("Cannot complete a reservation that has not been checked in");
 
-            var statuses = await statusValueService.GetStatuses(ReservationStatusTypeCode);
-            var completedStatus = statuses.FirstOrDefault(s => s.Code == CompletedCode)
-                ?? throw new InvalidOperationException("Completed status not configured");
-
-            reservation.ReservationStatusId = completedStatus.Id;
-            Repo.Update(reservation, userId);
-            await FreeTablesAndSessions(reservation, CompletedCode, userId);
+            await FreeTablesAndSessions(reservation, CancelledCode, userId);
             await Repo.SaveAsync();
         }
 
@@ -428,8 +420,7 @@ namespace RestX.BLL.Services
                     ts.ReservationId != null &&
                     ts.Reservation.Time >= bufferStart &&
                     ts.Reservation.Time <= bufferEnd &&
-                    ts.Reservation.ReservationStatus.Code != CancelledCode &&
-                    ts.Reservation.ReservationStatus.Code != CompletedCode,
+                    ts.Reservation.ReservationStatus.Code != CancelledCode,
                 includeProperties: "Table,Reservation.ReservationStatus"
             )).ToList();
             var conflictingSlots = conflicts.Select(ts => new ConflictingSlot
@@ -629,7 +620,7 @@ namespace RestX.BLL.Services
 
         private async Task FreeTablesAndSessions(Reservation reservation, string newStatusCode, string? userId = null)
         {
-            if (newStatusCode != CompletedCode && newStatusCode != CancelledCode && newStatusCode != ConfirmedCode)
+            if (newStatusCode != CancelledCode && newStatusCode != ConfirmedCode)
                 return;
 
             var sessions = (await Repo.GetAsync<TableSession>(

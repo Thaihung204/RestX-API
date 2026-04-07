@@ -45,7 +45,6 @@ namespace RestX.DAL.DataSeeders
             {
                 ("PENDING", "Pending", "#FF9800", true),
                 ("CONFIRMED", "Confirmed", "#4CAF50", false),
-                ("COMPLETED", "Completed", "#00C853", false),
                 ("CANCELLED", "Cancelled", "#F44336", false)
             }));
             values.AddRange(CreateValuesForType(typeMap["ORDER-DETAIL"], new[]

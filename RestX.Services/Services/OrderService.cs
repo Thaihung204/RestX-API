@@ -253,6 +253,16 @@ namespace RestX.BLL.Services
             order.OrderDetails = GroupOrderDetailsByDish(order.OrderDetails);
 
             var mappedOrder = mapper.Map<DataTranferObjects.Orders.Order>(order);
+            if (order.Payments != null && order.Payments.Any())
+            {
+                if (order.Payments.Any(p => p.Status == Models.Enum.PaymentStatus.Success))
+                    mappedOrder.PaymentStatus = Models.Enum.PaymentStatus.Success;
+                else if (order.Payments.Any(p => p.Status == Models.Enum.PaymentStatus.Pending))
+                    mappedOrder.PaymentStatus = Models.Enum.PaymentStatus.Pending;
+                else
+                    mappedOrder.PaymentStatus = Models.Enum.PaymentStatus.Fail;
+            }
+
             mappedOrder.Customer.TotalOrders = await Repo.ExecuteSqlCommandAsync<int>(
                             "SELECT COUNT(*) FROM Orders WHERE CustomerId = @CustomerId",
                             new SqlParameter("CustomerId", order.CustomerId));

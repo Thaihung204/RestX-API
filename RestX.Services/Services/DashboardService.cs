@@ -172,6 +172,7 @@ namespace RestX.BLL.Services
 
             var filterLower = request.FilterType?.ToLower();
             var isYear = filterLower == "year";
+            var isQuarter = filterLower == "quarter";
             var isToday = filterLower == "today";
 
             var keyFormat = isToday ? "yyyy-MM-dd HH:00" : "yyyy-MM-dd";
@@ -183,7 +184,7 @@ namespace RestX.BLL.Services
             {
                 var dateStr = isToday
                     ? current.ToString("yyyy-MM-dd HH:00")
-                    : isYear
+                    : (isYear || isQuarter)
                         ? new DateTime(current.Year, current.Month, 1).ToString("yyyy-MM-dd")
                         : current.ToString("yyyy-MM-dd");
 
@@ -194,7 +195,7 @@ namespace RestX.BLL.Services
                     Value = trendDict.GetValueOrDefault(dateStr)
                 });
 
-                current = isToday ? current.AddHours(1) : isYear ? current.AddMonths(1) : current.AddDays(1);
+                current = isToday ? current.AddHours(1) : (isYear || isQuarter) ? current.AddMonths(1) : current.AddDays(1);
             }
 
             return dto;
@@ -222,6 +223,7 @@ namespace RestX.BLL.Services
 
             var filterLower = request.FilterType?.ToLower();
             var isYear = filterLower == "year";
+            var isQuarter = filterLower == "quarter";
             var isToday = filterLower == "today";
 
             var keyFormat = isToday ? "yyyy-MM-dd HH:00" : "yyyy-MM-dd";
@@ -233,7 +235,7 @@ namespace RestX.BLL.Services
             {
                 var dateStr = isToday
                     ? current.ToString("yyyy-MM-dd HH:00")
-                    : isYear
+                    : (isYear || isQuarter)
                         ? new DateTime(current.Year, current.Month, 1).ToString("yyyy-MM-dd")
                         : current.ToString("yyyy-MM-dd");
 
@@ -244,7 +246,7 @@ namespace RestX.BLL.Services
                     Total = trendDict.GetValueOrDefault(dateStr)
                 });
 
-                current = isToday ? current.AddHours(1) : isYear ? current.AddMonths(1) : current.AddDays(1);
+                current = isToday ? current.AddHours(1) : (isYear || isQuarter) ? current.AddMonths(1) : current.AddDays(1);
             }
 
             return dto;
@@ -448,6 +450,7 @@ namespace RestX.BLL.Services
             {
                 "week" => (today.AddDays(-7), today.AddDays(1)),
                 "month" => (today.AddDays(-30), today.AddDays(1)),
+                "quarter" => (today.AddMonths(-3), today.AddDays(1)),
                 "year" => (today.AddDays(-365), today.AddDays(1)),
                 _ => (today, today.AddDays(1))
             };
@@ -459,6 +462,7 @@ namespace RestX.BLL.Services
             {
                 "week" => fromDate.AddDays(-7),
                 "month" => fromDate.AddMonths(-1),
+                "quarter" => fromDate.AddMonths(-3),
                 "year" => fromDate.AddYears(-1),
                 _ => fromDate.AddDays(-1)
             };
@@ -491,6 +495,16 @@ namespace RestX.BLL.Services
                     WHERE p.PaymentDate >= @from AND p.PaymentDate < @to
                     AND p.Status = @status AND p.Purpose = @purpose
                     GROUP BY DATEPART(HOUR, p.PaymentDate), CAST(p.PaymentDate AS DATE)
+                    ORDER BY Date",
+
+                "quarter" => @"
+                    SELECT
+                        DATEFROMPARTS(YEAR(p.PaymentDate), MONTH(p.PaymentDate), 1) AS Date,
+                        CAST(SUM(p.Amount) AS DECIMAL(18,2)) AS Value
+                    FROM Payments p
+                    WHERE p.PaymentDate >= @from AND p.PaymentDate < @to
+                    AND p.Status = @status AND p.Purpose = @purpose
+                    GROUP BY YEAR(p.PaymentDate), MONTH(p.PaymentDate)
                     ORDER BY Date",
 
                 "year" => @"
@@ -528,6 +542,15 @@ namespace RestX.BLL.Services
                     GROUP BY DATEPART(HOUR, o.CreatedDate), CAST(o.CreatedDate AS DATE)
                     ORDER BY Date",
 
+                "quarter" => @"
+                    SELECT
+                        DATEFROMPARTS(YEAR(o.CreatedDate), MONTH(o.CreatedDate), 1) AS Date,
+                        COUNT(o.Id) AS Total
+                    FROM Orders o
+                    WHERE o.CreatedDate >= @from AND o.CreatedDate < @to
+                    GROUP BY YEAR(o.CreatedDate), MONTH(o.CreatedDate)
+                    ORDER BY Date",
+
                 "year" => @"
                     SELECT
                         DATEFROMPARTS(YEAR(o.CreatedDate), MONTH(o.CreatedDate), 1) AS Date,
@@ -554,6 +577,7 @@ namespace RestX.BLL.Services
                 "today" => date.ToString("HH:mm"),
                 "week" => new[] { "CN", "T2", "T3", "T4", "T5", "T6", "T7" }[(int)date.DayOfWeek],
                 "month" => date.Day.ToString("D2"),
+                "quarter" => new[] { "Th1", "Th2", "Th3", "Th4", "Th5", "Th6", "Th7", "Th8", "Th9", "Th10", "Th11", "Th12" }[date.Month - 1],
                 "year" => new[] { "Th1", "Th2", "Th3", "Th4", "Th5", "Th6", "Th7", "Th8", "Th9", "Th10", "Th11", "Th12" }[date.Month - 1],
                 _ => string.Empty
             };

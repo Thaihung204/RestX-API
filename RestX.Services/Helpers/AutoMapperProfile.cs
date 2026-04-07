@@ -117,7 +117,9 @@ namespace RestX.BLL.Helpers
                 .ForMember(dest => dest.ItemStatusId, opt => opt.Ignore())
                 .ForMember(dest => dest.ItemStatus, opt => opt.Ignore())
                 .ForMember(dest => dest.Order, opt => opt.Ignore())
-                .ForMember(dest => dest.Dish, opt => opt.Ignore()); CreateMap<Models.Orders.Order, DataTranferObjects.Orders.Order>();
+                .ForMember(dest => dest.Dish, opt => opt.Ignore()); CreateMap<Models.Orders.Order, DataTranferObjects.Orders.Order>()
+                .ForMember(dest => dest.PaymentStatus, opt => opt.MapFrom(src =>
+                    src.IsPaid ? Models.Enum.PaymentStatus.Success : Models.Enum.PaymentStatus.Pending));
 
             CreateMap<DataTranferObjects.Orders.Order, Models.Orders.Order>()
                 .ForMember(dest => dest.OrderDetails, opt => opt.Ignore()); CreateMap<Models.Inventory.IngredientCategory, DataTranferObjects.Inventory.IngredientCategory>().ReverseMap();

@@ -9,9 +9,12 @@ using RestX.BLL.Interfaces.Inventory;
 using RestX.BLL.Interfaces.Status;
 using RestX.BLL.Interfaces.Tables;
 using RestX.Models.Common;
+using RestX.Models.Customers;
 using RestX.Models.Enum;
+using RestX.Models.Loyalty;
 using RestX.Models.Menu;
 using RestX.Models.Orders;
+using RestX.Models.Promotions;
 using RestX.Models.Reservations;
 using RestX.Models.Tables;
 using RestX.Models.Tenants;
@@ -671,5 +674,223 @@ namespace RestX.BLL.Services
             ExcelHelper.AutoFitAndStyle(sheet, headers.Length, row - 1);
             return package.GetAsByteArray();
         }
+        public async Task<ApplyDiscountResponse> ApplyDiscount(Guid orderId, ApplyDiscountRequest request)
+        {
+            var order = await Repo.GetOneAsync<Models.Orders.Order>(
+                filter: o => o.Id == orderId,
+                includeProperties: "PromotionHistories")
+                ?? throw new KeyNotFoundException("Order not found");
+
+            var alreadyPaid = await Repo.GetExistsAsync<Payment>(
+                p => p.OrderId == orderId && p.Status == PaymentStatus.Success);
+            if (alreadyPaid)
+                throw new InvalidOperationException("Cannot apply discount to a paid order");
+            var response = new ApplyDiscountResponse
+            {
+                OrderId = orderId,
+                SubTotal = order.SubTotal,
+                TaxAmount = order.TaxAmount,
+                ServiceCharge = order.ServiceCharge
+            };
+
+            decimal promotionDiscount = 0;
+            decimal membershipDiscount = 0;
+            if (!string.IsNullOrWhiteSpace(request.PromotionCode))
+            {
+                var now = DateTime.UtcNow.AddHours(7);
+                var promotion = await Repo.GetOneAsync<Models.Promotions.Promotion>(
+                    filter: p =>
+                        p.Code == request.PromotionCode.Trim().ToUpperInvariant()
+                        && p.IsActive
+                        && p.ValidFrom <= now
+                        && p.ValidTo >= now);
+
+                if (promotion == null)
+                {
+                    response.PromotionError = "Mã giảm giá không hợp lệ hoặc đã hết hạn";
+                }
+                else if (promotion.MinOrderAmount > 0 && order.SubTotal < promotion.MinOrderAmount)
+                {
+                    response.PromotionError = $"Đơn hàng tối thiểu {promotion.MinOrderAmount:N0} VND để áp dụng mã này";
+                }
+                else
+                {
+                    if (promotion.UsageLimit > 0)
+                    {
+                        var totalUsage = await Repo.GetCountAsync<PromotionHistory>(
+                            ph => ph.PromotionId == promotion.Id);
+                        if (totalUsage >= promotion.UsageLimit)
+                        {
+                            response.PromotionError = "Mã giảm giá đã hết lượt sử dụng";
+                        }
+                    }
+
+                    if (response.PromotionError == null && promotion.UsagePerCustomer > 0 && order.CustomerId.HasValue)
+                    {
+                        var customerOrders = await Repo.GetAsync<Models.Orders.Order>(
+                            o => o.CustomerId == order.CustomerId);
+                        var customerOrderIds = customerOrders.Select(o => o.Id).ToList();
+                        var customerUsage = await Repo.GetCountAsync<PromotionHistory>(
+                            ph => ph.PromotionId == promotion.Id && customerOrderIds.Contains(ph.OrderId));
+                        if (customerUsage >= promotion.UsagePerCustomer)
+                        {
+                            response.PromotionError = "Bạn đã sử dụng hết lượt cho mã giảm giá này";
+                        }
+                    }
+
+                    if (response.PromotionError == null)
+                    {
+                        // Load promotion applicable items + order details với dish để tính applicable subtotal
+                        var applicableItems = await Repo.GetAsync<PromotionApplicableItem>(
+                            pi => pi.PromotionId == promotion.Id);
+
+                        var orderDetails = await Repo.GetAsync<Models.Orders.OrderDetail>(
+                            od => od.OrderId == orderId,
+                            includeProperties: "Dish");
+
+                        decimal applicableSubTotal;
+                        if (!applicableItems.Any())
+                        {
+                            // Không giới hạn item → áp toàn bộ subtotal
+                            applicableSubTotal = order.SubTotal;
+                        }
+                        else
+                        {
+                            var applicableDishIds = applicableItems
+                                .Where(ai => ai.DishId.HasValue)
+                                .Select(ai => ai.DishId!.Value)
+                                .ToHashSet();
+
+                            var applicableCategoryIds = applicableItems
+                                .Where(ai => ai.CategoryId.HasValue)
+                                .Select(ai => ai.CategoryId!.Value)
+                                .ToHashSet();
+
+                            applicableSubTotal = orderDetails.Sum(od =>
+                            {
+                                if (od.Dish == null) return 0m;
+                                bool matches = applicableDishIds.Contains(od.DishId)
+                                    || applicableCategoryIds.Contains(od.Dish.CategoryId);
+                                return matches ? od.Quantity * od.Dish.Price : 0m;
+                            });
+                        }
+
+                        if (string.Equals(promotion.DiscountType, "PERCENTAGE", StringComparison.OrdinalIgnoreCase))
+                        {
+                            promotionDiscount = applicableSubTotal * promotion.DiscountValue / 100;
+                            if (promotion.MaxDiscountAmount > 0 && promotionDiscount > promotion.MaxDiscountAmount)
+                                promotionDiscount = promotion.MaxDiscountAmount;
+                        }
+                        else
+                        {
+                            promotionDiscount = Math.Min(promotion.DiscountValue, applicableSubTotal);
+                        }
+
+                        promotionDiscount = Math.Min(promotionDiscount, order.SubTotal);
+
+                        response.AppliedPromotion = new AppliedPromotionInfo
+                        {
+                            Code = promotion.Code,
+                            Name = promotion.Name,
+                            DiscountType = promotion.DiscountType,
+                            DiscountValue = promotion.DiscountValue,
+                            MaxDiscountAmount = promotion.MaxDiscountAmount
+                        };
+
+                        var existingHistory = order.PromotionHistories
+                            .FirstOrDefault(ph => ph.PromotionId == promotion.Id);
+                        if (existingHistory != null)
+                        {
+                            existingHistory.DiscountAmount = promotionDiscount;
+                            Repo.Update(existingHistory);
+                        }
+                        else
+                        {
+                            foreach (var old in order.PromotionHistories.ToList())
+                            {
+                                if (old.PromotionId != promotion.Id)
+                                    Repo.Delete(old);
+                            }
+
+                            await Repo.CreateAsync(new PromotionHistory
+                            {
+                                PromotionId = promotion.Id,
+                                OrderId = orderId,
+                                DiscountAmount = promotionDiscount
+                            });
+                        }
+                    }
+                    else
+                    {
+                        foreach (var old in order.PromotionHistories.ToList())
+                            Repo.Delete(old);
+                    }
+                }
+            }
+            else
+            {
+                foreach (var old in order.PromotionHistories.ToList())
+                    Repo.Delete(old);
+            }
+
+            if (request.ApplyMembership && order.CustomerId.HasValue)
+            {
+                var customer = await Repo.GetOneAsync<Customer>(c => c.Id == order.CustomerId.Value);
+                if (customer != null && !string.IsNullOrEmpty(customer.MembershipLevel))
+                {
+                    var band = await Repo.GetOneAsync<LoyaltyPointBand>(
+                        b => b.IsActive && b.Name == customer.MembershipLevel);
+                    if (band != null && band.DiscountPercentage > 0)
+                    {
+                        membershipDiscount = (order.SubTotal - promotionDiscount) * band.DiscountPercentage / 100;
+                        membershipDiscount = Math.Max(0, membershipDiscount);
+
+                        response.AppliedMembership = new AppliedMembershipInfo
+                        {
+                            Level = customer.MembershipLevel,
+                            DiscountPercentage = band.DiscountPercentage
+                        };
+                    }
+                }
+            }
+
+            var totalDiscount = Math.Min(promotionDiscount + membershipDiscount, order.SubTotal);
+            response.Breakdown = new DiscountBreakdown
+            {
+                PromotionDiscount = promotionDiscount,
+                MembershipDiscount = membershipDiscount
+            };
+            response.DiscountAmount = totalDiscount;
+            order.DiscountAmount = totalDiscount;
+            order.CalculateTotalAmount();
+            response.TotalAmount = order.TotalAmount;
+
+            Repo.Update(order);
+            await Repo.SaveAsync();
+
+            return response;
+        }
+
+        public async Task RemoveDiscount(Guid orderId)
+        {
+            var order = await Repo.GetOneAsync<Models.Orders.Order>(
+                filter: o => o.Id == orderId,
+                includeProperties: "PromotionHistories")
+                ?? throw new KeyNotFoundException("Order not found");
+
+            var alreadyPaid = await Repo.GetExistsAsync<Payment>(
+                p => p.OrderId == orderId && p.Status == PaymentStatus.Success);
+            if (alreadyPaid)
+                throw new InvalidOperationException("Cannot modify a paid order");
+
+            foreach (var old in order.PromotionHistories.ToList())
+                Repo.Delete(old);
+            order.DiscountAmount = 0;
+            order.CalculateTotalAmount();
+
+            Repo.Update(order);
+            await Repo.SaveAsync();
+        }
+
     }
 }

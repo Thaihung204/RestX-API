@@ -15,5 +15,7 @@ namespace RestX.BLL.Interfaces
         Task<IEnumerable<OrderDetail>> GetAllOrderDetails();
 
         Task<byte[]> ExportAsync(OrderSearch filter);
+        Task<ApplyDiscountResponse> ApplyDiscount(Guid orderId, ApplyDiscountRequest request);
+        Task RemoveDiscount(Guid orderId);
     }
 }

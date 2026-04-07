@@ -207,6 +207,16 @@ namespace RestX.BLL.Services
                 p => p.OrderId.HasValue && orderIds.Contains(p.OrderId.Value) && p.Status == PaymentStatus.Success);
             var paidOrderIds = paidPayments.Select(p => p.OrderId!.Value).ToHashSet();
 
+            var tableSessions = await Repo.GetAsync<Models.Reservations.TableSession>(
+                filter: ts => ts.OrderId.HasValue && orderIds.Contains(ts.OrderId.Value),
+                includeProperties: "Table"
+            );
+
+            var sessionsByOrderId = tableSessions
+                .Where(ts => ts.OrderId.HasValue)
+                .GroupBy(ts => ts.OrderId!.Value)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
             foreach (var o in orders)
             {
                 if (detailsByOrderId.TryGetValue(o.Id, out var ods))
@@ -218,6 +228,11 @@ namespace RestX.BLL.Services
                     }
 
                     o.OrderDetails = ods;
+                }
+
+                if (sessionsByOrderId.TryGetValue(o.Id, out var sessions))
+                {
+                    o.TableSessions = sessions;
                 }
 
                 o.IsPaid = paidOrderIds.Contains(o.Id);

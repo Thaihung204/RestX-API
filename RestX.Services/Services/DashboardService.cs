@@ -72,11 +72,9 @@ namespace RestX.BLL.Services
 
             var orderStatsResult = await Repo.ExecuteSqlSelectAsync<QueryResult.OrderStatusCount>(@"
                 SELECT
-                    SUM(CASE WHEN o.OrderStatusId = 0 THEN 1 ELSE 0 END) AS Pending,
-                    SUM(CASE WHEN o.OrderStatusId = 1 THEN 1 ELSE 0 END) AS Confirmed,
-                    SUM(CASE WHEN o.OrderStatusId = 2 THEN 1 ELSE 0 END) AS Serving,
-                    SUM(CASE WHEN o.OrderStatusId = 3 THEN 1 ELSE 0 END) AS Completed,
-                    SUM(CASE WHEN o.OrderStatusId = 4 THEN 1 ELSE 0 END) AS Cancelled,
+                    SUM(CASE WHEN o.OrderStatusId = 0 THEN 1 ELSE 0 END) AS [Open],
+                    SUM(CASE WHEN o.OrderStatusId = 1 THEN 1 ELSE 0 END) AS Completed,
+                    SUM(CASE WHEN o.OrderStatusId = 2 THEN 1 ELSE 0 END) AS Cancelled,
                     COUNT(o.Id) AS Total
                 FROM Orders o
                 WHERE o.CreatedDate >= @from AND o.CreatedDate < @to",
@@ -99,7 +97,7 @@ namespace RestX.BLL.Services
                 });
 
             var liveProcessing = await Repo.ExecuteSqlCommandAsync<int?>(
-                @"SELECT COUNT(o.Id) FROM Orders o WHERE o.OrderStatusId IN (0, 1, 2)", null);
+                @"SELECT COUNT(o.Id) FROM Orders o WHERE o.OrderStatusId = 0", null);
 
             var liveServingResult = await Repo.ExecuteSqlSelectAsync<QueryResult.CustomerCount>(@"
                 SELECT COUNT(DISTINCT r.Id) AS Count
@@ -131,20 +129,17 @@ namespace RestX.BLL.Services
             // Orders — Total comes from the same query, no extra round-trip
             var orderStat = orderStatsResult.FirstOrDefault();
             summary.Orders.Total = orderStat?.Total ?? 0;
-            summary.Orders.Pending = orderStat?.Pending ?? 0;
-            summary.Orders.Confirmed = orderStat?.Confirmed ?? 0;
-            summary.Orders.Processing = orderStat?.Serving ?? 0;
+            summary.Orders.Open = orderStat?.Open ?? 0;
             summary.Orders.Completed = orderStat?.Completed ?? 0;
             summary.Orders.Cancelled = orderStat?.Cancelled ?? 0;
             summary.Orders.LiveProcessing = liveProcessing ?? 0;
 
             // Reservations
             summary.Reservations.Total = GetStatusCountTotal(reservationStatsResult);
-            summary.Reservations.PendingDeposit = GetStatusCount(reservationStatsResult, "DEPOSIT_PENDING");
+            summary.Reservations.Pending = GetStatusCount(reservationStatsResult, "PENDING");
             summary.Reservations.Confirmed = GetStatusCount(reservationStatsResult, "CONFIRMED");
             summary.Reservations.Completed = GetStatusCount(reservationStatsResult, "COMPLETED");
             summary.Reservations.Cancelled = GetStatusCount(reservationStatsResult, "CANCELLED");
-            summary.Reservations.NoShow = GetStatusCount(reservationStatsResult, "NO_SHOW");
             summary.Reservations.LiveServing = liveServingResult.FirstOrDefault()?.Count ?? 0;
 
             // New Customers
@@ -315,15 +310,13 @@ namespace RestX.BLL.Services
             var @params = new[]
             {
                 new SqlParameter("available", SqlDbType.Int) { Value = (int)TableStatusEnum.Available },
-                new SqlParameter("occupied", SqlDbType.Int) { Value = (int)TableStatusEnum.Occupied },
-                new SqlParameter("reserved", SqlDbType.Int) { Value = (int)TableStatusEnum.Reserved }
+                new SqlParameter("occupied", SqlDbType.Int) { Value = (int)TableStatusEnum.Occupied }
             };
             var data = await Repo.ExecuteSqlSelectAsync<QueryResult.TableCount>(
                 @"SELECT
                        COUNT(*) AS Total,
                        SUM(CASE WHEN t.TableStatusId = @available THEN 1 ELSE 0 END) AS Available,
-                       SUM(CASE WHEN t.TableStatusId = @occupied THEN 1 ELSE 0 END) AS Occupied,
-                       SUM(CASE WHEN t.TableStatusId = @reserved THEN 1 ELSE 0 END) AS Reserved
+                       SUM(CASE WHEN t.TableStatusId = @occupied THEN 1 ELSE 0 END) AS Occupied
                    FROM Tables t",
                 @params.Cast<object>().ToArray());
 
@@ -332,8 +325,7 @@ namespace RestX.BLL.Services
             {
                 Total = result?.Total ?? 0,
                 Available = result?.Available ?? 0,
-                Occupied = result?.Occupied ?? 0,
-                Reserved = result?.Reserved ?? 0
+                Occupied = result?.Occupied ?? 0
             };
         }
 

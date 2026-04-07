@@ -34,7 +34,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpGet]
-        [Authorize(Roles = "Admin,Tenant Admin,Staff")]
+        [Authorize(Roles = "Admin,System Admin,Staff")]
         public async Task<IActionResult> GetAllPayments(
             [FromQuery] DateTime? from,
             [FromQuery] DateTime? to,
@@ -58,7 +58,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpGet("orders/{orderId:guid}")]
-        [Authorize(Roles = "Admin,Tenant Admin,Staff,Customer")]
+        [Authorize(Roles = "Admin,System Admin,Staff,Customer")]
         public async Task<IActionResult> GetPaymentsByOrder([FromRoute] Guid orderId)
         {
             try
@@ -78,7 +78,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpGet("{id:guid}")]
-        [Authorize(Roles = "Admin,Tenant Admin,Staff,Customer")]
+        [Authorize(Roles = "Admin,System Admin,Staff,Customer")]
         public async Task<IActionResult> GetPaymentById([FromRoute] Guid id)
         {
             try
@@ -100,7 +100,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpPost("orders/{orderId:guid}/cash")]
-        [Authorize(Roles = "Admin,Tenant Admin,Staff")]
+        [Authorize(Roles = "Admin,System Admin,Staff")]
         public async Task<IActionResult> PayByCash([FromRoute] Guid orderId, [FromBody] CashPaymentRequest request)
         {
             try
@@ -129,7 +129,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpPost("orders/{orderId:guid}")]
-        [Authorize(Roles = "Admin,Tenant Admin,Staff")]
+        [Authorize(Roles = "Admin,System Admin,Staff")]
         public async Task<IActionResult> CreatePaymentLink([FromRoute] Guid orderId)
         {
             try
@@ -158,7 +158,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpDelete("{id:guid}")]
-        [Authorize(Roles = "Admin,Tenant Admin,Staff")]
+        [Authorize(Roles = "Admin,System Admin,Staff")]
         public async Task<IActionResult> CancelPaymentLink([FromRoute] Guid id, [FromQuery] string? reason)
         {
             try
@@ -187,7 +187,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpGet("{id:guid}/receipt")]
-        [Authorize(Roles = "Admin,Tenant Admin,Staff,Customer")]
+        [Authorize(Roles = "Admin,System Admin,Staff,Customer")]
         public async Task<IActionResult> GetReceipt([FromRoute] Guid id)
         {
             try

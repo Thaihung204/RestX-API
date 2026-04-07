@@ -11,9 +11,7 @@ namespace RestX.BLL.DataTranferObjects.Dashboard
 
         public class OrderStatusCount
         {
-            public int? Pending { get; set; }
-            public int? Confirmed { get; set; }
-            public int? Serving { get; set; }
+            public int? Open { get; set; }
             public int? Completed { get; set; }
             public int? Cancelled { get; set; }
             public int? Total { get; set; }
@@ -31,7 +29,6 @@ namespace RestX.BLL.DataTranferObjects.Dashboard
             public int Total { get; set; }
             public int Available { get; set; }
             public int Occupied { get; set; }
-            public int Reserved { get; set; }
         }
 
         public class CustomerCount

@@ -19,7 +19,7 @@ namespace RestX.BLL.DataTranferObjects.Orders
         public Guid CustomerId { get; set; }
         public Guid? ReservationId { get; set; }
 
-        public OrderStatus OrderStatusId { get; set; } = OrderStatus.Pending;
+        public OrderStatus OrderStatusId { get; set; } = OrderStatus.Open;
         public PaymentStatus PaymentStatus { get; set; } = PaymentStatus.Pending;
         public string PaymentStatusName => PaymentStatus.ToString();
 

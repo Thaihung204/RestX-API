@@ -195,6 +195,14 @@ namespace RestX.BLL.Services
                 CloneParams(idParams)
             );
 
+            var dishIds = orderDetails.Select(d => d.DishId).Distinct().ToList();
+            var dishes = new List<Models.Menu.Dish>();
+            if (dishIds.Any())
+            {
+                dishes = (await Repo.GetAsync<Models.Menu.Dish>(d => dishIds.Contains(d.Id))).ToList();
+            }
+            var dishesById = dishes.ToDictionary(d => d.Id, d => d);
+
             var detailsByOrderId = orderDetails
                 .GroupBy(d => d.OrderId)
                 .ToDictionary(
@@ -228,6 +236,11 @@ namespace RestX.BLL.Services
                     {
                         if (statusById.TryGetValue(d.ItemStatusId, out var s))
                             d.ItemStatus = s;
+
+                        if (dishesById.TryGetValue(d.DishId, out var dish))
+                        {
+                            d.Dish = dish;
+                        }
                     }
 
                     o.OrderDetails = ods;

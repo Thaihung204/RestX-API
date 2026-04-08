@@ -605,12 +605,15 @@ namespace RestX.BLL.Services
                 return new List<DataTranferObjects.Orders.OrderDetail>();
             }
 
+            var startOfDay = DateTime.UtcNow.AddHours(7).Date;
+
             var queryParams = new List<SqlParameter>
             {
-                new SqlParameter("InitialStatusId", SqlDbType.Int) { Value = initialStatusId.Value }
+                new SqlParameter("InitialStatusId", SqlDbType.Int) { Value = initialStatusId.Value },
+                new SqlParameter("StartOfDay", SqlDbType.DateTime2) { Value = startOfDay }
             };
 
-            // Query OrderDetails có ItemStatusId = InitialStatusId (Bỏ qua những OrderDetails đã thay đổi trạng thái)
+            // Query OrderDetails có ItemStatusId = InitialStatusId VÀ chỉ lấy các món đặt trong ngày hôm nay
             var orderDetailsQuery = @"
                 SELECT
                     od.Id,
@@ -622,6 +625,7 @@ namespace RestX.BLL.Services
                     od.CreatedDate
                 FROM dbo.OrderDetails od
                 WHERE od.ItemStatusId = @InitialStatusId
+                  AND od.CreatedDate >= @StartOfDay
                 ORDER BY od.CreatedDate ASC
             ";
 

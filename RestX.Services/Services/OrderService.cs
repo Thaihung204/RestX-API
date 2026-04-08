@@ -595,20 +595,128 @@ namespace RestX.BLL.Services
 
         public async Task<IEnumerable<DataTranferObjects.Orders.OrderDetail>> GetAllOrderDetails()
         {
+            // Lấy ID của trạng thái mặc định (trạng thái đầu tiên của order-detail)
             var orderDetailStatuses = await statusValueService.GetStatuses("order-detail");
-
             var initialStatusId = orderDetailStatuses.FirstOrDefault(x => x.IsDefault)?.Id
                                   ?? orderDetailStatuses.FirstOrDefault()?.Id;
 
-            var orderDetails = await Repo.GetAsync<Models.Orders.OrderDetail>(
-                filter: od => od.ItemStatusId == initialStatusId,
-                orderBy: query => query.OrderBy(od => od.CreatedDate),
-                includeProperties: "ItemStatus,Order,Dish"
+            if (initialStatusId == null)
+            {
+                return new List<DataTranferObjects.Orders.OrderDetail>();
+            }
+
+            var startOfDay = DateTime.UtcNow.AddHours(7).Date;
+
+            var queryParams = new List<SqlParameter>
+            {
+                new SqlParameter("InitialStatusId", SqlDbType.Int) { Value = initialStatusId.Value },
+                new SqlParameter("StartOfDay", SqlDbType.DateTime2) { Value = startOfDay }
+            };
+
+            // Query OrderDetails có ItemStatusId = InitialStatusId VÀ chỉ lấy các món đặt trong ngày hôm nay
+            var orderDetailsQuery = @"
+                SELECT
+                    od.Id,
+                    od.OrderId,
+                    od.DishId,
+                    od.Quantity,
+                    od.Note,
+                    od.ItemStatusId,
+                    od.CreatedDate
+                FROM dbo.OrderDetails od
+                WHERE od.ItemStatusId = @InitialStatusId
+                  AND od.CreatedDate >= @StartOfDay
+                ORDER BY od.CreatedDate ASC
+            ";
+
+            var orderDetails = await Repo.ExecuteSqlSelectAsync<Models.Orders.OrderDetail>(
+                orderDetailsQuery,
+                queryParams.Any() ? queryParams.Cast<object>().ToArray() : null
             );
 
-            return mapper.Map<IEnumerable<DataTranferObjects.Orders.OrderDetail>>(orderDetails);
-        }
+            if (orderDetails.Count == 0)
+            {
+                return new List<DataTranferObjects.Orders.OrderDetail>();
+            }
 
+            // Lấy danh sách Order tương ứng với các OrderDetail này
+            var orderIds = orderDetails.Select(od => od.OrderId).Distinct().ToList();
+            var orders = new List<Models.Orders.Order>();
+
+            if (orderIds.Any())
+            {
+                orders = (await Repo.GetAsync<Models.Orders.Order>(o => orderIds.Contains(o.Id))).ToList();
+            }
+            var ordersById = orders.ToDictionary(o => o.Id, o => o);
+
+            // Lấy TableSession để map Table vào Order
+            var tableSessions = await Repo.GetAsync<Models.Reservations.TableSession>(
+                filter: ts => ts.OrderId.HasValue && orderIds.Contains(ts.OrderId.Value),
+                includeProperties: "Table"
+            );
+
+            var sessionsByOrderId = tableSessions
+                .Where(ts => ts.OrderId.HasValue)
+                .GroupBy(ts => ts.OrderId!.Value)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            // Gán TableSession vào Orders
+            foreach (var o in orders)
+            {
+                if (sessionsByOrderId.TryGetValue(o.Id, out var sessions))
+                {
+                    o.TableSessions = sessions;
+                }
+            }
+
+            // Lấy Dish để map Name, Price
+            var dishIds = orderDetails.Select(d => d.DishId).Distinct().ToList();
+            var dishes = new List<Models.Menu.Dish>();
+            if (dishIds.Any())
+            {
+                dishes = (await Repo.GetAsync<Models.Menu.Dish>(d => dishIds.Contains(d.Id))).ToList();
+            }
+            var dishesById = dishes.ToDictionary(d => d.Id, d => d);
+
+            // Gom nhóm OrderDetails lại để gộp số lượng theo yêu cầu cũ
+            var detailsByOrderId = orderDetails
+                .GroupBy(d => d.OrderId)
+                .ToDictionary(
+                    g => g.Key,
+                    g => GroupOrderDetailsByDish(g)
+                );
+
+            var resultDetails = new List<Models.Orders.OrderDetail>();
+
+            // Lắp ráp lại thành một list kết quả phẳng nhưng đã được gộp Quantity
+            foreach (var kvp in detailsByOrderId)
+            {
+                var orderId = kvp.Key;
+                var groupedDetails = kvp.Value;
+
+                foreach (var detail in groupedDetails)
+                {
+                    // Gán Order (Đã có TableSessions)
+                    if (ordersById.TryGetValue(orderId, out var order))
+                    {
+                        detail.Order = order;
+                    }
+
+                    // Gán Dish
+                    if (dishesById.TryGetValue(detail.DishId, out var dish))
+                    {
+                        detail.Dish = dish;
+                    }
+
+                    resultDetails.Add(detail);
+                }
+            }
+
+            // Trả về DTO
+            return mapper.Map<IEnumerable<DataTranferObjects.Orders.OrderDetail>>(
+                resultDetails.OrderBy(d => d.CreatedDate)
+            );
+        }
         private async Task<string> GetNextOrderReference()
         {
             string tenantPrefix = CurrentTenant.Prefix;

@@ -45,7 +45,9 @@ namespace RestX.DAL.Migrations
             //   - everything else unknown → CANCELLED
             // ════════════════════════════════════════════════════════════════════════════
 
-            // DEPOSIT_PENDING → PENDING (rename row, keep Id)
+            // DEPOSIT_PENDING → PENDING
+            // If PENDING already exists: migrate reservations from DEPOSIT_PENDING → existing PENDING, then delete DEPOSIT_PENDING
+            // If PENDING doesn't exist: rename DEPOSIT_PENDING → PENDING
             migrationBuilder.Sql(@"
                 IF EXISTS (
                     SELECT 1 FROM StatusValues sv
@@ -53,10 +55,30 @@ namespace RestX.DAL.Migrations
                     WHERE sv.Code = 'DEPOSIT_PENDING' AND st.Code = 'RESERVATION'
                 )
                 BEGIN
-                    UPDATE sv SET sv.Code = 'PENDING', sv.Name = 'Pending', sv.IsDefault = 1
-                    FROM StatusValues sv
-                    JOIN StatusTypes st ON sv.StatusTypeId = st.Id
-                    WHERE sv.Code = 'DEPOSIT_PENDING' AND st.Code = 'RESERVATION'
+                    IF EXISTS (
+                        SELECT 1 FROM StatusValues sv
+                        JOIN StatusTypes st ON sv.StatusTypeId = st.Id
+                        WHERE sv.Code = 'PENDING' AND st.Code = 'RESERVATION'
+                    )
+                    BEGIN
+                        -- PENDING already exists: re-point reservations then delete DEPOSIT_PENDING duplicate
+                        DECLARE @ExistingPendingId INT = (SELECT MIN(sv.Id) FROM StatusValues sv JOIN StatusTypes st ON sv.StatusTypeId = st.Id WHERE sv.Code = 'PENDING' AND st.Code = 'RESERVATION')
+                        DECLARE @DepositPendingId  INT = (SELECT MIN(sv.Id) FROM StatusValues sv JOIN StatusTypes st ON sv.StatusTypeId = st.Id WHERE sv.Code = 'DEPOSIT_PENDING' AND st.Code = 'RESERVATION')
+
+                        UPDATE Reservations SET ReservationStatusId = @ExistingPendingId WHERE ReservationStatusId = @DepositPendingId
+                        DELETE FROM StatusValues WHERE Id = @DepositPendingId
+
+                        UPDATE sv SET sv.IsDefault = 1
+                        FROM StatusValues sv WHERE sv.Id = @ExistingPendingId
+                    END
+                    ELSE
+                    BEGIN
+                        -- PENDING doesn't exist: rename DEPOSIT_PENDING
+                        UPDATE sv SET sv.Code = 'PENDING', sv.Name = 'Pending', sv.IsDefault = 1
+                        FROM StatusValues sv
+                        JOIN StatusTypes st ON sv.StatusTypeId = st.Id
+                        WHERE sv.Code = 'DEPOSIT_PENDING' AND st.Code = 'RESERVATION'
+                    END
                 END
             ");
 

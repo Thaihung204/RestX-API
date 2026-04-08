@@ -51,13 +51,18 @@ namespace RestX.BLL.Services.Reports
 
                 page.Content().Column(col =>
                 {
-                    ReportComponents.SectionTitle(col, "Doanh thu theo tháng",
-                        $"Tổng: {ReportStyles.FormatCurrency(_data.RevenueTrend.TotalRevenue)}");
-                    ReportComponents.RenderRevenueTrendTable(col, _data.RevenueTrend);
-
-                    ReportComponents.SectionTitle(col, "Đơn hàng theo tháng",
-                        $"Tổng: {_data.OrderTrend.TotalOrders:N0} đơn");
-                    ReportComponents.RenderOrderTrendTable(col, _data.OrderTrend);
+                    if (ReportComponents.HasRevenueTrendData(_data.RevenueTrend))
+                    {
+                        ReportComponents.SectionTitle(col, "Doanh thu theo tháng",
+                            $"Tổng: {ReportStyles.FormatCurrency(_data.RevenueTrend.TotalRevenue)}");
+                        ReportComponents.RenderRevenueTrendTable(col, _data.RevenueTrend);
+                    }
+                    if (ReportComponents.HasOrderTrendData(_data.OrderTrend))
+                    {
+                        ReportComponents.SectionTitle(col, "Đơn hàng theo tháng",
+                            $"Tổng: {_data.OrderTrend.TotalOrders:N0} đơn");
+                        ReportComponents.RenderOrderTrendTable(col, _data.OrderTrend);
+                    }
                 });
 
                 ReportComponents.RenderFooter(page, _data);
@@ -71,13 +76,17 @@ namespace RestX.BLL.Services.Reports
 
                 page.Content().Column(col =>
                 {
-                    ReportComponents.SectionTitle(col, "Top 15 món bán chạy trong năm");
-                    ReportComponents.RenderTopDishes(col, _data.TopDishes);
-
-                    ReportComponents.SectionTitle(col, "Khách hàng năm nay");
-                    ReportComponents.RenderCustomerStats(col, _data.CustomerStats);
-
-                    if (_data.Promotions.TotalUsageCount > 0)
+                    if (ReportComponents.HasTopDishesData(_data.TopDishes))
+                    {
+                        ReportComponents.SectionTitle(col, "Top 15 món bán chạy trong năm");
+                        ReportComponents.RenderTopDishes(col, _data.TopDishes);
+                    }
+                    if (ReportComponents.HasCustomerData(_data.CustomerStats))
+                    {
+                        ReportComponents.SectionTitle(col, "Khách hàng năm nay");
+                        ReportComponents.RenderCustomerStats(col, _data.CustomerStats);
+                    }
+                    if (ReportComponents.HasPromotionData(_data.Promotions))
                     {
                         ReportComponents.SectionTitle(col, "Khuyến mãi & giảm giá");
                         ReportComponents.RenderPromotionStats(col, _data.Promotions);

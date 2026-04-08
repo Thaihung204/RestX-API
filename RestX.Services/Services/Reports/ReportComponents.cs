@@ -8,6 +8,22 @@ namespace RestX.BLL.Services.Reports
 {
     internal static class ReportComponents
     {
+        // --- Data availability checks ---
+        public static bool HasRevenueTrendData(RevenueTrend trend) =>
+            trend.RevenueTrends.Any(x => x.Value > 0);
+
+        public static bool HasOrderTrendData(OrderTrend trend) =>
+            trend.OrderTrends.Any(x => x.Total > 0);
+
+        public static bool HasTopDishesData(TopDish topDish) =>
+            topDish.Dishes.Any();
+
+        public static bool HasCustomerData(CustomerStats stats) =>
+            stats.NewCustomers > 0 || stats.ReturningCustomers > 0 || stats.TotalOrders > 0;
+
+        public static bool HasPromotionData(PromotionStats stats) =>
+            stats.TotalUsageCount > 0;
+
         public static void RenderHeader(ColumnDescriptor col, ReportData data)
         {
             col.Item().Background(ReportStyles.PrimaryDark).Padding(24).Column(inner =>
@@ -65,9 +81,13 @@ namespace RestX.BLL.Services.Reports
                     ReportStyles.FormatCurrency(summary.Revenue.Total),
                     summary.Revenue.ChangePercent, ReportStyles.AccentGold);
                 row.ConstantItem(8);
-                KpiCard(row, "ĐƠN HÀNG", summary.Orders.Total.ToString("N0"), 0, ReportStyles.PrimaryMid);
+                KpiCard(row, "ĐƠN HÀNG",
+                    summary.Orders.Total > 0 ? summary.Orders.Total.ToString("N0") : "—",
+                    0, ReportStyles.PrimaryMid);
                 row.ConstantItem(8);
-                KpiCard(row, "ĐẶT BÀN", summary.Reservations.Total.ToString("N0"), 0, ReportStyles.PrimaryMid);
+                KpiCard(row, "ĐẶT BÀN",
+                    summary.Reservations.Total > 0 ? summary.Reservations.Total.ToString("N0") : "—",
+                    0, ReportStyles.PrimaryMid);
                 row.ConstantItem(8);
                 KpiCard(row, "KHÁCH MỚI",
                     summary.NewCustomers.Total.ToString("N0"),
@@ -122,13 +142,13 @@ namespace RestX.BLL.Services.Reports
 
                 var rows = new (string label, string value)[]
                 {
-                    ("Tổng doanh thu (thực thu)", ReportStyles.FormatCurrency(summary.Revenue.Total)),
-                    ("Đơn hoàn thành", summary.Orders.Completed.ToString("N0") + " đơn"),
-                    ("Đơn huỷ", summary.Orders.Cancelled.ToString("N0") + " đơn"),
+                    ("Tổng doanh thu (thực thu)", summary.Revenue.Total > 0 ? ReportStyles.FormatCurrency(summary.Revenue.Total) : "—"),
+                    ("Đơn hoàn thành", summary.Orders.Completed > 0 ? summary.Orders.Completed.ToString("N0") + " đơn" : "—"),
+                    ("Đơn huỷ", summary.Orders.Cancelled > 0 ? summary.Orders.Cancelled.ToString("N0") + " đơn" : "—"),
                     ("Giá trị đơn trung bình (AOV)", aov),
-                    ("Đặt bàn xác nhận", summary.Reservations.Confirmed.ToString("N0")),
-                    ("Đặt bàn huỷ", summary.Reservations.Cancelled.ToString("N0")),
-                    ("Khách mới", summary.NewCustomers.Total.ToString("N0")),
+                    ("Đặt bàn xác nhận", summary.Reservations.Confirmed > 0 ? summary.Reservations.Confirmed.ToString("N0") : "—"),
+                    ("Đặt bàn huỷ", summary.Reservations.Cancelled > 0 ? summary.Reservations.Cancelled.ToString("N0") : "—"),
+                    ("Khách mới", summary.NewCustomers.Total > 0 ? summary.NewCustomers.Total.ToString("N0") : "—"),
                 };
 
                 for (int i = 0; i < rows.Length; i++)
@@ -370,13 +390,15 @@ namespace RestX.BLL.Services.Reports
 
         public static void RenderCustomerStats(ColumnDescriptor col, CustomerStats stats)
         {
+            if (!HasCustomerData(stats)) return;
+
             col.Item().PaddingTop(10).Row(row =>
             {
-                StatBox(row, "Khách mới", stats.NewCustomers.ToString("N0"), ReportStyles.AccentGreen);
+                StatBox(row, "Khách mới", stats.NewCustomers > 0 ? stats.NewCustomers.ToString("N0") : "—", ReportStyles.AccentGreen);
                 row.ConstantItem(8);
-                StatBox(row, "Khách quay lại", stats.ReturningCustomers.ToString("N0"), ReportStyles.PrimaryMid);
+                StatBox(row, "Khách quay lại", stats.ReturningCustomers > 0 ? stats.ReturningCustomers.ToString("N0") : "—", ReportStyles.PrimaryMid);
                 row.ConstantItem(8);
-                StatBox(row, "Tổng đơn", stats.TotalOrders.ToString("N0"), ReportStyles.PrimaryMid);
+                StatBox(row, "Tổng đơn", stats.TotalOrders > 0 ? stats.TotalOrders.ToString("N0") : "—", ReportStyles.PrimaryMid);
                 row.ConstantItem(8);
                 StatBox(row, "DT TB / khách",
                     stats.AverageRevenuePerCustomer > 0 ? ReportStyles.FormatCurrency(stats.AverageRevenuePerCustomer) : "—",
@@ -437,6 +459,8 @@ namespace RestX.BLL.Services.Reports
 
         public static void RenderPromotionStats(ColumnDescriptor col, PromotionStats stats)
         {
+            if (!HasPromotionData(stats)) return;
+
             col.Item().PaddingTop(10).Row(row =>
             {
                 StatBox(row, "Tổng lần dùng", stats.TotalUsageCount.ToString("N0"), ReportStyles.PrimaryMid);

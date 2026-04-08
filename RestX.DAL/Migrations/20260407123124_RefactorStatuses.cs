@@ -74,10 +74,10 @@ namespace RestX.DAL.Migrations
             //   WAITING, PENDING_PAYMENT, UNPAID → PENDING
             //   everything else unknown → CANCELLED
             migrationBuilder.Sql(@"
-                DECLARE @ResPendingId    INT = (SELECT sv.Id FROM StatusValues sv JOIN StatusTypes st ON sv.StatusTypeId = st.Id WHERE sv.Code = 'PENDING'    AND st.Code = 'RESERVATION')
-                DECLARE @ResConfirmedId  INT = (SELECT sv.Id FROM StatusValues sv JOIN StatusTypes st ON sv.StatusTypeId = st.Id WHERE sv.Code = 'CONFIRMED'  AND st.Code = 'RESERVATION')
-                DECLARE @ResCompletedId  INT = (SELECT sv.Id FROM StatusValues sv JOIN StatusTypes st ON sv.StatusTypeId = st.Id WHERE sv.Code = 'COMPLETED'  AND st.Code = 'RESERVATION')
-                DECLARE @ResCancelledId  INT = (SELECT sv.Id FROM StatusValues sv JOIN StatusTypes st ON sv.StatusTypeId = st.Id WHERE sv.Code = 'CANCELLED'  AND st.Code = 'RESERVATION')
+                DECLARE @ResPendingId    INT = (SELECT MIN(sv.Id) FROM StatusValues sv JOIN StatusTypes st ON sv.StatusTypeId = st.Id WHERE sv.Code = 'PENDING'    AND st.Code = 'RESERVATION')
+                DECLARE @ResConfirmedId  INT = (SELECT MIN(sv.Id) FROM StatusValues sv JOIN StatusTypes st ON sv.StatusTypeId = st.Id WHERE sv.Code = 'CONFIRMED'  AND st.Code = 'RESERVATION')
+                DECLARE @ResCompletedId  INT = (SELECT MIN(sv.Id) FROM StatusValues sv JOIN StatusTypes st ON sv.StatusTypeId = st.Id WHERE sv.Code = 'COMPLETED'  AND st.Code = 'RESERVATION')
+                DECLARE @ResCancelledId  INT = (SELECT MIN(sv.Id) FROM StatusValues sv JOIN StatusTypes st ON sv.StatusTypeId = st.Id WHERE sv.Code = 'CANCELLED'  AND st.Code = 'RESERVATION')
 
                 -- Migrate reservations pointing to non-allowed statuses
                 UPDATE r SET r.ReservationStatusId =
@@ -127,9 +127,9 @@ namespace RestX.DAL.Migrations
 
             // Migrate order details pointing to non-allowed statuses
             migrationBuilder.Sql(@"
-                DECLARE @PreparingId INT = (SELECT sv.Id FROM StatusValues sv JOIN StatusTypes st ON sv.StatusTypeId = st.Id WHERE sv.Code = 'PREPARING' AND st.Code = 'ORDER-DETAIL')
-                DECLARE @ServedId    INT = (SELECT sv.Id FROM StatusValues sv JOIN StatusTypes st ON sv.StatusTypeId = st.Id WHERE sv.Code = 'SERVED'    AND st.Code = 'ORDER-DETAIL')
-                DECLARE @OdCancelledId INT = (SELECT sv.Id FROM StatusValues sv JOIN StatusTypes st ON sv.StatusTypeId = st.Id WHERE sv.Code = 'CANCELLED' AND st.Code = 'ORDER-DETAIL')
+                DECLARE @PreparingId INT = (SELECT MIN(sv.Id) FROM StatusValues sv JOIN StatusTypes st ON sv.StatusTypeId = st.Id WHERE sv.Code = 'PREPARING' AND st.Code = 'ORDER-DETAIL')
+                DECLARE @ServedId    INT = (SELECT MIN(sv.Id) FROM StatusValues sv JOIN StatusTypes st ON sv.StatusTypeId = st.Id WHERE sv.Code = 'SERVED'    AND st.Code = 'ORDER-DETAIL')
+                DECLARE @OdCancelledId INT = (SELECT MIN(sv.Id) FROM StatusValues sv JOIN StatusTypes st ON sv.StatusTypeId = st.Id WHERE sv.Code = 'CANCELLED' AND st.Code = 'ORDER-DETAIL')
 
                 UPDATE od SET od.ItemStatusId =
                     CASE
@@ -168,12 +168,12 @@ namespace RestX.DAL.Migrations
                 )
                 BEGIN
                     DECLARE @ResCompletedId INT = (
-                        SELECT sv.Id FROM StatusValues sv
+                        SELECT MIN(sv.Id) FROM StatusValues sv
                         JOIN StatusTypes st ON sv.StatusTypeId = st.Id
                         WHERE sv.Code = 'COMPLETED' AND st.Code = 'RESERVATION'
                     )
                     DECLARE @ResConfirmedId2 INT = (
-                        SELECT sv.Id FROM StatusValues sv
+                        SELECT MIN(sv.Id) FROM StatusValues sv
                         JOIN StatusTypes st ON sv.StatusTypeId = st.Id
                         WHERE sv.Code = 'CONFIRMED' AND st.Code = 'RESERVATION'
                     )

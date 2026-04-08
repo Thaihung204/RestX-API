@@ -23,6 +23,7 @@ namespace RestX.BLL.Services
             var topDishes = await GetTopDishesAsync(request, top, sortBy);
             var tableStatus = await GetTableStatusAsync();
             var customerStats = await GetCustomerStatsAsync(request);
+            var promotionStats = await GetPromotionStatsAsync(request);
 
             return new DashboardOverview
             {
@@ -31,7 +32,8 @@ namespace RestX.BLL.Services
                 OrderTrend = orderTrend,
                 TopDishes = topDishes,
                 TableStatus = tableStatus,
-                CustomerStats = customerStats
+                CustomerStats = customerStats,
+                PromotionStats = promotionStats
             };
         }
 
@@ -432,6 +434,56 @@ namespace RestX.BLL.Services
             dto.TopCustomers.AddRange(topCustomersData.Select((c, i) => { c.Rank = i + 1; return c; }));
 
             return dto;
+        }
+
+        public async Task<PromotionStats> GetPromotionStatsAsync(DashboardRequest request)
+        {
+            var (fromDate, toDate) = CalculateDateRange(request);
+
+            var totals = await Repo.ExecuteSqlSelectAsync<PromotionTotalRow>(@"
+                SELECT
+                    ISNULL(SUM(ph.DiscountAmount), 0) AS TotalDiscount,
+                    COUNT(ph.Id) AS TotalCount
+                FROM PromotionHistories ph
+                JOIN Orders o ON ph.OrderId = o.Id
+                WHERE o.CreatedDate >= @from AND o.CreatedDate < @to",
+                new object[]
+                {
+                    new SqlParameter("from", SqlDbType.DateTime2) { Value = fromDate },
+                    new SqlParameter("to", SqlDbType.DateTime2) { Value = toDate }
+                });
+
+            var topPromos = await Repo.ExecuteSqlSelectAsync<PromotionUsageItem>(@"
+                SELECT TOP 10
+                    p.Code AS PromotionCode,
+                    p.Name AS PromotionName,
+                    COUNT(ph.Id) AS UsageCount,
+                    ISNULL(SUM(ph.DiscountAmount), 0) AS TotalDiscount
+                FROM PromotionHistories ph
+                JOIN Promotions p ON ph.PromotionId = p.Id
+                JOIN Orders o ON ph.OrderId = o.Id
+                WHERE o.CreatedDate >= @from AND o.CreatedDate < @to
+                GROUP BY p.Code, p.Name
+                ORDER BY TotalDiscount DESC",
+                new object[]
+                {
+                    new SqlParameter("from", SqlDbType.DateTime2) { Value = fromDate },
+                    new SqlParameter("to", SqlDbType.DateTime2) { Value = toDate }
+                });
+
+            var total = totals.FirstOrDefault();
+            return new PromotionStats
+            {
+                TotalDiscountAmount = total?.TotalDiscount ?? 0,
+                TotalUsageCount = total?.TotalCount ?? 0,
+                TopPromotions = topPromos
+            };
+        }
+
+        private sealed class PromotionTotalRow
+        {
+            public decimal TotalDiscount { get; set; }
+            public int TotalCount { get; set; }
         }
 
         // Helper methods

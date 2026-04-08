@@ -8,5 +8,6 @@ namespace RestX.BLL.DataTranferObjects.Dashboard
         public TopDish TopDishes { get; set; }
         public TableStatus TableStatus { get; set; }
         public CustomerStats CustomerStats { get; set; }
+        public PromotionStats PromotionStats { get; set; }
     }
 }

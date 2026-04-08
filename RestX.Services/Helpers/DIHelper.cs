@@ -53,6 +53,7 @@ namespace RestX.BLL.Helpers
             services.AddScoped<IPromotionService, PromotionService>();
             services.AddScoped<IAIService, AIService>();
             services.AddScoped<IDashboardService, DashboardService>();
+            services.AddScoped<IReportService, ReportService>();
         }
     }
 }

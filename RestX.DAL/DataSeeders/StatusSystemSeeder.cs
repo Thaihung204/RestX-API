@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using RestX.DAL.Context;
 using RestX.Models.Common;
-using RestX.Models.Enum;
 using Serilog;
 
 namespace RestX.DAL.DataSeeders
@@ -34,10 +33,7 @@ namespace RestX.DAL.DataSeeders
         {
             return new List<StatusType>
             {
-                new() { Code = "ORDER" },
-                new() { Code = "PAYMENT" },
                 new() { Code = "RESERVATION" },
-                new() { Code = "TABLE" },
                 new() { Code = "ORDER-DETAIL" }
             };
         }
@@ -45,40 +41,15 @@ namespace RestX.DAL.DataSeeders
         {
             var values = new List<StatusValue>();
             var typeMap = statusTypes.ToDictionary(t => t.Code, t => t.Id);
-            values.AddRange(CreateValuesForType(typeMap["ORDER"], new[]
-            {
-                (nameof(OrderStatus.Pending), "Pending", "#FFA500", true),
-                (nameof(OrderStatus.Confirmed), "Confirmed", "#FFA500", true),
-                (nameof(OrderStatus.Serving), "Serving", "#9C27B0", false),
-                (nameof(OrderStatus.Completed), "Completed", "#4CAF50", false),
-                (nameof(OrderStatus.Cancelled), "Cancelled", "#F44336", false)
-            }));
-            values.AddRange(CreateValuesForType(typeMap["TABLE"], new[]
-            {
-                (nameof(TableStatus.Available), "Available", "#4CAF50", true),
-                (nameof(TableStatus.Reserved), "Reserved", "#FF9800", false),
-                (nameof(TableStatus.Occupied), "Occupied", "#F44336", false)
-            }));
-            values.AddRange(CreateValuesForType(typeMap["PAYMENT"], new[]
-            {
-                ("UNPAID", "Unpaid", "#FF9800", true),
-                ("PAID", "Paid", "#4CAF50", false),
-                ("CANCELLED", "Cancelled", "#F44336", false),
-                ("REFUNDED", "Refunded", "#9E9E9E", false)
-            }));
             values.AddRange(CreateValuesForType(typeMap["RESERVATION"], new[]
             {
-                ("DEPOSIT_PENDING", "Deposit Pending", "#FF9800", true),
+                ("PENDING", "Pending", "#FF9800", true),
                 ("CONFIRMED", "Confirmed", "#4CAF50", false),
-                ("COMPLETED", "Completed", "#00C853", false),
-                ("CANCELLED", "Cancelled", "#F44336", false),
-                ("NO_SHOW", "No Show", "#9E9E9E", false)
+                ("CANCELLED", "Cancelled", "#F44336", false)
             }));
             values.AddRange(CreateValuesForType(typeMap["ORDER-DETAIL"], new[]
             {
-                ("PENDING", "Pending", "#FFA500", true),
-                ("PREPARING", "Preparing", "#2196F3", false),
-                ("READY", "Ready", "#00C853", false),
+                ("PREPARING", "Preparing", "#2196F3", true),
                 ("SERVED", "Served", "#9C27B0", false),
                 ("CANCELLED", "Cancelled", "#F44336", false)
             }));

@@ -91,6 +91,7 @@ namespace RestX.BLL.Services
             var payment = new Payment
             {
                 OrderId = orderId,
+                ReservationId = order.ReservationId,
                 PaymentMethodId = PaymentConstants.Method.Cash,
                 Amount = amountDue,
                 CashReceive = request.CashReceive,
@@ -169,6 +170,7 @@ namespace RestX.BLL.Services
             var payment = new Payment
             {
                 OrderId = orderId,
+                ReservationId = order.ReservationId,
                 PaymentMethodId = PaymentConstants.Method.Bank,
                 Amount = (decimal)amount,
                 PayOSOrderCode = orderCode,

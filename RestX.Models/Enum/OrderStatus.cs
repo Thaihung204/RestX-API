@@ -2,9 +2,7 @@
 {
     public enum OrderStatus
     {
-        Pending,
-        Confirmed,
-        Serving,
+        Open,
         Completed,
         Cancelled
     }

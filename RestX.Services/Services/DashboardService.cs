@@ -72,11 +72,9 @@ namespace RestX.BLL.Services
 
             var orderStatsResult = await Repo.ExecuteSqlSelectAsync<QueryResult.OrderStatusCount>(@"
                 SELECT
-                    SUM(CASE WHEN o.OrderStatusId = 0 THEN 1 ELSE 0 END) AS Pending,
-                    SUM(CASE WHEN o.OrderStatusId = 1 THEN 1 ELSE 0 END) AS Confirmed,
-                    SUM(CASE WHEN o.OrderStatusId = 2 THEN 1 ELSE 0 END) AS Serving,
-                    SUM(CASE WHEN o.OrderStatusId = 3 THEN 1 ELSE 0 END) AS Completed,
-                    SUM(CASE WHEN o.OrderStatusId = 4 THEN 1 ELSE 0 END) AS Cancelled,
+                    SUM(CASE WHEN o.OrderStatusId = 0 THEN 1 ELSE 0 END) AS [Open],
+                    SUM(CASE WHEN o.OrderStatusId = 1 THEN 1 ELSE 0 END) AS Completed,
+                    SUM(CASE WHEN o.OrderStatusId = 2 THEN 1 ELSE 0 END) AS Cancelled,
                     COUNT(o.Id) AS Total
                 FROM Orders o
                 WHERE o.CreatedDate >= @from AND o.CreatedDate < @to",
@@ -99,7 +97,7 @@ namespace RestX.BLL.Services
                 });
 
             var liveProcessing = await Repo.ExecuteSqlCommandAsync<int?>(
-                @"SELECT COUNT(o.Id) FROM Orders o WHERE o.OrderStatusId IN (0, 1, 2)", null);
+                @"SELECT COUNT(o.Id) FROM Orders o WHERE o.OrderStatusId = 0", null);
 
             var liveServingResult = await Repo.ExecuteSqlSelectAsync<QueryResult.CustomerCount>(@"
                 SELECT COUNT(DISTINCT r.Id) AS Count
@@ -131,20 +129,16 @@ namespace RestX.BLL.Services
             // Orders — Total comes from the same query, no extra round-trip
             var orderStat = orderStatsResult.FirstOrDefault();
             summary.Orders.Total = orderStat?.Total ?? 0;
-            summary.Orders.Pending = orderStat?.Pending ?? 0;
-            summary.Orders.Confirmed = orderStat?.Confirmed ?? 0;
-            summary.Orders.Processing = orderStat?.Serving ?? 0;
+            summary.Orders.Open = orderStat?.Open ?? 0;
             summary.Orders.Completed = orderStat?.Completed ?? 0;
             summary.Orders.Cancelled = orderStat?.Cancelled ?? 0;
             summary.Orders.LiveProcessing = liveProcessing ?? 0;
 
             // Reservations
             summary.Reservations.Total = GetStatusCountTotal(reservationStatsResult);
-            summary.Reservations.PendingDeposit = GetStatusCount(reservationStatsResult, "DEPOSIT_PENDING");
+            summary.Reservations.Pending = GetStatusCount(reservationStatsResult, "PENDING");
             summary.Reservations.Confirmed = GetStatusCount(reservationStatsResult, "CONFIRMED");
-            summary.Reservations.Completed = GetStatusCount(reservationStatsResult, "COMPLETED");
             summary.Reservations.Cancelled = GetStatusCount(reservationStatsResult, "CANCELLED");
-            summary.Reservations.NoShow = GetStatusCount(reservationStatsResult, "NO_SHOW");
             summary.Reservations.LiveServing = liveServingResult.FirstOrDefault()?.Count ?? 0;
 
             // New Customers
@@ -178,6 +172,7 @@ namespace RestX.BLL.Services
 
             var filterLower = request.FilterType?.ToLower();
             var isYear = filterLower == "year";
+            var isQuarter = filterLower == "quarter";
             var isToday = filterLower == "today";
 
             var keyFormat = isToday ? "yyyy-MM-dd HH:00" : "yyyy-MM-dd";
@@ -189,7 +184,7 @@ namespace RestX.BLL.Services
             {
                 var dateStr = isToday
                     ? current.ToString("yyyy-MM-dd HH:00")
-                    : isYear
+                    : (isYear || isQuarter)
                         ? new DateTime(current.Year, current.Month, 1).ToString("yyyy-MM-dd")
                         : current.ToString("yyyy-MM-dd");
 
@@ -200,7 +195,7 @@ namespace RestX.BLL.Services
                     Value = trendDict.GetValueOrDefault(dateStr)
                 });
 
-                current = isToday ? current.AddHours(1) : isYear ? current.AddMonths(1) : current.AddDays(1);
+                current = isToday ? current.AddHours(1) : (isYear || isQuarter) ? current.AddMonths(1) : current.AddDays(1);
             }
 
             return dto;
@@ -228,6 +223,7 @@ namespace RestX.BLL.Services
 
             var filterLower = request.FilterType?.ToLower();
             var isYear = filterLower == "year";
+            var isQuarter = filterLower == "quarter";
             var isToday = filterLower == "today";
 
             var keyFormat = isToday ? "yyyy-MM-dd HH:00" : "yyyy-MM-dd";
@@ -239,7 +235,7 @@ namespace RestX.BLL.Services
             {
                 var dateStr = isToday
                     ? current.ToString("yyyy-MM-dd HH:00")
-                    : isYear
+                    : (isYear || isQuarter)
                         ? new DateTime(current.Year, current.Month, 1).ToString("yyyy-MM-dd")
                         : current.ToString("yyyy-MM-dd");
 
@@ -250,7 +246,7 @@ namespace RestX.BLL.Services
                     Total = trendDict.GetValueOrDefault(dateStr)
                 });
 
-                current = isToday ? current.AddHours(1) : isYear ? current.AddMonths(1) : current.AddDays(1);
+                current = isToday ? current.AddHours(1) : (isYear || isQuarter) ? current.AddMonths(1) : current.AddDays(1);
             }
 
             return dto;
@@ -315,15 +311,13 @@ namespace RestX.BLL.Services
             var @params = new[]
             {
                 new SqlParameter("available", SqlDbType.Int) { Value = (int)TableStatusEnum.Available },
-                new SqlParameter("occupied", SqlDbType.Int) { Value = (int)TableStatusEnum.Occupied },
-                new SqlParameter("reserved", SqlDbType.Int) { Value = (int)TableStatusEnum.Reserved }
+                new SqlParameter("occupied", SqlDbType.Int) { Value = (int)TableStatusEnum.Occupied }
             };
             var data = await Repo.ExecuteSqlSelectAsync<QueryResult.TableCount>(
                 @"SELECT
                        COUNT(*) AS Total,
                        SUM(CASE WHEN t.TableStatusId = @available THEN 1 ELSE 0 END) AS Available,
-                       SUM(CASE WHEN t.TableStatusId = @occupied THEN 1 ELSE 0 END) AS Occupied,
-                       SUM(CASE WHEN t.TableStatusId = @reserved THEN 1 ELSE 0 END) AS Reserved
+                       SUM(CASE WHEN t.TableStatusId = @occupied THEN 1 ELSE 0 END) AS Occupied
                    FROM Tables t",
                 @params.Cast<object>().ToArray());
 
@@ -332,8 +326,7 @@ namespace RestX.BLL.Services
             {
                 Total = result?.Total ?? 0,
                 Available = result?.Available ?? 0,
-                Occupied = result?.Occupied ?? 0,
-                Reserved = result?.Reserved ?? 0
+                Occupied = result?.Occupied ?? 0
             };
         }
 
@@ -457,6 +450,7 @@ namespace RestX.BLL.Services
             {
                 "week" => (today.AddDays(-7), today.AddDays(1)),
                 "month" => (today.AddDays(-30), today.AddDays(1)),
+                "quarter" => (today.AddMonths(-3), today.AddDays(1)),
                 "year" => (today.AddDays(-365), today.AddDays(1)),
                 _ => (today, today.AddDays(1))
             };
@@ -468,6 +462,7 @@ namespace RestX.BLL.Services
             {
                 "week" => fromDate.AddDays(-7),
                 "month" => fromDate.AddMonths(-1),
+                "quarter" => fromDate.AddMonths(-3),
                 "year" => fromDate.AddYears(-1),
                 _ => fromDate.AddDays(-1)
             };
@@ -500,6 +495,16 @@ namespace RestX.BLL.Services
                     WHERE p.PaymentDate >= @from AND p.PaymentDate < @to
                     AND p.Status = @status AND p.Purpose = @purpose
                     GROUP BY DATEPART(HOUR, p.PaymentDate), CAST(p.PaymentDate AS DATE)
+                    ORDER BY Date",
+
+                "quarter" => @"
+                    SELECT
+                        DATEFROMPARTS(YEAR(p.PaymentDate), MONTH(p.PaymentDate), 1) AS Date,
+                        CAST(SUM(p.Amount) AS DECIMAL(18,2)) AS Value
+                    FROM Payments p
+                    WHERE p.PaymentDate >= @from AND p.PaymentDate < @to
+                    AND p.Status = @status AND p.Purpose = @purpose
+                    GROUP BY YEAR(p.PaymentDate), MONTH(p.PaymentDate)
                     ORDER BY Date",
 
                 "year" => @"
@@ -537,6 +542,15 @@ namespace RestX.BLL.Services
                     GROUP BY DATEPART(HOUR, o.CreatedDate), CAST(o.CreatedDate AS DATE)
                     ORDER BY Date",
 
+                "quarter" => @"
+                    SELECT
+                        DATEFROMPARTS(YEAR(o.CreatedDate), MONTH(o.CreatedDate), 1) AS Date,
+                        COUNT(o.Id) AS Total
+                    FROM Orders o
+                    WHERE o.CreatedDate >= @from AND o.CreatedDate < @to
+                    GROUP BY YEAR(o.CreatedDate), MONTH(o.CreatedDate)
+                    ORDER BY Date",
+
                 "year" => @"
                     SELECT
                         DATEFROMPARTS(YEAR(o.CreatedDate), MONTH(o.CreatedDate), 1) AS Date,
@@ -563,6 +577,7 @@ namespace RestX.BLL.Services
                 "today" => date.ToString("HH:mm"),
                 "week" => new[] { "CN", "T2", "T3", "T4", "T5", "T6", "T7" }[(int)date.DayOfWeek],
                 "month" => date.Day.ToString("D2"),
+                "quarter" => new[] { "Th1", "Th2", "Th3", "Th4", "Th5", "Th6", "Th7", "Th8", "Th9", "Th10", "Th11", "Th12" }[date.Month - 1],
                 "year" => new[] { "Th1", "Th2", "Th3", "Th4", "Th5", "Th6", "Th7", "Th8", "Th9", "Th10", "Th11", "Th12" }[date.Month - 1],
                 _ => string.Empty
             };

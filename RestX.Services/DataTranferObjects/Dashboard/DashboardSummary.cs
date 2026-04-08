@@ -18,9 +18,7 @@ namespace RestX.BLL.DataTranferObjects.Dashboard
         public class OrderSummary
         {
             public int Total { get; set; }
-            public int Pending { get; set; }
-            public int Confirmed { get; set; }
-            public int Processing { get; set; }
+            public int Open { get; set; }
             public int Completed { get; set; }
             public int Cancelled { get; set; }
             public int LiveProcessing { get; set; }
@@ -29,11 +27,9 @@ namespace RestX.BLL.DataTranferObjects.Dashboard
         public class ReservationSummary
         {
             public int Total { get; set; }
-            public int PendingDeposit { get; set; }
+            public int Pending { get; set; }
             public int Confirmed { get; set; }
-            public int Completed { get; set; }
             public int Cancelled { get; set; }
-            public int NoShow { get; set; }
             public int LiveServing { get; set; }
         }
 

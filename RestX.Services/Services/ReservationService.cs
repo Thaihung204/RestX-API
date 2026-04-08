@@ -27,11 +27,9 @@ namespace RestX.BLL.Services
     public class ReservationService : BaseService, IReservationService
     {
         private const string ReservationStatusTypeCode = "RESERVATION";
-        private const string DepositPendingCode = "DEPOSIT_PENDING";
+        private const string PendingCode = "PENDING";
         private const string ConfirmedCode = "CONFIRMED";
         private const string CancelledCode = "CANCELLED";
-        private const string CompletedCode = "COMPLETED";
-        private const string NoShowCode = "NO_SHOW";
         private const int ReservationBufferMinutes = 120;
 
         private static readonly TimeSpan VietnamOffset = TimeSpan.FromHours(7);
@@ -104,7 +102,7 @@ namespace RestX.BLL.Services
 
             if (requiresDeposit)
             {
-                initialStatusCode = DepositPendingCode;
+                initialStatusCode = PendingCode;
                 depositAmount = request.NumberOfGuests * depositConfig!.DepositAmountPerPerson;
                 paymentDeadline = VnNow.AddHours(depositConfig.DeadlineHours);
             }
@@ -167,10 +165,10 @@ namespace RestX.BLL.Services
                 orderBy: filter.SortDescending
                     ? q => q.OrderByDescending(r => r.Time)
                     : q => q.OrderBy(r =>
-                                r.ReservationStatus.Code == CompletedCode || r.ReservationStatus.Code == CancelledCode ? 2 :
+                                r.ReservationStatus.Code == CancelledCode ? 2 :
                                 r.Time >= VnNow ? 0 : 1)
                             .ThenBy(r => r.Time)
-                            .ThenBy(r => r.ReservationStatus.Code == ConfirmedCode ? 0 : r.ReservationStatus.Code == DepositPendingCode ? 1 : 2),
+                            .ThenBy(r => r.ReservationStatus.Code == ConfirmedCode ? 0 : r.ReservationStatus.Code == PendingCode ? 1 : 2),
                 includeProperties: ReservationIncludes,
                 skip: (filter.PageNumber - 1) * filter.PageSize,
                 take: filter.PageSize
@@ -220,8 +218,8 @@ namespace RestX.BLL.Services
             var reservation = await RequireReservation(id, TablesAndStatusIncludes);
 
             var currentStatusCode = reservation.ReservationStatus?.Code;
-            if (currentStatusCode == CancelledCode || currentStatusCode == CompletedCode)
-                throw new InvalidOperationException("Cannot update a reservation that is already cancelled or completed");
+            if (currentStatusCode == CancelledCode)
+                throw new InvalidOperationException("Cannot update a reservation that is already cancelled");
 
             if (request.ReservationDateTime.HasValue)
             {
@@ -255,8 +253,7 @@ namespace RestX.BLL.Services
                         ts.ReservationId != null &&
                         ts.Reservation.Time >= newDateTime.AddMinutes(-ReservationBufferMinutes) &&
                         ts.Reservation.Time <= newDateTime.AddMinutes(ReservationBufferMinutes) &&
-                        ts.Reservation.ReservationStatus.Code != CancelledCode &&
-                        ts.Reservation.ReservationStatus.Code != CompletedCode,
+                        ts.Reservation.ReservationStatus.Code != CancelledCode,
                     includeProperties: "Reservation.ReservationStatus"
                 )).ToList();
 
@@ -313,8 +310,6 @@ namespace RestX.BLL.Services
 
             if (status.Code.Equals(CancelledCode, StringComparison.OrdinalIgnoreCase))
                 await CancelReservation(id, userId);
-            else if (status.Code.Equals(NoShowCode, StringComparison.OrdinalIgnoreCase))
-                await NoShowReservation(id, userId);
             else
                 throw new ArgumentException($"Cannot manually set status '{status.Code}'");
         }
@@ -324,9 +319,9 @@ namespace RestX.BLL.Services
             var reservation = await RequireReservation(id, TablesAndStatusIncludes);
 
             var statusCode = reservation.ReservationStatus?.Code;
-            if (statusCode == CompletedCode || statusCode == CancelledCode)
-                throw new InvalidOperationException("Cannot confirm a reservation that is already cancelled or completed");
-            if (statusCode == DepositPendingCode)
+            if (statusCode == CancelledCode)
+                throw new InvalidOperationException("Cannot confirm a reservation that is already cancelled");
+            if (statusCode == PendingCode)
             {
                 var statuses = await statusValueService.GetStatuses(ReservationStatusTypeCode);
                 var confirmedStatus = statuses.FirstOrDefault(s => s.Code == ConfirmedCode)
@@ -338,22 +333,6 @@ namespace RestX.BLL.Services
             await Repo.SaveAsync();
         }
 
-        private async Task NoShowReservation(Guid id, string? userId)
-        {
-            var reservation = await RequireReservation(id, TablesIncludes);
-            var statusCode = reservation.ReservationStatus?.Code;
-            if (statusCode != ConfirmedCode)
-                throw new InvalidOperationException("Only confirmed reservations can be marked as no-show");
-
-            var statuses = await statusValueService.GetStatuses(ReservationStatusTypeCode);
-            var noShowStatus = statuses.FirstOrDefault(s => s.Code == NoShowCode)
-                ?? throw new InvalidOperationException("No-show status not configured");
-
-            reservation.ReservationStatusId = noShowStatus.Id;
-            Repo.Update(reservation, userId);
-            await FreeTablesAndSessions(reservation, NoShowCode, userId);
-            await Repo.SaveAsync();
-        }
 
         public async Task CheckIn(string confirmationCode, string userId)
         {
@@ -392,19 +371,13 @@ namespace RestX.BLL.Services
             var reservation = await RequireReservation(id, TablesIncludes);
 
             var statusCode = reservation.ReservationStatus?.Code;
-            if (statusCode == CancelledCode || statusCode == CompletedCode)
-                throw new InvalidOperationException("Reservation is already cancelled or completed");
+            if (statusCode == CancelledCode)
+                throw new InvalidOperationException("Reservation is already cancelled");
 
             if (!reservation.CheckedInAt.HasValue)
                 throw new InvalidOperationException("Cannot complete a reservation that has not been checked in");
 
-            var statuses = await statusValueService.GetStatuses(ReservationStatusTypeCode);
-            var completedStatus = statuses.FirstOrDefault(s => s.Code == CompletedCode)
-                ?? throw new InvalidOperationException("Completed status not configured");
-
-            reservation.ReservationStatusId = completedStatus.Id;
-            Repo.Update(reservation, userId);
-            await FreeTablesAndSessions(reservation, CompletedCode, userId);
+            await FreeTablesAndSessions(reservation, CancelledCode, userId);
             await Repo.SaveAsync();
         }
 
@@ -414,7 +387,7 @@ namespace RestX.BLL.Services
             var statuses = await statusValueService.GetStatuses(ReservationStatusTypeCode);
             var cancelledStatus = statuses.FirstOrDefault(s => s.Code == CancelledCode)
                 ?? throw new InvalidOperationException("Cancelled status not configured");
-            if (reservation.ReservationStatus?.Code == DepositPendingCode)
+            if (reservation.ReservationStatus?.Code == PendingCode)
             {
                 var pendingPayment = await Repo.GetOneAsync<Payment>(
                     p => p.ReservationId == id && p.Purpose == PaymentPurpose.Deposit && p.Status == PaymentStatus.Pending);
@@ -447,8 +420,7 @@ namespace RestX.BLL.Services
                     ts.ReservationId != null &&
                     ts.Reservation.Time >= bufferStart &&
                     ts.Reservation.Time <= bufferEnd &&
-                    ts.Reservation.ReservationStatus.Code != CancelledCode &&
-                    ts.Reservation.ReservationStatus.Code != CompletedCode,
+                    ts.Reservation.ReservationStatus.Code != CancelledCode,
                 includeProperties: "Table,Reservation.ReservationStatus"
             )).ToList();
             var conflictingSlots = conflicts.Select(ts => new ConflictingSlot
@@ -648,7 +620,7 @@ namespace RestX.BLL.Services
 
         private async Task FreeTablesAndSessions(Reservation reservation, string newStatusCode, string? userId = null)
         {
-            if (newStatusCode != CompletedCode && newStatusCode != CancelledCode && newStatusCode != ConfirmedCode)
+            if (newStatusCode != CancelledCode && newStatusCode != ConfirmedCode)
                 return;
 
             var sessions = (await Repo.GetAsync<TableSession>(
@@ -746,10 +718,10 @@ namespace RestX.BLL.Services
             var reservation = await Repo.GetByIdAsync<Reservation>(reservationId)
                 ?? throw new KeyNotFoundException("Reservation not found");
 
-            if (reservation.ReservationStatus?.Code != DepositPendingCode)
+            if (reservation.ReservationStatus?.Code != PendingCode)
             {
                 var status = await Repo.GetOneAsync<RestX.Models.Common.StatusValue>(s => s.Id == reservation.ReservationStatusId);
-                if (status?.Code != DepositPendingCode)
+                if (status?.Code != PendingCode)
                     throw new InvalidOperationException("Reservation is not in deposit-pending status");
             }
 
@@ -814,7 +786,7 @@ namespace RestX.BLL.Services
                 includeProperties: "ReservationStatus")
                 ?? throw new KeyNotFoundException("Reservation not found");
 
-            if (reservation.ReservationStatus?.Code != DepositPendingCode)
+            if (reservation.ReservationStatus?.Code != PendingCode)
                 throw new InvalidOperationException("Reservation is not in deposit-pending status");
 
             var alreadyPaid = await Repo.GetExistsAsync<Payment>(
@@ -853,7 +825,7 @@ namespace RestX.BLL.Services
                 includeProperties: "ReservationStatus")
                 ?? throw new KeyNotFoundException("Reservation not found");
 
-            if (reservation.ReservationStatus?.Code != DepositPendingCode)
+            if (reservation.ReservationStatus?.Code != PendingCode)
                 return;
 
             var hasPaidDeposit = await Repo.GetExistsAsync<Payment>(
@@ -876,7 +848,7 @@ namespace RestX.BLL.Services
 
             foreach (var reservation in confirmedReservations)
             {
-                await NoShowReservation(reservation.Id, null);
+                await CancelReservation(reservation.Id, null);
             }
         }
 

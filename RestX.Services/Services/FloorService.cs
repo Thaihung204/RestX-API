@@ -124,8 +124,7 @@ namespace RestX.BLL.Services
                         ts.ReservationId != null &&
                         ts.Reservation.Time >= bufferStart &&
                         ts.Reservation.Time <= bufferEnd &&
-                        ts.Reservation.ReservationStatus.Code != "CANCELLED" &&
-                        ts.Reservation.ReservationStatus.Code != "COMPLETED",
+                        ts.Reservation.ReservationStatus.Code != "CANCELLED",
                     includeProperties: "Reservation.ReservationStatus"
                 )).Select(ts => ts.TableId).ToHashSet();
 

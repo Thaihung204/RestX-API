@@ -17,6 +17,8 @@ namespace RestX.BLL.DataTranferObjects.Orders
         public Guid TableId { get; set; }
 
         public Guid CustomerId { get; set; }
+        public string? CustomerName { get; set; }
+        public string? CustomerEmail { get; set; }
         public Guid? ReservationId { get; set; }
 
         public OrderStatus OrderStatusId { get; set; } = OrderStatus.Open;

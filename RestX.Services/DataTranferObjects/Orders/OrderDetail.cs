@@ -21,6 +21,7 @@ namespace RestX.BLL.DataTranferObjects.Orders
         public string? Status { get; set; }
         public Guid? OrderId { get; set; }
         public DateTime? CreatedDate { get; set; }
-        public Order Order { get; set; }
+        public List<string>? TableCode { get; set; }
+
     }
 }

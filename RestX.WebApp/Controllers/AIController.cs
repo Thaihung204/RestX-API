@@ -196,7 +196,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpPut("content/apply-content")]
-        [Authorize(Roles = "Admin,SystemAdmin")]
+        [Authorize(Roles = "Admin,System Admin, Staff")]
         public async Task<IActionResult> ApplyDescription([FromBody] ApplyDescriptionRequest request)
         {
             try

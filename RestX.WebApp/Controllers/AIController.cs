@@ -14,6 +14,7 @@ namespace RestX.WebApp.Controllers
 {
     [Route("api/ai")]
     [ApiController]
+    [Authorize(AuthenticationSchemes = "Bearer")]
     public class AIController : BaseController
     {
         private const string SessionCookieName = "restx_ai_session";
@@ -162,6 +163,66 @@ namespace RestX.WebApp.Controllers
                 await _aiMenuService.ClearSession(sessionId);
                 Response.Cookies.Delete(SessionCookieName);
                 return Ok();
+            }
+            catch (AppException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
+        [HttpPost("content/generate")]
+        [Authorize(Roles = "Admin,System Admin,Staff")]
+        public async Task<ActionResult<ContentGenerateResponse>> GenerateContent([FromBody] ContentGenerateRequest request)
+        {
+            try
+            {
+                var response = await _aiMenuService.GenerateContent(request);
+                return Ok(response);
+            }
+            catch (AppException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
+        [HttpPut("content/apply-content")]
+        [Authorize(Roles = "Admin,SystemAdmin")]
+        public async Task<IActionResult> ApplyDescription([FromBody] ApplyDescriptionRequest request)
+        {
+            try
+            {
+                await _aiMenuService.ApplyDescription(request);
+                return Ok();
+            }
+            catch (AppException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
+        [HttpPost("content/campaign-pack")]
+        [Authorize(Roles = "Admin,System Admin, Staff")]
+        public async Task<ActionResult<CampaignPackResponse>> GenerateCampaignPack([FromBody] CampaignPackRequest request)
+        {
+            try
+            {
+                var response = await _aiMenuService.GenerateCampaignPack(request);
+                return Ok(response);
             }
             catch (AppException ex)
             {

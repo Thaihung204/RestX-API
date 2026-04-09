@@ -11,5 +11,6 @@ namespace RestX.BLL.Interfaces
         Task<TopDish> GetTopDishesAsync(DashboardRequest request, int top = 5, string sortBy = "revenue");
         Task<TableStatus> GetTableStatusAsync();
         Task<CustomerStats> GetCustomerStatsAsync(DashboardRequest request);
+        Task<PromotionStats> GetPromotionStatsAsync(DashboardRequest request);
     }
 }

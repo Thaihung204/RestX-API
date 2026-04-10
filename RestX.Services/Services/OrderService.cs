@@ -732,14 +732,6 @@ namespace RestX.BLL.Services
             if (!orders.Any())
                 return ExcelHelper.CreateEmptyWorkbook("Orders");
 
-            string GetOrderStatusName(int statusId) => statusId switch
-            {
-                (int)OrderStatus.Open => "Open",
-                (int)OrderStatus.Completed => "Completed",
-                (int)OrderStatus.Cancelled => "Cancelled",
-                _ => statusId.ToString()
-            };
-
             using var package = new ExcelPackage();
             var sheet = package.Workbook.Worksheets.Add("Orders");
             var headers = new[]
@@ -756,7 +748,7 @@ namespace RestX.BLL.Services
                 sheet.Cells[row, 1].Value = o.Reference;
                 sheet.Cells[row, 2].Value = o.CustomerName ?? "";
                 sheet.Cells[row, 3].Value = o.CustomerEmail ?? "";
-                sheet.Cells[row, 4].Value = GetOrderStatusName((int)o.OrderStatusId);
+                sheet.Cells[row, 4].Value = o.OrderStatusId.ToString();
                 sheet.Cells[row, 5].Value = o.SubTotal ?? 0;
                 sheet.Cells[row, 6].Value = o.DiscountAmount ?? 0;
                 sheet.Cells[row, 7].Value = o.TaxAmount ?? 0;

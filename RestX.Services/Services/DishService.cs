@@ -323,19 +323,17 @@ namespace RestX.BLL.Services
 
         public async Task<bool> DeleteDish(Guid id)
         {
-            var dish = await Repo.GetOneAsync<Dish>(
-                filter: x => x.Id == id,
-                includeProperties: "DishImages");
+            var dish = await Repo.GetByIdAsync<Dish>(id);
 
-            if (dish == null) return false;
+            if (dish == null)
+                return false;
 
-            var deleteTasks = dish.DishImages.Select(img =>
-                cloudinaryService.DeleteAsync($"{CurrentTenant.Name.Replace(" ", "")}/dishes/{id}/{img.Id}"));
+            dish.IsActive = false;
 
-            await Task.WhenAll(deleteTasks);
-
-            Repo.Delete(dish);
+            Repo.Update(dish);
             await Repo.SaveAsync();
+
+            await RedisService.RemoveAsync($"{CurrentTenant.Hostname}:Menu");
 
             return true;
         }

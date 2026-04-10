@@ -62,10 +62,24 @@ namespace RestX.BLL.Services
         {
             var customer = await Repo.GetFirstAsync<Customer>(
                 filter: c => c.Id == id,
-                includeProperties: "ApplicationUser");
+                includeProperties: "ApplicationUser,Orders,Reservations");
             if (customer == null) return null;
-            var stats = await GetCustomerStatsAsync(id);
-            return MapToResponse(customer, stats);
+            return new CustomerResponse
+            {
+                Id = customer.Id,
+                MembershipLevel = customer.MembershipLevel,
+                LoyaltyPoints = customer.LoyaltyPoints,
+                IsActive = customer.IsActive,
+                CreatedDate = customer.CreatedDate,
+                ModifiedDate = customer.ModifiedDate,
+                UserId = customer.ApplicationUser?.Id ?? Guid.Empty,
+                Email = customer.ApplicationUser?.Email ?? string.Empty,
+                FullName = customer.ApplicationUser?.FullName ?? string.Empty,
+                PhoneNumber = customer.ApplicationUser?.PhoneNumber,
+                AvatarUrl = customer.ApplicationUser?.AvatarUrl,
+                TotalOrders = customer.Orders.Count(),
+                TotalReservations = customer.Reservations.Count()
+            };
         }
 
         public async Task<CustomerResponse> CreateCustomer(CreateCustomer dto)

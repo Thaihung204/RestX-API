@@ -46,6 +46,7 @@ namespace RestX.WebApp.Controllers
                 return BadRequest(new { success = false, message = "An internal error occurred" });
             }
         }
+
         [HttpGet("{id}")]
         [Authorize(Roles = "Admin,System Admin,Customer")]
         public async Task<IActionResult> GetCustomerById([Required] Guid id)

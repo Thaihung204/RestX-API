@@ -279,21 +279,20 @@ namespace RestX.WebApp.Controllers
             try
             {
                 var user = await GetCurrentUserAsync();
-                var reservation = await reservationService.GetReservationByCode(code);
-                await reservationService.CheckIn(code, user?.Id.ToString());
+                var result = await reservationService.CheckIn(code, user?.Id.ToString());
 
-                if (reservation != null)
-                    foreach (var tableInfo in reservation.Tables)
-                        await hub.BroadcastToTenant(CurrentTenant.Id, SignalrServer.TableStatusChanged, new
-                        {
-                            tableId = tableInfo.Id,
-                            tableCode = tableInfo.Code,
-                            floorId = tableInfo.FloorId,
-                            status = (int)TableStatus.Occupied,
-                            statusName = TableStatus.Occupied.ToString()
-                        });
+                foreach (var tableInfo in result.Tables)
+                {
+                    await hub.BroadcastToTenant(CurrentTenant.Id, SignalrServer.TableStatusChanged, new
+                    {
+                        tableId = tableInfo.Id,
+                        tableCode = tableInfo.Code,
+                        status = (int)TableStatus.Occupied,
+                        statusName = TableStatus.Occupied.ToString()
+                    });
+                }
 
-                return Ok(new { success = true, message = "Checked in successfully" });
+                return Ok(result);
             }
             catch (AppException ex)
             {

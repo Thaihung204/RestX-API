@@ -137,4 +137,35 @@ namespace RestX.BLL.DataTranferObjects.Reservation
         [Required]
         public int StatusId { get; set; }
     }
+
+    public class CheckInResponse
+    {
+        public Guid ReservationId { get; set; }
+        public string ConfirmationCode { get; set; } = string.Empty;
+        public DateTime ReservationDateTime { get; set; }
+        public int NumberOfGuests { get; set; }
+        public string? SpecialRequests { get; set; }
+        public DateTime CheckedInAt { get; set; }
+        public ReservationStatusInfo Status { get; set; } = new();
+        public CheckInCustomerInfo Customer { get; set; } = new();
+        public List<CheckInTableInfo> Tables { get; set; } = new();
+    }
+
+    public class CheckInCustomerInfo
+    {
+        public Guid Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string? Phone { get; set; }
+        public string? Email { get; set; }
+        public string? MembershipLevel { get; set; }
+        public int LoyaltyPoints { get; set; }
+    }
+
+    public class CheckInTableInfo
+    {
+        public Guid Id { get; set; }
+        public string Code { get; set; } = string.Empty;
+        public int Capacity { get; set; }
+        public string FloorName { get; set; } = string.Empty;
+    }
 }

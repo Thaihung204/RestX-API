@@ -49,6 +49,27 @@ namespace RestX.BLL.Services
             await SendEmailAsync(toEmail, subject, body);
         }
 
+        public async Task SendTenantRequestSubmittedAsync(string toEmail, string businessName, string submittedAt)
+        {
+            var subject = $"RestX - Tenant Request Received ({businessName})";
+            var body = EmailTemplates.TenantRequestSubmitted(businessName, toEmail, submittedAt);
+            await SendEmailAsync(toEmail, subject, body);
+        }
+
+        public async Task SendTenantRequestAcceptedAsync(string toEmail, string businessName, string hostname)
+        {
+            var subject = $"RestX - Tenant Request Accepted ({businessName})";
+            var body = EmailTemplates.TenantRequestAccepted(businessName, hostname);
+            await SendEmailAsync(toEmail, subject, body);
+        }
+
+        public async Task SendTenantRequestRejectedAsync(string toEmail, string businessName)
+        {
+            var subject = $"RestX - Tenant Request Declined ({businessName})";
+            var body = EmailTemplates.TenantRequestRejected(businessName);
+            await SendEmailAsync(toEmail, subject, body);
+        }
+
         private SmtpClient CreateSmtpClient()
         {
             return new SmtpClient(emailSettings.SmtpServer)

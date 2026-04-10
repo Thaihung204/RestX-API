@@ -25,8 +25,18 @@ namespace RestX.BLL.Services
         private readonly IConfiguration configuration;
         private readonly ICloudinaryService cloudinaryService;
         private readonly ILogger<TenantService> logger;
+        private readonly IEmailService emailService;
 
-        public TenantService(ILogger<TenantService> logger, ICloudinaryService cloudinaryService, RestxAdminContext restxAdminContext, IRepository repo, IRedisService redisService, IMapper mapper, IConfiguration configuration, IEnumerable<ActiveTenant> tenant = null) : base(repo, redisService, tenant)
+        public TenantService(
+            ILogger<TenantService> logger,
+            ICloudinaryService cloudinaryService,
+            RestxAdminContext restxAdminContext,
+            IRepository repo,
+            IRedisService redisService,
+            IMapper mapper,
+            IConfiguration configuration,
+            IEmailService emailService,
+            IEnumerable<ActiveTenant> tenant = null) : base(repo, redisService, tenant)
         {
             this.logger = logger;
             this.cloudinaryService = cloudinaryService;
@@ -34,6 +44,7 @@ namespace RestX.BLL.Services
             this.adminRepo = repo;
             this.mapper = mapper;
             this.configuration = configuration;
+            this.emailService = emailService;
         }
 
         public async Task<IEnumerable<Tenant>> GetAllTenants()
@@ -560,6 +571,19 @@ namespace RestX.BLL.Services
 
             await Repo.CreateAsync(entity);
 
+            var submittedAt = DateTime.UtcNow.AddHours(7).ToString("dd/MM/yyyy HH:mm");
+            try
+            {
+                await emailService.SendTenantRequestSubmittedAsync(
+                    entity.BusinessEmailAddress,
+                    entity.BusinessName ?? entity.Name,
+                    submittedAt);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to send submitted email for tenant request: {Name}", entity.Name);
+            }
+
             return entity.Id;
         }
 
@@ -577,6 +601,19 @@ namespace RestX.BLL.Services
             tenantItem.Id = null;
 
             string jobId = await UploadAndCreateTenant(tenantItem);
+
+            try
+            {
+                await emailService.SendTenantRequestAcceptedAsync(
+                    tenantRequest.BusinessEmailAddress,
+                    tenantRequest.BusinessName ?? tenantRequest.Name,
+                    tenantRequest.Hostname);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to send accepted email for tenant request: {Name}", tenantRequest.Name);
+            }
+
             return jobId;
         }
         public async Task<Guid> DeclineTenantRequest(Guid tenantRequestsId)
@@ -589,6 +626,17 @@ namespace RestX.BLL.Services
 
             Repo.Update(request);
             await Repo.SaveAsync();
+
+            try
+            {
+                await emailService.SendTenantRequestRejectedAsync(
+                    request.BusinessEmailAddress,
+                    request.BusinessName ?? request.Name);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to send rejected email for tenant request: {Name}", request.Name);
+            }
 
             return request.Id;
         }

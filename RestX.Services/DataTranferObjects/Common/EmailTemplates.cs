@@ -262,5 +262,279 @@ namespace RestX.BLL.DataTranferObjects.Common
                     </body>
                     </html>";
         }
+        public static string TenantRequestSubmitted(
+            string businessName,
+            string contactEmail,
+            string submittedAt)
+        {
+            var encodedBusiness = System.Net.WebUtility.HtmlEncode(businessName);
+            return $@"
+                    <html>
+                    <body style='font-family: Arial, sans-serif; background:#f3f4f6; padding:40px 0'>
+                      <table width='100%' cellpadding='0' cellspacing='0' border='0'>
+                        <tr>
+                          <td align='center'>
+                            <table width='600' cellpadding='0' cellspacing='0' border='0'
+                                   style='background:#ffffff;border-radius:12px;overflow:hidden;
+                                          box-shadow:0 6px 24px rgba(0,0,0,0.06)'>
+
+                              <!-- HEADER -->
+                              <tr>
+                                <td style='background:#111827;padding:28px;text-align:center'>
+                                  <h1 style='margin:0;font-size:24px;color:#ffffff;font-weight:700'>
+                                    &#128227; Tenant Request Received
+                                  </h1>
+                                </td>
+                              </tr>
+
+                              <!-- BODY -->
+                              <tr>
+                                <td style='padding:32px'>
+                                  <p style='font-size:16px;color:#111827;margin:0 0 24px 0'>
+                                    Dear <strong>{encodedBusiness}</strong>,
+                                  </p>
+                                  <p style='font-size:15px;color:#374151;line-height:1.7;margin:0 0 24px 0'>
+                                    Thank you for submitting your tenant registration request. We have received your application
+                                    and our team is currently reviewing it.
+                                  </p>
+
+                                  <table width='100%' cellpadding='16' cellspacing='0' border='0'
+                                         style='background:#f9fafb;border:1px solid #e5e7eb;
+                                                border-radius:10px;margin-bottom:24px'>
+                                    <tr>
+                                      <td>
+                                        <table width='100%' cellpadding='0' cellspacing='0' border='0'>
+                                          <tr>
+                                            <td style='padding-bottom:8px'>
+                                              <span style='font-size:13px;color:#6b7280'>Business Name</span><br/>
+                                              <span style='font-size:15px;font-weight:600;color:#111827'>{encodedBusiness}</span>
+                                            </td>
+                                          </tr>
+                                          <tr>
+                                            <td style='padding-bottom:8px'>
+                                              <span style='font-size:13px;color:#6b7280'>Contact Email</span><br/>
+                                              <span style='font-size:15px;font-weight:600;color:#111827'>{System.Net.WebUtility.HtmlEncode(contactEmail)}</span>
+                                            </td>
+                                          </tr>
+                                          <tr>
+                                            <td>
+                                              <span style='font-size:13px;color:#6b7280'>Submitted At</span><br/>
+                                              <span style='font-size:15px;font-weight:600;color:#111827'>{submittedAt}</span>
+                                            </td>
+                                          </tr>
+                                        </table>
+                                      </td>
+                                    </tr>
+                                  </table>
+
+                                  <p style='font-size:14px;color:#6b7280;text-align:center'>
+                                    You will receive another email once our team has reviewed your request.
+                                  </p>
+                                </td>
+                              </tr>
+
+                              <!-- FOOTER -->
+                              <tr>
+                                <td style='background:#f9fafb;padding:16px;text-align:center;
+                                           font-size:12px;color:#9ca3af;border-top:1px solid #e5e7eb'>
+                                  This is an automated email. Please do not reply.
+                                </td>
+                              </tr>
+                            </table>
+                          </td>
+                        </tr>
+                      </table>
+                    </body>
+                    </html>";
+                            }
+
+        public static string TenantRequestAccepted(
+            string businessName,
+            string hostname)
+        {
+            var encodedBusiness = System.Net.WebUtility.HtmlEncode(businessName);
+            var encodedHostname = System.Net.WebUtility.HtmlEncode(hostname);
+
+            var contactSection = $@"
+                    <table width='100%' cellpadding='16' cellspacing='0' border='0'
+                           style='background:#f0fdf4;border:1px solid #bbf7d0;
+                                  border-radius:10px;margin-top:16px'>
+                      <tr>
+                        <td>
+                          <div style='font-size:14px;font-weight:700;color:#15803d;margin-bottom:8px'>
+                            &#128222; Contact Support
+                          </div>
+                          <div style='font-size:14px;color:#374151'>Email: <a href='mailto:baook01234@gmail.com' style='color:#2563eb;text-decoration:none'>baook01234@gmail.com</a></div>
+                          <div style='font-size:14px;color:#374151'>Phone: 0987367341</div>
+                        </td>
+                      </tr>
+                    </table>";
+
+            return $@"
+                    <html>
+                    <body style='font-family: Arial, sans-serif; background:#f3f4f6; padding:40px 0'>
+                      <table width='100%' cellpadding='0' cellspacing='0' border='0'>
+                        <tr>
+                          <td align='center'>
+                            <table width='600' cellpadding='0' cellspacing='0' border='0'
+                                   style='background:#ffffff;border-radius:12px;overflow:hidden;
+                                          box-shadow:0 6px 24px rgba(0,0,0,0.06)'>
+
+                              <!-- HEADER -->
+                              <tr>
+                                <td style='background:#15803d;padding:28px;text-align:center'>
+                                  <h1 style='margin:0;font-size:24px;color:#ffffff;font-weight:700'>
+                                    &#9989; Tenant Request Accepted
+                                  </h1>
+                                </td>
+                              </tr>
+
+                              <!-- BODY -->
+                              <tr>
+                                <td style='padding:32px'>
+                                  <p style='font-size:16px;color:#111827;margin:0 0 24px 0'>
+                                    Dear <strong>{encodedBusiness}</strong>,
+                                  </p>
+                                  <p style='font-size:15px;color:#374151;line-height:1.7;margin:0 0 24px 0'>
+                                    Great news! Your tenant registration request has been
+                                    <strong style='color:#15803d'>approved</strong>. Your tenant account is now active.
+                                  </p>
+
+                                  <table width='100%' cellpadding='16' cellspacing='0' border='0'
+                                         style='background:#eff6ff;border:1px solid #bfdbfe;
+                                                border-radius:10px;margin-bottom:24px;text-align:center'>
+                                    <tr>
+                                      <td>
+                                        <div style='font-size:13px;color:#6b7280;letter-spacing:1px;margin-bottom:8px'>
+                                          YOUR TENANT PORTAL
+                                        </div>
+                                        <a href='https://{encodedHostname}'
+                                           style='display:inline-block;background:#2563eb;color:#ffffff;
+                                                  text-decoration:none;padding:13px 32px;
+                                                  border-radius:8px;font-size:15px;font-weight:600'>
+                                          Your Restaurant
+                                        </a>
+                                        <div style='margin-top:10px;font-size:13px;color:#6b7280'>
+                                          {encodedHostname}
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  </table>
+
+                                  {contactSection}
+
+                                  <p style='margin-top:24px;font-size:13px;color:#9ca3af;text-align:center'>
+                                    Keep this email for your records.
+                                  </p>
+                                </td>
+                              </tr>
+
+                              <!-- FOOTER -->
+                              <tr>
+                                <td style='background:#f9fafb;padding:16px;text-align:center;
+                                           font-size:12px;color:#9ca3af;border-top:1px solid #e5e7eb'>
+                                  This is an automated email. Please do not reply.
+                                </td>
+                              </tr>
+                            </table>
+                          </td>
+                        </tr>
+                      </table>
+                    </body>
+                    </html>";
+                            }
+
+        public static string TenantRequestRejected(string businessName)
+        {
+            var encodedBusiness = System.Net.WebUtility.HtmlEncode(businessName);
+
+            return $@"
+                    <html>
+                    <body style='font-family: Arial, sans-serif; background:#f3f4f6; padding:40px 0'>
+                      <table width='100%' cellpadding='0' cellspacing='0' border='0'>
+                        <tr>
+                          <td align='center'>
+                            <table width='600' cellpadding='0' cellspacing='0' border='0'
+                                   style='background:#ffffff;border-radius:12px;overflow:hidden;
+                                          box-shadow:0 6px 24px rgba(0,0,0,0.06)'>
+
+                              <!-- HEADER -->
+                              <tr>
+                                <td style='background:#1f2937;padding:28px;text-align:center'>
+                                  <h1 style='margin:0;font-size:24px;color:#ffffff;font-weight:700'>
+                                    &#9888; Application Under Review
+                                  </h1>
+                                </td>
+                              </tr>
+
+                              <!-- BODY -->
+                              <tr>
+                                <td style='padding:32px'>
+                                  <p style='font-size:16px;color:#111827;margin:0 0 24px 0'>
+                                    Dear <strong>{encodedBusiness}</strong>,
+                                  </p>
+                                  <p style='font-size:15px;color:#374151;line-height:1.7;margin:0 0 16px 0'>
+                                    Thank you for your interest in <strong>RestX</strong>. After a thorough review of your
+                                    application, we were unable to approve it at this time.
+                                  </p>
+                                  <p style='font-size:15px;color:#374151;line-height:1.7;margin:0 0 24px 0'>
+                                    Our team evaluates each submission carefully to ensure platform quality and compliance
+                                    with our service standards. Unfortunately, your application does not currently meet
+                                    our requirements.
+                                  </p>
+
+                                  <table width='100%' cellpadding='0' cellspacing='0' border='0'
+                                         style='background:#f9fafb;border-left:4px solid #d97706;
+                                                border-radius:6px;margin-bottom:24px'>
+                                    <tr>
+                                      <td style='padding:14px 18px'>
+                                        <div style='font-size:14px;font-weight:600;color:#92400e;margin-bottom:4px'>
+                                          What's next?
+                                        </div>
+                                        <div style='font-size:14px;color:#78350f;line-height:1.6'>
+                                          You are welcome to review our
+                                          <a href='https://restx.food/' style='color:#2563eb;text-decoration:none'>platform guidelines</a>
+                                          and resubmit a new application in the future.
+                                          Our team is happy to assist if you have any questions.
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  </table>
+
+                                  <table width='100%' cellpadding='16' cellspacing='0' border='0'
+                                         style='background:#f0fdf4;border:1px solid #bbf7d0;
+                                                border-radius:10px;margin-bottom:24px'>
+                                    <tr>
+                                      <td>
+                                        <div style='font-size:14px;font-weight:700;color:#15803d;margin-bottom:8px'>
+                                          &#128222; Contact Support
+                                        </div>
+                                        <div style='font-size:14px;color:#374151'>Email: <a href='mailto:baook01234@gmail.com' style='color:#2563eb;text-decoration:none'>baook01234@gmail.com</a></div>
+                                        <div style='font-size:14px;color:#374151'>Phone: 0987367341</div>
+                                      </td>
+                                    </tr>
+                                  </table>
+
+                                  <p style='font-size:14px;color:#6b7280;text-align:center'>
+                                    If you believe this was a mistake or would like further clarification,
+                                    please reply to this email or contact our support team.
+                                  </p>
+                                </td>
+                              </tr>
+
+                              <!-- FOOTER -->
+                              <tr>
+                                <td style='background:#f9fafb;padding:16px;text-align:center;
+                                           font-size:12px;color:#9ca3af;border-top:1px solid #e5e7eb'>
+                                  This is an automated email. Please do not reply directly to this message.
+                                </td>
+                              </tr>
+                            </table>
+                          </td>
+                        </tr>
+                      </table>
+                    </body>
+                    </html>";
+                            }
     }
 }

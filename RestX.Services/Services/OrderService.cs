@@ -719,6 +719,19 @@ namespace RestX.BLL.Services
                 .ToList();
         }
 
+        public async Task<DataTranferObjects.Orders.Order?> GetOrderByTableId(Guid tableId)
+        {
+            var activeSession = await Repo.GetOneAsync<Models.Reservations.TableSession>(
+                filter: ts => ts.TableId == tableId && ts.IsActive
+            );
+
+            if (activeSession == null || !activeSession.OrderId.HasValue)
+            {
+                return null;
+            }
+
+            return await GetOrderById((Guid)activeSession.OrderId);
+        }
 
         public async Task<byte[]> ExportAsync(OrderSearch filter)
         {

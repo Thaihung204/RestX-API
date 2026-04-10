@@ -266,6 +266,26 @@ namespace RestX.WebApp.Controllers
             }
         }
 
+        [HttpGet("table/{tableId:guid}")]
+        [Authorize(Roles = "System Admin,Admin,Staff,Customer")]
+        public async Task<ActionResult<Order>> GetOrderByTableId([Required] Guid tableId)
+        {
+            try
+            {
+                var order = await orderService.GetOrderByTableId(tableId);
+
+                if (order == null)
+                    return NotFound(new { success = false, message = "No active order found for this table" });
+
+                return Ok(order);
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
         [HttpPut("{id:guid}/discount")]
         [Authorize(Roles = "System Admin,Admin,Staff")]
         public async Task<ActionResult<ApplyDiscountResponse>> ApplyDiscount([Required] Guid id, [FromBody] ApplyDiscountRequest request)

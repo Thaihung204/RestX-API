@@ -13,6 +13,7 @@ namespace RestX.BLL.Interfaces
         Task<bool> UpdateStatus(Guid orderId, int statusId, string userId);
         Task<bool> UpdateOrderDetailStatus(Guid orderDetailId, int statusId, string userId);
         Task<IEnumerable<OrderDetail>> GetAllOrderDetails();
+        Task<Order?> GetOrderByTableId(Guid tableId);
 
         Task<byte[]> ExportAsync(OrderSearch filter);
         Task<ApplyDiscountResponse> ApplyDiscount(Guid orderId, ApplyDiscountRequest request);

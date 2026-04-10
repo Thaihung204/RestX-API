@@ -334,11 +334,11 @@ namespace RestX.BLL.Services
         }
 
 
-        public async Task CheckIn(string confirmationCode, string userId)
+        public async Task<CheckInResponse> CheckIn(string confirmationCode, string userId)
         {
             var reservation = await Repo.GetOneAsync<Reservation>(
                 filter: r => r.ConfirmationCode == confirmationCode,
-                includeProperties: TablesAndStatusIncludes)
+                includeProperties: "Customer.ApplicationUser,TableSessions.Table.Floor,ReservationStatus")
                 ?? throw new KeyNotFoundException("Reservation not found");
 
             var statusCode = reservation.ReservationStatus?.Code;
@@ -364,6 +364,39 @@ namespace RestX.BLL.Services
             }
 
             await Repo.SaveAsync();
+
+            return new CheckInResponse
+            {
+                ReservationId = reservation.Id,
+                ConfirmationCode = reservation.ConfirmationCode,
+                ReservationDateTime = reservation.Time,
+                NumberOfGuests = reservation.NumberOfGuests,
+                SpecialRequests = reservation.SpecialRequests,
+                CheckedInAt = reservation.CheckedInAt.Value,
+                Status = new ReservationStatusInfo
+                {
+                    Id = reservation.ReservationStatusId,
+                    Code = reservation.ReservationStatus?.Code ?? "",
+                    Name = reservation.ReservationStatus?.Name ?? "",
+                    ColorCode = reservation.ReservationStatus?.ColorCode ?? ""
+                },
+                Customer = new CheckInCustomerInfo
+                {
+                    Id = reservation.CustomerId,
+                    Name = reservation.Customer?.ApplicationUser?.FullName ?? "",
+                    Phone = reservation.Customer?.ApplicationUser?.PhoneNumber,
+                    Email = reservation.Customer?.ApplicationUser?.Email,
+                    MembershipLevel = reservation.Customer?.MembershipLevel,
+                    LoyaltyPoints = reservation.Customer?.LoyaltyPoints ?? 0
+                },
+                Tables = sessions.Select(s => new CheckInTableInfo
+                {
+                    Id = s.Table.Id,
+                    Code = s.Table.Code,
+                    Capacity = s.Table.SeatingCapacity,
+                    FloorName = s.Table.Floor?.Name ?? ""
+                }).ToList()
+            };
         }
 
         public async Task CompleteReservation(Guid id, string? userId = null)

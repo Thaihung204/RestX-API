@@ -18,6 +18,7 @@ using RestX.Models.Promotions;
 using RestX.Models.Reservations;
 using RestX.Models.Tables;
 using RestX.Models.Tenants;
+using RestX.Models.Enum;
 using System.Data;
 using System.Text;
 
@@ -746,8 +747,6 @@ namespace RestX.BLL.Services
 
             if (!orders.Any())
                 return ExcelHelper.CreateEmptyWorkbook("Orders");
-            var statuses = await statusValueService.GetStatuses("order");
-            var statusById = statuses.ToDictionary(s => s.Id, s => s.Name);
 
             using var package = new ExcelPackage();
             var sheet = package.Workbook.Worksheets.Add("Orders");
@@ -763,9 +762,9 @@ namespace RestX.BLL.Services
             foreach (var o in orders)
             {
                 sheet.Cells[row, 1].Value = o.Reference;
-                sheet.Cells[row, 2].Value = o.Customer?.FullName ?? "";
-                sheet.Cells[row, 3].Value = o.Customer?.Email ?? "";
-                sheet.Cells[row, 4].Value = statusById.TryGetValue((int)o.OrderStatusId, out var statusName) ? statusName : o.OrderStatusId.ToString();
+                sheet.Cells[row, 2].Value = o.CustomerName ?? "";
+                sheet.Cells[row, 3].Value = o.CustomerEmail ?? "";
+                sheet.Cells[row, 4].Value = o.OrderStatusId.ToString();
                 sheet.Cells[row, 5].Value = o.SubTotal ?? 0;
                 sheet.Cells[row, 6].Value = o.DiscountAmount ?? 0;
                 sheet.Cells[row, 7].Value = o.TaxAmount ?? 0;

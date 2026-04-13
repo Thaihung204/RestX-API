@@ -14,5 +14,6 @@ namespace RestX.BLL.DataTranferObjects.Status
         [MaxLength(7)]
         public string ColorCode { get; set; } = string.Empty;
         public bool IsDefault { get; set; }
+        public int DisplayOrder { get; set; } = 1;
     }
 }

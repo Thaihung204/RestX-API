@@ -296,6 +296,7 @@ namespace RestX.DAL.Context
                 entity.Property(e => e.Code).HasMaxLength(50).IsRequired();
                 entity.Property(e => e.Name).HasMaxLength(255).IsRequired();
                 entity.Property(e => e.ColorCode).HasMaxLength(7);
+                entity.Property(e => e.DisplayOrder);
 
                 entity.HasOne<StatusType>(e => e.StatusType)
                     .WithMany(st => st.StatusValues)

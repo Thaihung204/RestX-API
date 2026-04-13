@@ -24,6 +24,7 @@ namespace RestX.Models.Common
         public string ColorCode { get; set; } = string.Empty;
         public bool IsDefault { get; set; } = false;
 
+        public int Order { get; set; } = 1;
         public virtual StatusType StatusType { get; set; } = null!;
     }
 }

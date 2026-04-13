@@ -43,21 +43,21 @@ namespace RestX.DAL.DataSeeders
             var typeMap = statusTypes.ToDictionary(t => t.Code, t => t.Id);
             values.AddRange(CreateValuesForType(typeMap["RESERVATION"], new[]
             {
-                ("PENDING", "Pending", "#FF9800", true),
-                ("CONFIRMED", "Confirmed", "#4CAF50", false),
-                ("CANCELLED", "Cancelled", "#F44336", false)
+                ("PENDING", "Pending", "#FF9800", true, 1),
+                ("CONFIRMED", "Confirmed", "#4CAF50", false, 2),
+                ("CANCELLED", "Cancelled", "#F44336", false, 3)
             }));
             values.AddRange(CreateValuesForType(typeMap["ORDER-DETAIL"], new[]
             {
-                ("PREPARING", "Preparing", "#2196F3", true),
-                ("SERVED", "Served", "#9C27B0", false),
-                ("CANCELLED", "Cancelled", "#F44336", false)
+                ("PREPARING", "Preparing", "#2196F3", true, 1),
+                ("SERVED", "Served", "#9C27B0", false, 2),
+                ("CANCELLED", "Cancelled", "#F44336", false, 3)
             }));
             return values;
         }
         private static IEnumerable<StatusValue> CreateValuesForType(
             int typeId,
-            (string Code, string Name, string Color, bool IsDefault)[] definitions)
+            (string Code, string Name, string Color, bool IsDefault, int Order)[] definitions)
         {
             return definitions.Select(d => new StatusValue
             {
@@ -65,7 +65,8 @@ namespace RestX.DAL.DataSeeders
                 Code = d.Code,
                 Name = d.Name,
                 ColorCode = d.Color,
-                IsDefault = d.IsDefault
+                IsDefault = d.IsDefault,
+                Order = d.Order
             });
         }
     }

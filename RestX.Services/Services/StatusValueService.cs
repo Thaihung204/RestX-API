@@ -33,7 +33,7 @@ namespace RestX.BLL.Services
             var statusType = await GetStatusType(typeCode);
             var values = (await Repo.GetAsync<StatusValue>(
                 filter: sv => sv.StatusTypeId == statusType.Id,
-                orderBy: q => q.OrderBy(sv => sv.Id)
+                orderBy: q => q.OrderBy(sv => sv.Order)
             )).ToList();
             var result = mapper.Map<List<StatusValues>>(values);
             await RedisService.SetAsync(cacheKey, result);
@@ -59,12 +59,19 @@ namespace RestX.BLL.Services
                 entity.Name = request.Name;
                 entity.ColorCode = request.ColorCode;
                 entity.IsDefault = request.IsDefault;
+                entity.Order = request.Order > 0 ? request.Order : 1;
                 Repo.Update(entity);
             }
             else
             {
                 entity = mapper.Map<StatusValue>(request);
                 entity.StatusTypeId = statusType.Id;
+                var maxOrder = (await Repo.GetAsync<StatusValue>(
+                    filter: sv => sv.StatusTypeId == statusType.Id,
+                    orderBy: q => q.OrderByDescending(sv => sv.Order),
+                    take: 1
+                )).FirstOrDefault()?.Order ?? 0;
+                entity.Order = maxOrder + 1;
                 await Repo.CreateAsync(entity);
             }
             if (request.IsDefault)

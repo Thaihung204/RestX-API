@@ -317,6 +317,11 @@ namespace RestX.DAL.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
 
+                    b.Property<int>("Order")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1);
+
                     b.Property<string>("PropertiesJson")
                         .HasColumnType("nvarchar(max)");
 

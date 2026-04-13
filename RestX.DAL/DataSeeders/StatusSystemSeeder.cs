@@ -57,7 +57,7 @@ namespace RestX.DAL.DataSeeders
         }
         private static IEnumerable<StatusValue> CreateValuesForType(
             int typeId,
-            (string Code, string Name, string Color, bool IsDefault, int Order)[] definitions)
+            (string Code, string Name, string Color, bool IsDefault, int DisplayOrder)[] definitions)
         {
             return definitions.Select(d => new StatusValue
             {
@@ -66,7 +66,7 @@ namespace RestX.DAL.DataSeeders
                 Name = d.Name,
                 ColorCode = d.Color,
                 IsDefault = d.IsDefault,
-                Order = d.Order
+                DisplayOrder = d.DisplayOrder
             });
         }
     }

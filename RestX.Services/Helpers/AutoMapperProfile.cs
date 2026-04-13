@@ -132,7 +132,7 @@ namespace RestX.BLL.Helpers
                 .ForMember(dest => dest.Id, opt => opt.Ignore())
                 .ForMember(dest => dest.StatusTypeId, opt => opt.Ignore())
                 .ForMember(dest => dest.StatusType, opt => opt.Ignore())
-                .ForMember(dest => dest.Order, opt => opt.Ignore());
+                .ForMember(dest => dest.DisplayOrder, opt => opt.Ignore());
             CreateMap<StatusValue, ReservationStatusInfo>();
 
             CreateMap<TableSession, ReservationTableInfo>()

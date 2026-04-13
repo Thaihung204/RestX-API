@@ -60,8 +60,6 @@ namespace RestX.BLL.Services
 
             settings.ReturnUrl = $"{hostname}/payment/success";
             settings.CancelUrl = $"{hostname}/payment/cancel";
-            settings.ReturnUrlDeposit = $"{hostname}/deposit/success";
-            settings.CancelUrlDeposit = $"{hostname}/deposit/cancel";
 
             var json = JsonConvert.SerializeObject(settings);
 

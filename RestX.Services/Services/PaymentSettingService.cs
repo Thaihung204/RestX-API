@@ -44,6 +44,25 @@ namespace RestX.BLL.Services
             var existing = await adminContext.TenantSettings
                 .FirstOrDefaultAsync(s => s.TenantId == tenantId && s.Key.ToLower() == PaymentConstants.SettingKey.Payment);
 
+            string hostname = string.Empty;
+            if (existing != null)
+            {
+                var old = JsonConvert.DeserializeObject<PaymentGatewaySettings>(existing.Value);
+                hostname = old?.ReturnUrl?.Split('/').Length > 2
+                    ? old.ReturnUrl.Split('/')[2]
+                    : string.Empty;
+            }
+            if (string.IsNullOrEmpty(hostname))
+            {
+                var tenant = await adminContext.Tenants.FindAsync(tenantId);
+                hostname = tenant?.Hostname ?? string.Empty;
+            }
+
+            settings.ReturnUrl = $"{hostname}/payment/success";
+            settings.CancelUrl = $"{hostname}/payment/cancel";
+            settings.ReturnUrlDeposit = $"{hostname}/deposit/success";
+            settings.CancelUrlDeposit = $"{hostname}/deposit/cancel";
+
             var json = JsonConvert.SerializeObject(settings);
 
             if (existing != null)

@@ -44,12 +44,13 @@ namespace RestX.BLL.Services
             var existing = await adminContext.TenantSettings
                 .FirstOrDefaultAsync(s => s.TenantId == tenantId && s.Key.ToLower() == PaymentConstants.SettingKey.Payment);
 
+            PaymentGatewaySettings? oldUrl = null;
             string hostname = string.Empty;
             if (existing != null)
             {
-                var old = JsonConvert.DeserializeObject<PaymentGatewaySettings>(existing.Value);
-                hostname = old?.ReturnUrl?.Split('/').Length > 2
-                    ? old.ReturnUrl.Split('/')[2]
+                oldUrl = JsonConvert.DeserializeObject<PaymentGatewaySettings>(existing.Value);
+                hostname = oldUrl?.ReturnUrl?.Split('/').Length > 2
+                    ? oldUrl.ReturnUrl.Split('/')[2]
                     : string.Empty;
             }
             if (string.IsNullOrEmpty(hostname))
@@ -58,8 +59,8 @@ namespace RestX.BLL.Services
                 hostname = tenant?.Hostname ?? string.Empty;
             }
 
-            settings.ReturnUrl = $"{hostname}/payment/success";
-            settings.CancelUrl = $"{hostname}/payment/cancel";
+            settings.ReturnUrl = !string.IsNullOrEmpty(settings.ReturnUrl) ? settings.ReturnUrl : (oldUrl?.ReturnUrl ?? $"{hostname}/payment/success");
+            settings.CancelUrl = !string.IsNullOrEmpty(settings.CancelUrl) ? settings.CancelUrl : (oldUrl?.CancelUrl ?? $"{hostname}/payment/cancel");
 
             var json = JsonConvert.SerializeObject(settings);
 

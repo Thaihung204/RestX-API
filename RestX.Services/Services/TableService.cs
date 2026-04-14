@@ -243,7 +243,7 @@ namespace RestX.BLL.Services
                 filter: ts => ts.IsActive
                            && ts.StartedAt <= targetTime
                            && (ts.EndedAt == null || ts.EndedAt > targetTime),
-                orderBy: q => q.OrderByDescending(ts => ts.StartedAt),
+                orderBy: q => q.OrderByDescending(ts => ts.Table.Code),
                 includeProperties: "Table,Order"
             )).ToList();
 

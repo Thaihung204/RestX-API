@@ -722,9 +722,14 @@ namespace RestX.BLL.Services
 
         public async Task<DataTranferObjects.Orders.Order?> GetOrderByTableId(Guid tableId)
         {
+            var now = DateTime.UtcNow.AddHours(7);
+
             var activeSessions = await Repo.GetAsync<Models.Reservations.TableSession>(
-                filter: ts => ts.TableId == tableId && ts.IsActive,
-                orderBy: query => query.OrderByDescending(ts => ts.Id) 
+                filter: ts => ts.TableId == tableId
+                           && ts.IsActive
+                           && ts.StartedAt <= now
+                           && (ts.EndedAt == null || ts.EndedAt > now),
+                orderBy: query => query.OrderByDescending(ts => ts.StartedAt)
             );
 
             var sessionWithOrder = activeSessions.FirstOrDefault(ts => ts.OrderId.HasValue);

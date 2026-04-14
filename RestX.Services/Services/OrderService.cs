@@ -724,13 +724,18 @@ namespace RestX.BLL.Services
         {
             var now = DateTime.UtcNow.AddHours(7);
 
-            var activeSessions = await Repo.GetAsync<Models.Reservations.TableSession>(
-                filter: ts => ts.TableId == tableId
-                           && ts.IsActive
-                           && ts.StartedAt <= now
-                           && (ts.EndedAt == null || ts.EndedAt > now),
-                orderBy: query => query.OrderByDescending(ts => ts.StartedAt)
-            );
+            var activeSessions = (await Repo.GetAsync<Models.Reservations.TableSession>(
+                    filter: ts => ts.TableId == tableId
+                               && ts.IsActive
+                               && ts.StartedAt <= now
+                               && (ts.EndedAt == null || ts.EndedAt > now),
+                    orderBy: query => query.OrderByDescending(ts => ts.StartedAt)
+                )).ToList();
+
+            if (!activeSessions.Any())
+            {
+                return null;
+            }
 
             var sessionWithOrder = activeSessions.FirstOrDefault(ts => ts.OrderId.HasValue);
 

@@ -788,8 +788,8 @@ namespace RestX.BLL.Services
                 {
                     new() { Name = "Tien coc dat ban", Quantity = 1, Price = (long)reservation.DepositAmount }
                 },
-                ReturnUrl = settings.ReturnDepositUrl,
-                CancelUrl = settings.CancelDepositUrl
+                ReturnUrl = $"https://{CurrentTenant.Hostname}/your-reservation/{reservationId}",
+                CancelUrl = $"https://{CurrentTenant.Hostname}/deposit/cancel"
             };
 
             var link = await client.PaymentRequests.CreateAsync(linkRequest);

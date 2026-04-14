@@ -44,26 +44,6 @@ namespace RestX.BLL.Services
             var existing = await adminContext.TenantSettings
                 .FirstOrDefaultAsync(s => s.TenantId == tenantId && s.Key.ToLower() == PaymentConstants.SettingKey.Payment);
 
-            PaymentGatewaySettings? oldUrl = null;
-            string hostname = string.Empty;
-            if (existing != null)
-            {
-                oldUrl = JsonConvert.DeserializeObject<PaymentGatewaySettings>(existing.Value);
-                hostname = oldUrl?.ReturnUrl?.Split('/').Length > 2
-                    ? oldUrl.ReturnUrl.Split('/')[2]
-                    : string.Empty;
-            }
-            if (string.IsNullOrEmpty(hostname))
-            {
-                var tenant = await adminContext.Tenants.FindAsync(tenantId);
-                hostname = tenant?.Hostname ?? string.Empty;
-            }
-
-            settings.ReturnUrl = !string.IsNullOrEmpty(settings.ReturnUrl) ? settings.ReturnUrl : (!string.IsNullOrEmpty(oldUrl?.ReturnUrl) ? oldUrl!.ReturnUrl : $"{hostname}/payment/success");
-            settings.CancelUrl = !string.IsNullOrEmpty(settings.CancelUrl) ? settings.CancelUrl : (!string.IsNullOrEmpty(oldUrl?.CancelUrl) ? oldUrl!.CancelUrl : $"{hostname}/payment/cancel");
-            settings.ReturnDepositUrl = !string.IsNullOrEmpty(settings.ReturnDepositUrl) ? settings.ReturnDepositUrl : (!string.IsNullOrEmpty(oldUrl?.ReturnDepositUrl) ? oldUrl!.ReturnDepositUrl : $"{hostname}/deposit/success");
-            settings.CancelDepositUrl = !string.IsNullOrEmpty(settings.CancelDepositUrl) ? settings.CancelDepositUrl : (!string.IsNullOrEmpty(oldUrl?.CancelDepositUrl) ? oldUrl!.CancelDepositUrl : $"{hostname}/deposit/cancel");
-
             var json = JsonConvert.SerializeObject(settings);
 
             if (existing != null)

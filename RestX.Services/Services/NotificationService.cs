@@ -2,6 +2,7 @@
 using RestX.BLL.DataTranferObjects;
 using RestX.BLL.Exceptionhandling;
 using RestX.BLL.Interfaces;
+using RestX.Models.Enum;
 using RestX.Models.Notifications;
 using RestX.Models.Tenants;
 
@@ -10,16 +11,6 @@ namespace RestX.BLL.Services
     public class NotificationService : BaseService, INotificationService
     {
         private readonly IMapper mapper;
-
-        private static readonly HashSet<string> AllowedTypes = new(StringComparer.OrdinalIgnoreCase)
-        {
-            "INFO", "ORDER", "RESERVATION", "PAYMENT", "PROMOTION", "SYSTEM"
-        };
-
-        private static readonly HashSet<string> AllowedPriorities = new(StringComparer.OrdinalIgnoreCase)
-        {
-            "LOW", "NORMAL", "HIGH", "URGENT"
-        };
 
         public NotificationService(
             IMapper mapper,
@@ -40,12 +31,12 @@ namespace RestX.BLL.Services
             return mapper.Map<List<RestaurantNotification>>(entities.ToList());
         }
 
-        public async Task<List<RestaurantNotification>> GetMyNotifications(string? recipientId)
+        public async Task<List<RestaurantNotification>> GetNotificationByRecipentId(string? recipentId)
         {
             DateTime now = DateTime.UtcNow.AddHours(7);
             IEnumerable<Notification> entities;
 
-            if (string.IsNullOrWhiteSpace(recipientId))
+            if (string.IsNullOrWhiteSpace(recipentId))
             {
                 entities = await Repo.GetAsync<Notification>(
                     filter: x =>
@@ -57,7 +48,7 @@ namespace RestX.BLL.Services
             }
             else
             {
-                string recipient = recipientId.Trim();
+                string recipient = recipentId.Trim();
                 entities = await Repo.GetAsync<Notification>(
                     filter: x =>
                         x.IsPublished
@@ -176,12 +167,16 @@ namespace RestX.BLL.Services
                 throw new AppException("Message is required");
             }
 
-            if (!AllowedTypes.Contains(model.NotificationType))
+            bool isValidType = Enum.TryParse<NotificationType>(model.NotificationType, true, out _)
+                               && !int.TryParse(model.NotificationType, out _);
+            if (!isValidType)
             {
                 throw new AppException("Invalid NotificationType");
             }
 
-            if (!AllowedPriorities.Contains(model.Priority))
+            bool isValidPriority = Enum.TryParse<NotificationPriority>(model.Priority, true, out _)
+                                   && !int.TryParse(model.Priority, out _);
+            if (!isValidPriority)
             {
                 throw new AppException("Invalid Priority");
             }

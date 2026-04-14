@@ -36,7 +36,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpGet]
-        [Authorize(Roles = "System Admin,Admin,Staff")]
+        [Authorize(Roles = "System Admin,Admin")]
         public async Task<ActionResult<List<RestaurantNotification>>> GetAllNotifications()
         {
             try
@@ -54,16 +54,20 @@ namespace RestX.WebApp.Controllers
             }
         }
 
-        [HttpGet("my")]
+        [HttpGet("recipient")]
         [Authorize(Roles = "System Admin,Admin,Staff,Customer")]
-        public async Task<ActionResult<List<RestaurantNotification>>> GetMyNotifications()
+        public async Task<ActionResult<List<RestaurantNotification>>> GetNotificationByRecipentId(
+            [FromQuery] string? recipentId = null)
         {
             try
             {
-                ApplicationUser currentUser = await GetCurrentUserAsync();
-                string? recipientId = currentUser?.Id.ToString();
+                if (string.IsNullOrWhiteSpace(recipentId))
+                {
+                    ApplicationUser currentUser = await GetCurrentUserAsync();
+                    recipentId = currentUser?.Id.ToString();
+                }
 
-                return Ok(await notificationService.GetMyNotifications(recipientId));
+                return Ok(await notificationService.GetNotificationByRecipentId(recipentId));
             }
             catch (AppException ex)
             {
@@ -77,7 +81,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpGet("{id:guid}")]
-        [Authorize(Roles = "System Admin,Admin,Staff,Customer")]
+        [Authorize(Roles = "System Admin,Admin,Customer")]
         public async Task<ActionResult<RestaurantNotification>> GetNotificationById([Required] Guid id)
         {
             try
@@ -102,7 +106,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpPost]
-        [Authorize(Roles = "System Admin,Admin,Staff")]
+        [Authorize(Roles = "System Admin,Admin")]
         public async Task<ActionResult<RestaurantNotification>> CreateNotification([FromBody] RestaurantNotification item)
         {
             try
@@ -131,7 +135,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpPut("{id:guid}")]
-        [Authorize(Roles = "System Admin,Admin,Staff")]
+        [Authorize(Roles = "System Admin,Admin")]
         public async Task<ActionResult<Guid>> UpdateNotification([Required] Guid id, [FromBody] RestaurantNotification item)
         {
             try
@@ -166,7 +170,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpDelete("{id:guid}")]
-        [Authorize(Roles = "System Admin,Admin,Staff")]
+        [Authorize(Roles = "System Admin,Admin")]
         public async Task<IActionResult> DeleteNotification([Required] Guid id)
         {
             try
@@ -196,7 +200,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpPatch("{id:guid}/publish/{isPublished}")]
-        [Authorize(Roles = "System Admin,Admin,Staff")]
+        [Authorize(Roles = "System Admin,Admin")]
         public async Task<ActionResult<bool>> SetPublishStatus([Required] Guid id, [Required] bool isPublished)
         {
             try

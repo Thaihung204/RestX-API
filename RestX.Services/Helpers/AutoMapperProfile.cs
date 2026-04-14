@@ -1,4 +1,5 @@
 ﻿using AutoMapper;
+using RestX.BLL.DataTranferObjects;
 using RestX.BLL.DataTranferObjects.Authentication;
 using RestX.BLL.DataTranferObjects.Category;
 using RestX.BLL.DataTranferObjects.Combo;
@@ -18,6 +19,7 @@ using RestX.Models.HR;
 using RestX.Models.Identity;
 using RestX.Models.Inventory;
 using RestX.Models.Menu;
+using RestX.Models.Notifications;
 using RestX.Models.Reservations;
 using RestX.Models.Tables;
 using RestX.Models.Tenants;
@@ -181,6 +183,7 @@ namespace RestX.BLL.Helpers
             CreateMap<Models.Reservations.TableSession, TableSessionInfo>()
                 .ForMember(dest => dest.OrderReference, opt => opt.MapFrom(src => src.Order != null ? src.Order.Reference : null))
                 .ForMember(dest => dest.OrderTotalAmount, opt => opt.MapFrom(src => src.Order != null ? src.Order.TotalAmount : (decimal?)null));
+            CreateMap<Notification, RestaurantNotification>().ReverseMap();
 
         }
     }

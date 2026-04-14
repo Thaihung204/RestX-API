@@ -8,6 +8,10 @@ namespace RestX.WebApp.Helpers
         public const string OrderUpdated = "orders.updated";
         public const string OrderDeleted = "orders.deleted";
 
+        public const string NotificationCreated = "notifications.created";
+        public const string NotificationUpdated = "notifications.updated";
+        public const string NotificationDeleted = "notifications.deleted";
+
         public const string TableStatusChanged = "tables.status_changed";
         public const string TableLayoutUpdated = "tables.layout_updated";
 

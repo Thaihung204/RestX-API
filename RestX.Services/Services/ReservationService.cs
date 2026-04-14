@@ -140,6 +140,7 @@ namespace RestX.BLL.Services
             if (requiresDeposit)
             {
                 var paymentLink = await CreateDepositPaymentLink(reservation.Id);
+                detail.CheckoutUrl = paymentLink;
                 await SendConfirmationEmail(request.Email, request.Name, detail, tables, paymentLink);
                 var paymentDeadlineUtc = paymentDeadline!.Value.Subtract(VietnamOffset);
                 BackgroundJob.Schedule<IReservationService>(
@@ -788,8 +789,8 @@ namespace RestX.BLL.Services
                 {
                     new() { Name = "Tien coc dat ban", Quantity = 1, Price = (long)reservation.DepositAmount }
                 },
-                ReturnUrl = settings.ReturnUrl,
-                CancelUrl = settings.CancelUrl
+                ReturnUrl = $"https://{CurrentTenant.Hostname}/your-reservation/{reservationId}",
+                CancelUrl = $"https://{CurrentTenant.Hostname}/deposit/cancel"
             };
 
             var link = await client.PaymentRequests.CreateAsync(linkRequest);

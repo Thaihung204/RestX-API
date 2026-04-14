@@ -160,8 +160,8 @@ namespace RestX.BLL.Services
                 Amount = amount,
                 Description = description,
                 Items = items,
-                ReturnUrl = gatewaySettings.ReturnUrl,
-                CancelUrl = gatewaySettings.CancelUrl
+                ReturnUrl = $"https://{CurrentTenant.Hostname}/staff/orders?payos=success",
+                CancelUrl = $"https://{CurrentTenant.Hostname}/staff/orders?payos=cancel"
             };
 
             var link = await gatewayClient.PaymentRequests.CreateAsync(linkRequest);

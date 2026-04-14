@@ -116,6 +116,7 @@ namespace RestX.BLL.DataTranferObjects.Reservation
         public DateTime? CheckedInAt { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
+        public string? CheckoutUrl { get; set; }
     }
 
     public class CheckAvailabilityResponse

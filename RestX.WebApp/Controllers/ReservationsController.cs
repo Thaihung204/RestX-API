@@ -54,7 +54,7 @@ namespace RestX.WebApp.Controllers
                     return BadRequest(new { success = false, message = "Validation failed", errors = ModelState });
 
                 var result = await reservationService.CreateReservation(request);
-                return Ok(new { success = true, message = "Reservation created successfully", data = new { result.Id } });
+                return Ok(new { success = true, message = "Reservation created successfully", data = result });
             }
             catch (AppException ex)
             {

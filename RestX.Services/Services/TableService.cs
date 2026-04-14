@@ -210,6 +210,39 @@ namespace RestX.BLL.Services
             return session;
         }
 
+        public async Task CloseTableSession(Guid tableId)
+        {
+            DateTime now = DateTime.UtcNow.AddHours(7);
+
+            List<TableSession> activeSessions = (await Repo.GetAsync<TableSession>(
+                filter: ts => ts.TableId == tableId && ts.IsActive
+            )).ToList();
+
+            foreach (TableSession session in activeSessions)
+            {
+                session.IsActive = false;
+                session.EndedAt = now;
+                Repo.Update(session);
+            }
+
+            await Repo.SaveAsync();
+        }
+
+        public async Task<IEnumerable<TableSessionInfo>> GetAllTableSession(DateTime? at = null)
+        {
+            DateTime targetTime = at ?? DateTime.UtcNow.AddHours(7);
+
+            List<TableSession> sessions = (await Repo.GetAsync<TableSession>(
+                filter: ts => ts.IsActive
+                           && ts.StartedAt <= targetTime
+                           && (ts.EndedAt == null || ts.EndedAt > targetTime),
+                orderBy: q => q.OrderBy(ts => ts.Table.Code),
+                includeProperties: "Table,Order"
+            )).ToList();
+
+            return mapper.Map<List<TableSessionInfo>>(sessions);
+        }
+
         #region QR Code Generation
         private string GenerateTableQRCode(Guid tableId, string tenantHostname)
         {

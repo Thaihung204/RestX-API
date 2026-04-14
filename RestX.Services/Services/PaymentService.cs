@@ -6,6 +6,7 @@ using RestX.BLL.DataTranferObjects.Payments;
 using RestX.BLL.Helpers;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Reservations;
+using RestX.BLL.Interfaces.Tables;
 using RestX.Models.Customers;
 using RestX.Models.Enum;
 using RestX.Models.HR;
@@ -20,6 +21,7 @@ namespace RestX.BLL.Services
     {
         private readonly IPaymentSettingService paymentSettingService;
         private readonly IReservationService reservationService;
+        private readonly ITableService tableService;
         private readonly IMapper mapper;
 
         public PaymentService(
@@ -27,12 +29,14 @@ namespace RestX.BLL.Services
             IRedisService redisService,
             IPaymentSettingService paymentSettingService,
             IReservationService reservationService,
+            ITableService tableService,
             IMapper mapper,
             IEnumerable<ActiveTenant> tenant = null
         ) : base(repo, redisService, tenant)
         {
             this.paymentSettingService = paymentSettingService;
             this.reservationService = reservationService;
+            this.tableService = tableService;
             this.mapper = mapper;
         }
 
@@ -114,6 +118,14 @@ namespace RestX.BLL.Services
                 await reservationService.CompleteReservation(order.ReservationId.Value, createdBy);
             }
 
+            List<TableSession> activeSessions = (await Repo.GetAsync<TableSession>(
+                filter: ts => ts.OrderId == orderId && ts.IsActive
+            )).ToList();
+
+            foreach (Guid tableId in activeSessions.Select(ts => ts.TableId).Distinct())
+            {
+                await tableService.CloseTableSession(tableId);
+            }
             await Repo.SaveAsync();
 
             return new CashPaymentResponse
@@ -258,6 +270,15 @@ namespace RestX.BLL.Services
                     if (order.ReservationId.HasValue)
                     {
                         await reservationService.CompleteReservation(order.ReservationId.Value);
+                    }
+
+                    List<TableSession> activeSessions = (await Repo.GetAsync<TableSession>(
+                        filter: ts => ts.OrderId == order.Id && ts.IsActive
+                    )).ToList();
+
+                    foreach (Guid tableId in activeSessions.Select(ts => ts.TableId).Distinct())
+                    {
+                        await tableService.CloseTableSession(tableId);
                     }
                 }
             }

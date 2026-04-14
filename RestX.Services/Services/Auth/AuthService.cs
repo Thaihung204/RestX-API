@@ -200,11 +200,7 @@ namespace RestX.BLL.Services.Auth
                 }
                 var existingCustomer = await Repo.GetFirstAsync<Customer>(c => c.ApplicationUserId == existingUser.Id);
                 if (existingCustomer != null)
-                {
-                    if (!existingCustomer.IsActive)
-                        return AuthResponse.FailureResponse("Account is inactive. Please contact your administrator.");
                     return AuthResponse.FailureResponse("Phone number already registered as a customer");
-                }
                 await EnsureRoleAndAssignAsync(existingUser, CustomerRole);
                 var newCustomer = await customerService.CreateCustomerRecord(existingUser.Id);
                 return await GenerateAuthResponseAsync(existingUser, "Customer account linked successfully", newCustomer.Id, customerModeOnly: true);

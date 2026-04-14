@@ -475,7 +475,7 @@ namespace RestX.BLL.Services
         {
             return r =>
                 (!filter.StatusId.HasValue || r.ReservationStatusId == filter.StatusId.Value) &&
-                (!filter.Date.HasValue || r.Time.Date == filter.Date.Value.Date) &&
+                (!filter.Date.HasValue || (r.Time >= filter.Date.Value.Date && r.Time < filter.Date.Value.Date.AddDays(1))) &&
                 (!filter.TableId.HasValue || r.TableSessions.Any(ts => ts.TableId == filter.TableId.Value)) &&
                 (string.IsNullOrEmpty(search) ||
                     (r.ConfirmationCode != null && r.ConfirmationCode.ToLower().Contains(search)) ||

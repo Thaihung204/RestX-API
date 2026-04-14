@@ -221,22 +221,21 @@ namespace RestX.WebApp.Controllers
             }
         }
 
-        [HttpPut("orders/{orderId:guid}/sessions/close")]
+        [HttpPut("{tableId:guid}/sessions/close")]
         [Authorize(Roles = "System Admin,Admin,Staff")]
-        public async Task<ActionResult<object>> CloseTableSession([Required] Guid orderId)
+        public async Task<ActionResult<object>> CloseTableSession([Required] Guid tableId)
         {
             try
             {
-                int closedCount = await tableService.CloseTableSession(orderId);
+                await tableService.CloseTableSession(tableId);
 
                 await hub.BroadcastToTenant(CurrentTenant.Id, SignalrServer.TableSessionClosed, new
                 {
-                    orderId,
-                    closedSessions = closedCount,
+                    tableId,
                     closedAt = DateTime.UtcNow.AddHours(7)
                 });
 
-                return Ok(new { closedSessions = closedCount });
+                return Ok();
             }
             catch (AppException ex)
             {

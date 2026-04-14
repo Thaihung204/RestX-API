@@ -118,8 +118,14 @@ namespace RestX.BLL.Services
                 await reservationService.CompleteReservation(order.ReservationId.Value, createdBy);
             }
 
-            await tableService.CloseTableSession(orderId);
+            List<TableSession> activeSessions = (await Repo.GetAsync<TableSession>(
+                filter: ts => ts.OrderId == orderId && ts.IsActive
+            )).ToList();
 
+            foreach (Guid tableId in activeSessions.Select(ts => ts.TableId).Distinct())
+            {
+                await tableService.CloseTableSession(tableId);
+            }
             await Repo.SaveAsync();
 
             return new CashPaymentResponse
@@ -266,7 +272,14 @@ namespace RestX.BLL.Services
                         await reservationService.CompleteReservation(order.ReservationId.Value);
                     }
 
-                    await tableService.CloseTableSession(order.Id);
+                    List<TableSession> activeSessions = (await Repo.GetAsync<TableSession>(
+                        filter: ts => ts.OrderId == order.Id && ts.IsActive
+                    )).ToList();
+
+                    foreach (Guid tableId in activeSessions.Select(ts => ts.TableId).Distinct())
+                    {
+                        await tableService.CloseTableSession(tableId);
+                    }
                 }
             }
 

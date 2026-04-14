@@ -13,7 +13,7 @@ namespace RestX.BLL.Interfaces.Tables
         Task<TableItem> ChangeTableStatus(Guid id, TableStatus status);
         Task<TableSession> CreateTableSession(Guid tableId, string userId, Guid? customerId = null, Guid? reservationId = null);
         Task<TableSession?> GetActiveTableSession(Guid tableId);
-        Task<int> CloseTableSession(Guid orderId);
+        Task CloseTableSession(Guid tableId);
         Task<IEnumerable<TableSessionInfo>> GetAllTableSession(DateTime? at = null);
     }
 }

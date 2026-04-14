@@ -210,20 +210,15 @@ namespace RestX.BLL.Services
             return session;
         }
 
-        public async Task<int> CloseTableSession(Guid orderId)
+        public async Task CloseTableSession(Guid tableId)
         {
-            var now = DateTime.UtcNow.AddHours(7);
+            DateTime now = DateTime.UtcNow.AddHours(7);
 
-            var activeSessions = (await Repo.GetAsync<TableSession>(
-                filter: ts => ts.OrderId == orderId && ts.IsActive
+            List<TableSession> activeSessions = (await Repo.GetAsync<TableSession>(
+                filter: ts => ts.TableId == tableId && ts.IsActive
             )).ToList();
 
-            if (!activeSessions.Any())
-            {
-                return 0;
-            }
-
-            foreach (var session in activeSessions)
+            foreach (TableSession session in activeSessions)
             {
                 session.IsActive = false;
                 session.EndedAt = now;
@@ -231,8 +226,6 @@ namespace RestX.BLL.Services
             }
 
             await Repo.SaveAsync();
-
-            return activeSessions.Count;
         }
 
         public async Task<IEnumerable<TableSessionInfo>> GetAllTableSession(DateTime? at = null)
@@ -243,7 +236,7 @@ namespace RestX.BLL.Services
                 filter: ts => ts.IsActive
                            && ts.StartedAt <= targetTime
                            && (ts.EndedAt == null || ts.EndedAt > targetTime),
-                orderBy: q => q.OrderByDescending(ts => ts.Table.Code),
+                orderBy: q => q.OrderBy(ts => ts.Table.Code),
                 includeProperties: "Table,Order"
             )).ToList();
 

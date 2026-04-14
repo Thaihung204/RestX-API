@@ -159,7 +159,9 @@ namespace RestX.BLL.Services
                 OrderCode = orderCode,
                 Amount = amount,
                 Description = description,
-                Items = items
+                Items = items,
+                ReturnUrl = gatewaySettings.ReturnUrl,
+                CancelUrl = gatewaySettings.CancelUrl
             };
 
             var link = await gatewayClient.PaymentRequests.CreateAsync(linkRequest);

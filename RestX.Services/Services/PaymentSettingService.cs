@@ -61,6 +61,8 @@ namespace RestX.BLL.Services
 
             settings.ReturnUrl = !string.IsNullOrEmpty(settings.ReturnUrl) ? settings.ReturnUrl : (oldUrl?.ReturnUrl ?? $"{hostname}/payment/success");
             settings.CancelUrl = !string.IsNullOrEmpty(settings.CancelUrl) ? settings.CancelUrl : (oldUrl?.CancelUrl ?? $"{hostname}/payment/cancel");
+            settings.ReturnDepositUrl = !string.IsNullOrEmpty(settings.ReturnDepositUrl) ? settings.ReturnDepositUrl : (oldUrl?.ReturnDepositUrl ?? $"{hostname}/payment/deposit/success");
+            settings.CancelDepositUrl = !string.IsNullOrEmpty(settings.CancelDepositUrl) ? settings.CancelDepositUrl : (oldUrl?.CancelDepositUrl ?? $"{hostname}/payment/deposit/cancel");
 
             var json = JsonConvert.SerializeObject(settings);
 

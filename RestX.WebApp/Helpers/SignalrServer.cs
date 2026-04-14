@@ -10,6 +10,8 @@ namespace RestX.WebApp.Helpers
 
         public const string TableStatusChanged = "tables.status_changed";
         public const string TableLayoutUpdated = "tables.layout_updated";
+        public const string TableSessionCreated = "tables.session_created";
+        public const string TableSessionClosed = "tables.session_closed";
 
         public const string DashboardOverviewUpdated = "dashboard.overview_updated";
         public const string DashboardSummaryUpdated = "dashboard.summary_updated";

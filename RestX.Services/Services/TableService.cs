@@ -235,9 +235,14 @@ namespace RestX.BLL.Services
             return activeSessions.Count;
         }
 
-        public async Task<IEnumerable<TableSessionInfo>> GetAllTableSession()
+        public async Task<IEnumerable<TableSessionInfo>> GetAllTableSession(DateTime? at = null)
         {
-            var sessions = (await Repo.GetAsync<TableSession>(
+            DateTime targetTime = at ?? DateTime.UtcNow.AddHours(7);
+
+            List<TableSession> sessions = (await Repo.GetAsync<TableSession>(
+                filter: ts => ts.IsActive
+                           && ts.StartedAt <= targetTime
+                           && (ts.EndedAt == null || ts.EndedAt > targetTime),
                 orderBy: q => q.OrderByDescending(ts => ts.StartedAt),
                 includeProperties: "Table,Order"
             )).ToList();

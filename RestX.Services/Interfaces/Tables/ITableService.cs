@@ -14,7 +14,6 @@ namespace RestX.BLL.Interfaces.Tables
         Task<TableSession> CreateTableSession(Guid tableId, string userId, Guid? customerId = null, Guid? reservationId = null);
         Task<TableSession?> GetActiveTableSession(Guid tableId);
         Task<int> CloseTableSession(Guid orderId);
-        Task<IEnumerable<TableSessionInfo>> GetAllTableSession();
-
+        Task<IEnumerable<TableSessionInfo>> GetAllTableSession(DateTime? at = null);
     }
 }

@@ -162,11 +162,11 @@ namespace RestX.WebApp.Controllers
 
         [HttpGet("sessions")]
         [Authorize(Roles = "System Admin,Admin,Staff")]
-        public async Task<ActionResult<IEnumerable<TableSessionInfo>>> GetAllTableSession()
+        public async Task<ActionResult<IEnumerable<TableSessionInfo>>> GetAllTableSession([FromQuery] DateTime? at = null)
         {
             try
             {
-                return Ok(await tableService.GetAllTableSession());
+                return Ok(await tableService.GetAllTableSession(at));
             }
             catch (AppException ex)
             {
@@ -188,38 +188,25 @@ namespace RestX.WebApp.Controllers
         {
             try
             {
-                var currentUser = await GetCurrentUserAsync();
-                var userId = string.Empty;
+                ApplicationUser? currentUser = await GetCurrentUserAsync();
+                string userId = string.Empty;
                 if (currentUser?.Id != null)
                 {
                     userId = currentUser.MemberId.ToString();
                 }
 
-                var result = await tableService.CreateTableSession(tableId, userId, customerId, reservationId);
-                return Ok(result);
-            }
-            catch (AppException ex)
-            {
-                return this.BadRequest(ex.Message);
-            }
-            catch (Exception ex)
-            {
-                this.ExceptionHandler.RaiseException(ex);
-                return BadRequest("An internal error occurred");
-            }
-        }
+                TableSession result = await tableService.CreateTableSession(tableId, userId, customerId, reservationId);
 
-        [HttpGet("{tableId:guid}/sessions/active")]
-        [Authorize(Roles = "System Admin,Admin,Staff,Customer")]
-        public async Task<ActionResult<TableSession>> GetActiveTableSession([Required] Guid tableId)
-        {
-            try
-            {
-                var result = await tableService.GetActiveTableSession(tableId);
-                if (result == null)
+                await hub.BroadcastToTenant(CurrentTenant.Id, SignalrServer.TableSessionCreated, new
                 {
-                    return NotFound(new { success = false, message = "No active table session found" });
-                }
+                    sessionId = result.Id,
+                    tableId = result.TableId,
+                    orderId = result.OrderId,
+                    reservationId = result.ReservationId,
+                    startedAt = result.StartedAt,
+                    endedAt = result.EndedAt,
+                    isActive = result.IsActive
+                });
 
                 return Ok(result);
             }
@@ -240,7 +227,15 @@ namespace RestX.WebApp.Controllers
         {
             try
             {
-                var closedCount = await tableService.CloseTableSession(orderId);
+                int closedCount = await tableService.CloseTableSession(orderId);
+
+                await hub.BroadcastToTenant(CurrentTenant.Id, SignalrServer.TableSessionClosed, new
+                {
+                    orderId,
+                    closedSessions = closedCount,
+                    closedAt = DateTime.UtcNow.AddHours(7)
+                });
+
                 return Ok(new { closedSessions = closedCount });
             }
             catch (AppException ex)
@@ -253,6 +248,5 @@ namespace RestX.WebApp.Controllers
                 return BadRequest("An internal error occurred");
             }
         }
-
     }
 }

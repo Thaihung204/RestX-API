@@ -6,6 +6,7 @@ using RestX.BLL.DataTranferObjects.Payments;
 using RestX.BLL.Helpers;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Reservations;
+using RestX.BLL.Interfaces.Tables;
 using RestX.Models.Customers;
 using RestX.Models.Enum;
 using RestX.Models.HR;
@@ -20,6 +21,7 @@ namespace RestX.BLL.Services
     {
         private readonly IPaymentSettingService paymentSettingService;
         private readonly IReservationService reservationService;
+        private readonly ITableService tableService;
         private readonly IMapper mapper;
 
         public PaymentService(
@@ -27,12 +29,14 @@ namespace RestX.BLL.Services
             IRedisService redisService,
             IPaymentSettingService paymentSettingService,
             IReservationService reservationService,
+            ITableService tableService,
             IMapper mapper,
             IEnumerable<ActiveTenant> tenant = null
         ) : base(repo, redisService, tenant)
         {
             this.paymentSettingService = paymentSettingService;
             this.reservationService = reservationService;
+            this.tableService = tableService;
             this.mapper = mapper;
         }
 
@@ -113,6 +117,8 @@ namespace RestX.BLL.Services
             {
                 await reservationService.CompleteReservation(order.ReservationId.Value, createdBy);
             }
+
+            await tableService.CloseTableSession(orderId);
 
             await Repo.SaveAsync();
 
@@ -259,6 +265,8 @@ namespace RestX.BLL.Services
                     {
                         await reservationService.CompleteReservation(order.ReservationId.Value);
                     }
+
+                    await tableService.CloseTableSession(order.Id);
                 }
             }
 

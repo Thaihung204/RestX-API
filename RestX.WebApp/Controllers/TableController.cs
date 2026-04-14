@@ -9,6 +9,7 @@ using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Tables;
 using RestX.Models.Enum;
 using RestX.Models.Identity;
+using RestX.Models.Reservations;
 using RestX.Models.Tenants;
 using RestX.WebApp.Controllers.BaseControllers;
 using RestX.WebApp.Helpers;
@@ -147,6 +148,100 @@ namespace RestX.WebApp.Controllers
                     statusName = result.TableStatusId.ToString()
                 });
                 return Ok(result);
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                this.ExceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
+        [HttpGet("sessions")]
+        [Authorize(Roles = "System Admin,Admin,Staff")]
+        public async Task<ActionResult<IEnumerable<TableSessionInfo>>> GetAllTableSession()
+        {
+            try
+            {
+                return Ok(await tableService.GetAllTableSession());
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                this.ExceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
+        [HttpPost("{tableId:guid}/sessions")]
+        [Authorize(Roles = "System Admin,Admin,Staff,Customer")]
+        public async Task<ActionResult<TableSession>> CreateTableSession(
+            [Required] Guid tableId,
+            [FromQuery] Guid? customerId = null,
+            [FromQuery] Guid? reservationId = null)
+        {
+            try
+            {
+                var currentUser = await GetCurrentUserAsync();
+                var userId = string.Empty;
+                if (currentUser?.Id != null)
+                {
+                    userId = currentUser.MemberId.ToString();
+                }
+
+                var result = await tableService.CreateTableSession(tableId, userId, customerId, reservationId);
+                return Ok(result);
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                this.ExceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
+        [HttpGet("{tableId:guid}/sessions/active")]
+        [Authorize(Roles = "System Admin,Admin,Staff,Customer")]
+        public async Task<ActionResult<TableSession>> GetActiveTableSession([Required] Guid tableId)
+        {
+            try
+            {
+                var result = await tableService.GetActiveTableSession(tableId);
+                if (result == null)
+                {
+                    return NotFound(new { success = false, message = "No active table session found" });
+                }
+
+                return Ok(result);
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                this.ExceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
+        [HttpPut("orders/{orderId:guid}/sessions/close")]
+        [Authorize(Roles = "System Admin,Admin,Staff")]
+        public async Task<ActionResult<object>> CloseTableSession([Required] Guid orderId)
+        {
+            try
+            {
+                var closedCount = await tableService.CloseTableSession(orderId);
+                return Ok(new { closedSessions = closedCount });
             }
             catch (AppException ex)
             {

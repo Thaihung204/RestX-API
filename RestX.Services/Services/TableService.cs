@@ -234,6 +234,17 @@ namespace RestX.BLL.Services
 
             return activeSessions.Count;
         }
+
+        public async Task<IEnumerable<TableSessionInfo>> GetAllTableSession()
+        {
+            var sessions = (await Repo.GetAsync<TableSession>(
+                orderBy: q => q.OrderByDescending(ts => ts.StartedAt),
+                includeProperties: "Table,Order"
+            )).ToList();
+
+            return mapper.Map<List<TableSessionInfo>>(sessions);
+        }
+
         #region QR Code Generation
         private string GenerateTableQRCode(Guid tableId, string tenantHostname)
         {

@@ -59,10 +59,10 @@ namespace RestX.BLL.Services
                 hostname = tenant?.Hostname ?? string.Empty;
             }
 
-            settings.ReturnUrl = !string.IsNullOrEmpty(settings.ReturnUrl) ? settings.ReturnUrl : (oldUrl?.ReturnUrl ?? $"{hostname}/payment/success");
-            settings.CancelUrl = !string.IsNullOrEmpty(settings.CancelUrl) ? settings.CancelUrl : (oldUrl?.CancelUrl ?? $"{hostname}/payment/cancel");
-            settings.ReturnDepositUrl = !string.IsNullOrEmpty(settings.ReturnDepositUrl) ? settings.ReturnDepositUrl : (oldUrl?.ReturnDepositUrl ?? $"{hostname}/payment/deposit/success");
-            settings.CancelDepositUrl = !string.IsNullOrEmpty(settings.CancelDepositUrl) ? settings.CancelDepositUrl : (oldUrl?.CancelDepositUrl ?? $"{hostname}/payment/deposit/cancel");
+            settings.ReturnUrl = !string.IsNullOrEmpty(settings.ReturnUrl) ? settings.ReturnUrl : (!string.IsNullOrEmpty(oldUrl?.ReturnUrl) ? oldUrl!.ReturnUrl : $"{hostname}/payment/success");
+            settings.CancelUrl = !string.IsNullOrEmpty(settings.CancelUrl) ? settings.CancelUrl : (!string.IsNullOrEmpty(oldUrl?.CancelUrl) ? oldUrl!.CancelUrl : $"{hostname}/payment/cancel");
+            settings.ReturnDepositUrl = !string.IsNullOrEmpty(settings.ReturnDepositUrl) ? settings.ReturnDepositUrl : (!string.IsNullOrEmpty(oldUrl?.ReturnDepositUrl) ? oldUrl!.ReturnDepositUrl : $"{hostname}/deposit/success");
+            settings.CancelDepositUrl = !string.IsNullOrEmpty(settings.CancelDepositUrl) ? settings.CancelDepositUrl : (!string.IsNullOrEmpty(oldUrl?.CancelDepositUrl) ? oldUrl!.CancelDepositUrl : $"{hostname}/deposit/cancel");
 
             var json = JsonConvert.SerializeObject(settings);
 

@@ -192,12 +192,6 @@ namespace RestX.BLL.Services.Auth
             var existingUser = FindUserByPhoneNumber(normalizedPhone);
             if (existingUser != null)
             {
-                if (existingUser.MemberId.HasValue)
-                {
-                    var existingEmployee = await Repo.GetFirstAsync<Employee>(e => e.Id == existingUser.MemberId.Value);
-                    if (existingEmployee != null && !existingEmployee.IsActive)
-                        return AuthResponse.FailureResponse("Account is inactive. Please contact your administrator.");
-                }
                 var existingCustomer = await Repo.GetFirstAsync<Customer>(c => c.ApplicationUserId == existingUser.Id);
                 if (existingCustomer != null)
                     return AuthResponse.FailureResponse("Phone number already registered as a customer");

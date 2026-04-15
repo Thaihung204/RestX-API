@@ -1,6 +1,10 @@
 ﻿using AutoMapper;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.Extensions.FileSystemGlobbing.Internal;
 using OfficeOpenXml;
+using PayOS.Resources.V1.Payouts.Batch;
 using RestX.BLL.DataTranferObjects.Orders;
 using RestX.BLL.Exceptionhandling;
 using RestX.BLL.Helpers;
@@ -11,6 +15,7 @@ using RestX.BLL.Interfaces.Tables;
 using RestX.Models.Common;
 using RestX.Models.Customers;
 using RestX.Models.Enum;
+using RestX.Models.Enum;
 using RestX.Models.Loyalty;
 using RestX.Models.Menu;
 using RestX.Models.Orders;
@@ -18,9 +23,9 @@ using RestX.Models.Promotions;
 using RestX.Models.Reservations;
 using RestX.Models.Tables;
 using RestX.Models.Tenants;
-using RestX.Models.Enum;
 using System.Data;
 using System.Text;
+using System.Threading.Channels;
 
 namespace RestX.BLL.Services
 {
@@ -399,6 +404,8 @@ namespace RestX.BLL.Services
                 var statuses = await statusValueService.GetStatuses("order-detail");
                 int itemDefaultStatusId = statuses.First(x => x.IsDefault).Id;
 
+                Dictionary<Guid, int> dishQuantitiesToDeduct = new Dictionary<Guid, int>();
+
                 if (order.OrderDetails != null && order.OrderDetails.Any())
                 {
                     foreach (var d in order.OrderDetails)
@@ -417,7 +424,21 @@ namespace RestX.BLL.Services
                             Note = d.Note,
                             ItemStatusId = itemDefaultStatusId
                         });
+
+                        if (dishQuantitiesToDeduct.ContainsKey(d.DishId))
+                        {
+                            dishQuantitiesToDeduct[d.DishId] += d.Quantity;
+                        }
+                        else
+                        {
+                            dishQuantitiesToDeduct[d.DishId] = d.Quantity;
+                        }
                     }
+                }
+
+                if (dishQuantitiesToDeduct.Any())
+                {
+                    await ingredientService.DeductFromRecipes(dishQuantitiesToDeduct);
                 }
 
                 orderEntity.SubTotal += additionalSubTotal;
@@ -447,16 +468,18 @@ namespace RestX.BLL.Services
                 var statuses = await statusValueService.GetStatuses("order-detail");
                 int itemDefaultStatusId = statuses.First(x => x.IsDefault).Id;
 
+                Dictionary<Guid, int> dishQuantitiesToDeduct = new Dictionary<Guid, int>();
+
                 if (order.OrderDetails != null && order.OrderDetails.Any())
                 {
-                    foreach (var d in order.OrderDetails)
+                    foreach (DataTranferObjects.Orders.OrderDetail d in order.OrderDetails)
                     {
                         if (!dishesById.ContainsKey(d.DishId))
-                            throw new Exception($"Dish {d.DishId} not found");
+                            throw new AppException("Dish is not exist");
 
-                        var dish = dishesById[d.DishId];
+                        Dish dish = dishesById[d.DishId];
 
-                        var newDetail = new Models.Orders.OrderDetail
+                        Models.Orders.OrderDetail newDetail = new Models.Orders.OrderDetail
                         {
                             OrderId = orderEntity.Id,
                             DishId = d.DishId,
@@ -468,7 +491,21 @@ namespace RestX.BLL.Services
                         additionalSubTotal += d.Quantity * dish.Price;
 
                         await Repo.CreateAsync(newDetail, userId);
+
+                        if (dishQuantitiesToDeduct.ContainsKey(d.DishId))
+                        {
+                            dishQuantitiesToDeduct[d.DishId] += d.Quantity;
+                        }
+                        else
+                        {
+                            dishQuantitiesToDeduct[d.DishId] = d.Quantity;
+                        }
                     }
+                }
+
+                if (dishQuantitiesToDeduct.Any())
+                {
+                    await ingredientService.DeductFromRecipes(dishQuantitiesToDeduct);
                 }
 
                 orderEntity.SubTotal += additionalSubTotal;
@@ -493,21 +530,20 @@ namespace RestX.BLL.Services
                 return Guid.Empty;
             }
 
-            var dishIds = (order.OrderDetails ?? new List<DataTranferObjects.Orders.OrderDetail>())
+            List<Guid> requestDishIds = (order.OrderDetails ?? new List<DataTranferObjects.Orders.OrderDetail>())
                 .Select(x => x.DishId)
                 .Distinct()
                 .ToList();
 
-            var dishes = (await Repo.GetAsync<Dish>(filter: d => dishIds.Contains(d.Id))).ToList();
-            var dishesById = dishes.ToDictionary(d => d.Id, d => d);
+            List<Dish> requestDishes = (await Repo.GetAsync<Dish>(filter: d => requestDishIds.Contains(d.Id))).ToList();
+            Dictionary<Guid, Dish> requestDishesById = requestDishes.ToDictionary(d => d.Id, d => d);
+
+            IEnumerable<RestX.BLL.DataTranferObjects.Status.StatusValues> statuses = await statusValueService.GetStatuses("order-detail");
+            int itemDefaultStatusId = statuses.First(x => x.IsDefault).Id;
 
             decimal discountAmount = order.DiscountAmount ?? 0m;
             decimal taxAmount = order.TaxAmount ?? 0m;
             decimal serviceCharge = order.ServiceCharge ?? 0m;
-            decimal subTotal = (order.OrderDetails?.Sum(x => x.Quantity * dishesById[x.DishId].Price)) ?? 0m;
-
-            var statuses = await statusValueService.GetStatuses("order-detail");
-            int itemDefaultStatusId = statuses.First(x => x.IsDefault).Id;
 
             orderEntity.Reference = order.Reference ?? orderEntity.Reference;
             orderEntity.CustomerId = order.CustomerId;
@@ -521,16 +557,60 @@ namespace RestX.BLL.Services
 
             if (orderEntity.OrderDetails?.Any() == true)
             {
+                List<Models.Orders.OrderDetail> oldPreparingDetails = orderEntity.OrderDetails
+                    .Where(x => x.ItemStatusId == itemDefaultStatusId)
+                    .ToList();
+
+                if (oldPreparingDetails.Any())
+                {
+                    Dictionary<Guid, int> oldQtyByDishId = oldPreparingDetails
+                        .GroupBy(x => x.DishId)
+                        .ToDictionary(g => g.Key, g => g.Sum(x => x.Quantity));
+
+                    List<Guid> oldDishIds = oldQtyByDishId.Keys.ToList();
+
+                    List<DishRecipe> oldRecipes = (await Repo.GetAsync<DishRecipe>(
+                        filter: r => oldDishIds.Contains(r.DishId),
+                        includeProperties: "Ingredient,Ingredient.InventoryStock"
+                    )).ToList();
+
+                    foreach (DishRecipe recipe in oldRecipes)
+                    {
+                        if (!oldQtyByDishId.TryGetValue(recipe.DishId, out int totalQty)) continue;
+
+                        Models.Inventory.Ingredient? ingredient = recipe.Ingredient;
+                        if (ingredient?.InventoryStock == null) continue;
+
+                        decimal restoreQty = recipe.Quantity * totalQty;
+                        ingredient.InventoryStock.CurrentQuantity += restoreQty;
+                        ingredient.InventoryStock.LastUpdated = DateTime.UtcNow.AddHours(7);
+
+                        ingredient.Status = ingredient.InventoryStock.CurrentQuantity == 0
+                            ? IngredientStatus.OutOfStock
+                            : ingredient.MinStockLevel > 0 && ingredient.InventoryStock.CurrentQuantity <= ingredient.MinStockLevel
+                                ? IngredientStatus.LowStock
+                                : IngredientStatus.InStock;
+                    }
+                }
+
                 foreach (Models.Orders.OrderDetail d in orderEntity.OrderDetails.ToList())
                 {
                     Repo.Delete<Models.Orders.OrderDetail>(d.Id);
                 }
             }
 
+            decimal subTotal = 0m;
+
             if (order.OrderDetails?.Any() == true)
             {
                 foreach (DataTranferObjects.Orders.OrderDetail d in order.OrderDetails)
                 {
+                    if (!requestDishesById.ContainsKey(d.DishId))
+                        throw new Exception($"Dish {d.DishId} not found");
+
+                    Dish dish = requestDishesById[d.DishId];
+                    subTotal += d.Quantity * dish.Price;
+
                     Models.Orders.OrderDetail newDetail = new Models.Orders.OrderDetail
                     {
                         OrderId = orderEntity.Id,
@@ -539,8 +619,20 @@ namespace RestX.BLL.Services
                         Note = d.Note,
                         ItemStatusId = itemDefaultStatusId
                     };
+
                     orderEntity.OrderDetails.Add(newDetail);
+
+                    await Repo.CreateAsync(newDetail, userId);
                 }
+            }
+
+            if (order.OrderDetails?.Any() == true)
+            {
+                Dictionary<Guid, int> newQtyByDishId = order.OrderDetails
+                    .GroupBy(x => x.DishId)
+                    .ToDictionary(g => g.Key, g => g.Sum(x => x.Quantity));
+
+                await ingredientService.DeductFromRecipes(newQtyByDishId);
             }
 
             orderEntity.SubTotal = subTotal;
@@ -564,38 +656,74 @@ namespace RestX.BLL.Services
 
         public async Task<bool> UpdateStatus(Guid orderId, int statusId, string userId)
         {
-            var order = await Repo.GetByIdAsync<Models.Orders.Order>(orderId);
+            Models.Orders.Order? order = await Repo.GetOneAsync<Models.Orders.Order>(
+                filter: o => o.Id == orderId,
+                includeProperties: "OrderDetails"
+            );
 
             if (order == null) throw new AppException("No order");
 
-            int oldStatusId = order.OrderStatusId;
-
-            if (userId != String.Empty) order.HandledBy = Guid.Parse(userId);
+            if (userId != string.Empty) order.HandledBy = Guid.Parse(userId);
 
             order.OrderStatusId = statusId;
 
-            if (oldStatusId == (int)OrderStatus.Open)
+            if (statusId == (int)OrderStatus.Cancelled)
             {
-                string targetOrderDetailCode = statusId == (int)OrderStatus.Completed ? "SERVED" : 
-                    statusId == (int)OrderStatus.Cancelled ? "CANCELLED" : string.Empty;
+                List<RestX.BLL.DataTranferObjects.Status.StatusValues> orderDetailStatuses =
+                    (await statusValueService.GetStatuses("order-detail")).ToList();
 
-                if (!string.IsNullOrEmpty(targetOrderDetailCode))
+                RestX.BLL.DataTranferObjects.Status.StatusValues? preparingStatus = orderDetailStatuses.FirstOrDefault(x =>
+                    string.Equals(x.Code, "PREPARING", StringComparison.OrdinalIgnoreCase));
+                RestX.BLL.DataTranferObjects.Status.StatusValues? cancelledStatus = orderDetailStatuses.FirstOrDefault(x =>
+                    string.Equals(x.Code, "CANCELLED", StringComparison.OrdinalIgnoreCase));
+
+                if (preparingStatus != null && cancelledStatus != null && order.OrderDetails?.Any() == true)
                 {
-                    var orderDetailStatuses = (await statusValueService.GetStatuses("order-detail")).ToList();
+                    List<Models.Orders.OrderDetail> preparingOrderDetails = order.OrderDetails
+                        .Where(od => od.ItemStatusId == preparingStatus.Id)
+                        .ToList();
 
-                    var preparingStatus = orderDetailStatuses.FirstOrDefault(x =>
-                        string.Equals(x.Code, "PREPARING", StringComparison.OrdinalIgnoreCase));
-                    var targetStatus = orderDetailStatuses.FirstOrDefault(x =>
-                        string.Equals(x.Code, targetOrderDetailCode, StringComparison.OrdinalIgnoreCase));
-
-                    if (preparingStatus != null && targetStatus != null)
+                    if (preparingOrderDetails.Any())
                     {
-                        var preparingOrderDetails = await Repo.GetAsync<Models.Orders.OrderDetail>(
-                            od => od.OrderId == orderId && od.ItemStatusId == preparingStatus.Id);
+                        Dictionary<Guid, int> qtyByDishId = preparingOrderDetails
+                            .GroupBy(x => x.DishId)
+                            .ToDictionary(g => g.Key, g => g.Sum(x => x.Quantity));
 
-                        foreach (var orderDetail in preparingOrderDetails)
+                        List<Guid> dishIds = qtyByDishId.Keys.ToList();
+
+                        List<DishRecipe> recipes = (await Repo.GetAsync<DishRecipe>(
+                            filter: r => dishIds.Contains(r.DishId),
+                            includeProperties: "Ingredient,Ingredient.InventoryStock"
+                        )).ToList();
+
+                        foreach (DishRecipe recipe in recipes)
                         {
-                            orderDetail.ItemStatusId = targetStatus.Id;
+                            if (!qtyByDishId.TryGetValue(recipe.DishId, out int totalQty))
+                            {
+                                continue;
+                            }
+
+                            Models.Inventory.Ingredient? ingredient = recipe.Ingredient;
+                            if (ingredient?.InventoryStock == null)
+                            {
+                                continue;
+                            }
+
+                            decimal restoreQty = recipe.Quantity * totalQty;
+                            ingredient.InventoryStock.CurrentQuantity += restoreQty;
+                            ingredient.InventoryStock.LastUpdated = DateTime.UtcNow.AddHours(7);
+
+                            ingredient.Status = ingredient.InventoryStock.CurrentQuantity == 0
+                                ? IngredientStatus.OutOfStock
+                                : ingredient.MinStockLevel > 0 && ingredient.InventoryStock.CurrentQuantity <= ingredient.MinStockLevel
+                                    ? IngredientStatus.LowStock
+                                    : IngredientStatus.InStock;
+                        }
+
+                        foreach (Models.Orders.OrderDetail detail in preparingOrderDetails)
+                        {
+                            detail.ItemStatusId = cancelledStatus.Id;
+                            Repo.Update(detail, userId);
                         }
                     }
                 }
@@ -605,41 +733,64 @@ namespace RestX.BLL.Services
             await Repo.SaveAsync();
 
             return true;
-
-            // Minus ingredient base on DishRecipe -> Trigger call method 
-            //if (statusId == (int)OrderStatus.Cancelled)
-            //    order.CancelledAt = DateTime.UtcNow.AddHours(7);
-            //else if (statusId == (int)OrderStatus.Completed)
-            //    order.CompletedAt = DateTime.UtcNow.AddHours(7);
-
-            //if (oldStatus != OrderStatus.Confirmed && statusId == (int)OrderStatus.Confirmed)
-            //{
-            //    var orderDetails = await Repo.GetAsync<Models.Orders.OrderDetail>(
-            //        filter: od => od.OrderId == orderId,
-            //        includeProperties: "Dish"
-            //    );
-
-            //    foreach (var detail in orderDetails)
-            //    {
-            //        var hasRecipe = await Repo.GetExistsAsync<DishRecipe>(r => r.DishId == detail.DishId);
-            //        if (hasRecipe)
-            //        {
-            //            await ingredientService.DeductFromRecipe(detail.DishId, detail.Quantity);
-            //        }
-            //    }
-            //}
-
-            Repo.Update(order, userId);
-            await Repo.SaveAsync();
-
-            return true;
         }
-
         public async Task<bool> UpdateOrderDetailStatus(Guid orderDetailId, int statusId, string userId)
         {
-            var orderDetail = await Repo.GetByIdAsync<Models.Orders.OrderDetail>(orderDetailId);
+            Models.Orders.OrderDetail? orderDetail = await Repo.GetByIdAsync<Models.Orders.OrderDetail>(orderDetailId);
             if (orderDetail == null)
                 return false;
+
+            int oldStatusId = orderDetail.ItemStatusId;
+
+            List<RestX.BLL.DataTranferObjects.Status.StatusValues> orderDetailStatuses =
+                (await statusValueService.GetStatuses("order-detail")).ToList();
+
+            RestX.BLL.DataTranferObjects.Status.StatusValues? preparingStatus = orderDetailStatuses.FirstOrDefault(x =>
+                string.Equals(x.Code, "PREPARING", StringComparison.OrdinalIgnoreCase));
+            RestX.BLL.DataTranferObjects.Status.StatusValues? cancelledStatus = orderDetailStatuses.FirstOrDefault(x =>
+                string.Equals(x.Code, "CANCELLED", StringComparison.OrdinalIgnoreCase));
+
+            if (preparingStatus != null
+                && oldStatusId != preparingStatus.Id
+                && statusId == preparingStatus.Id)
+            {
+                Dictionary<Guid, int> dishQtyToDeduct = new Dictionary<Guid, int>
+                {
+                    [orderDetail.DishId] = orderDetail.Quantity
+                };
+
+                await ingredientService.DeductFromRecipes(dishQtyToDeduct);
+            }
+
+            else if (preparingStatus != null
+                && cancelledStatus != null
+                && oldStatusId == preparingStatus.Id
+                && statusId == cancelledStatus.Id)
+            {
+                List<DishRecipe> recipes = (await Repo.GetAsync<DishRecipe>(
+                    filter: r => r.DishId == orderDetail.DishId,
+                    includeProperties: "Ingredient,Ingredient.InventoryStock"
+                )).ToList();
+
+                foreach (DishRecipe recipe in recipes)
+                {
+                    Models.Inventory.Ingredient? ingredient = recipe.Ingredient;
+                    if (ingredient?.InventoryStock == null)
+                    {
+                        continue;
+                    }
+
+                    decimal restoreQuantity = recipe.Quantity * orderDetail.Quantity;
+                    ingredient.InventoryStock.CurrentQuantity += restoreQuantity;
+                    ingredient.InventoryStock.LastUpdated = DateTime.UtcNow.AddHours(7);
+
+                    ingredient.Status = ingredient.InventoryStock.CurrentQuantity == 0
+                        ? IngredientStatus.OutOfStock
+                        : ingredient.MinStockLevel > 0 && ingredient.InventoryStock.CurrentQuantity <= ingredient.MinStockLevel
+                            ? IngredientStatus.LowStock
+                            : IngredientStatus.InStock;
+                }
+            }
 
             orderDetail.ItemStatusId = statusId;
 

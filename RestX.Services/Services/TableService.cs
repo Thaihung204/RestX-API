@@ -19,7 +19,7 @@ namespace RestX.BLL.Services
     {
         private readonly IMapper mapper;
         private readonly ICloudinaryService cloudinaryService;
-        private const int ReservationBufferMinutes = 120;
+        private int ReservationBufferMinutes => CurrentTenant?.Configuration?.SessionBufferMinutes ?? 120;
 
         public TableService(
             IMapper mapper,

@@ -14,6 +14,7 @@ using Serilog;
 using System.Text.RegularExpressions;
 using Hangfire;
 using Microsoft.EntityFrameworkCore.Storage;
+using TenantConfiguration = RestX.BLL.DataTranferObjects.Tenants.TenantConfiguration;
 
 namespace RestX.BLL.Services
 {
@@ -227,6 +228,9 @@ namespace RestX.BLL.Services
                 tenant.BusinessOpeningHours = model.BusinessOpeningHours ?? string.Empty;
                 tenant.AboutUs = model.AboutUs ?? string.Empty;
 
+                TenantConfiguration properties = JsonConvert.DeserializeObject<TenantConfiguration>(JsonConvert.SerializeObject(model.Configuration)); // action.CustomProperties.ToObject<CreateEnquiryHistoryProperties>();
+                tenant.PropertiesJson = JsonConvert.SerializeObject(properties);
+
                 adminRepo.Update(tenant);
                 await adminRepo.SaveAsync();
             }
@@ -295,6 +299,8 @@ namespace RestX.BLL.Services
 
             string tenantConnectionString = configuration["TenantConnectionStringTemplate"].Replace("{NAME}", name);
 
+            TenantConfiguration properties = JsonConvert.DeserializeObject<TenantConfiguration>(JsonConvert.SerializeObject(model.Configuration)); // action.CustomProperties.ToObject<CreateEnquiryHistoryProperties>();
+            
             var tenant = new Tenant
             {
                 // Core
@@ -339,7 +345,10 @@ namespace RestX.BLL.Services
                 BusinessEmailAddress = model.BusinessEmailAddress,
                 BusinessCompanyNumber = model.BusinessCompanyNumber ?? string.Empty,
                 BusinessOpeningHours = model.BusinessOpeningHours ?? string.Empty,
-                AboutUs = model.AboutUs ?? string.Empty
+                AboutUs = model.AboutUs ?? string.Empty,
+
+                //Property Json
+                PropertiesJson = JsonConvert.SerializeObject(properties)
             };
 
             await using IDbContextTransaction transaction = await adminContext.Database.BeginTransactionAsync();

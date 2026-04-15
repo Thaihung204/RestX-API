@@ -1,4 +1,5 @@
 ﻿using AutoMapper;
+using Newtonsoft.Json;
 using RestX.BLL.DataTranferObjects;
 using RestX.BLL.DataTranferObjects.Authentication;
 using RestX.BLL.DataTranferObjects.Category;
@@ -74,7 +75,19 @@ namespace RestX.BLL.Helpers
             CreateMap<Category, MenuCategory>()
                 .ForMember(dest => dest.Items, opt => opt.MapFrom(src => src.Dishes));
 
-            this.CreateMap<Tenant, TenantOverview>().ReverseMap();
+            CreateMap<Tenant, TenantOverview>()
+                .ForMember(dest => dest.Configuration,
+                    opt => opt.MapFrom(src =>
+                        string.IsNullOrEmpty(src.PropertiesJson)
+                            ? new DataTranferObjects.Tenants.TenantConfiguration()
+                            : JsonConvert.DeserializeObject<DataTranferObjects.Tenants.TenantConfiguration>(src.PropertiesJson)
+                    ));
+
+            CreateMap<TenantOverview, Tenant>()
+                .ForMember(dest => dest.PropertiesJson,
+                    opt => opt.MapFrom(src =>
+                        JsonConvert.SerializeObject(src.Configuration ?? new DataTranferObjects.Tenants.TenantConfiguration())
+                    ));
             CreateMap<Tenant, TenantItem>().ReverseMap();
             CreateMap<Category, CategoryItem>()
                 .ForMember(

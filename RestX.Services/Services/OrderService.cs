@@ -568,9 +568,43 @@ namespace RestX.BLL.Services
 
             if (order == null) throw new AppException("No order");
 
+            int oldStatusId = order.OrderStatusId;
+
             if (userId != String.Empty) order.HandledBy = Guid.Parse(userId);
 
             order.OrderStatusId = statusId;
+
+            if (oldStatusId == (int)OrderStatus.Open)
+            {
+                string targetOrderDetailCode = statusId == (int)OrderStatus.Completed ? "SERVED" : 
+                    statusId == (int)OrderStatus.Cancelled ? "CANCELLED" : string.Empty;
+
+                if (!string.IsNullOrEmpty(targetOrderDetailCode))
+                {
+                    var orderDetailStatuses = (await statusValueService.GetStatuses("order-detail")).ToList();
+
+                    var preparingStatus = orderDetailStatuses.FirstOrDefault(x =>
+                        string.Equals(x.Code, "PREPARING", StringComparison.OrdinalIgnoreCase));
+                    var targetStatus = orderDetailStatuses.FirstOrDefault(x =>
+                        string.Equals(x.Code, targetOrderDetailCode, StringComparison.OrdinalIgnoreCase));
+
+                    if (preparingStatus != null && targetStatus != null)
+                    {
+                        var preparingOrderDetails = await Repo.GetAsync<Models.Orders.OrderDetail>(
+                            od => od.OrderId == orderId && od.ItemStatusId == preparingStatus.Id);
+
+                        foreach (var orderDetail in preparingOrderDetails)
+                        {
+                            orderDetail.ItemStatusId = targetStatus.Id;
+                        }
+                    }
+                }
+            }
+
+            Repo.Update(order, userId);
+            await Repo.SaveAsync();
+
+            return true;
 
             // Minus ingredient base on DishRecipe -> Trigger call method 
             //if (statusId == (int)OrderStatus.Cancelled)
@@ -626,23 +660,17 @@ namespace RestX.BLL.Services
 
             var startOfDay = DateTime.UtcNow.AddHours(7).Date;
 
-            var orderDetails = await Repo.GetAsync<Models.Orders.OrderDetail>(
+            var orderDetails = (await Repo.GetAsync<Models.Orders.OrderDetail>(
                 filter: od => od.ItemStatusId == initialStatus.Id && od.CreatedDate >= startOfDay,
                 orderBy: query => query.OrderBy(od => od.CreatedDate),
                 includeProperties: "ItemStatus,Dish,Order,Order.TableSessions,Order.TableSessions.Table"
-            );
+            )).ToList();
 
-            var detailsByOrderId = orderDetails
-                .GroupBy(d => d.OrderId)
-                .SelectMany(g => GroupOrderDetailsByDish(g))
-                .OrderBy(d => d.CreatedDate)
-                .ToList();
+            var mappedDetails = mapper.Map<List<DataTranferObjects.Orders.OrderDetail>>(orderDetails);
 
-            var mappedDetails = mapper.Map<List<DataTranferObjects.Orders.OrderDetail>>(detailsByOrderId);
-
-            for (int i = 0; i < detailsByOrderId.Count; i++)
+            for (int i = 0; i < orderDetails.Count; i++)
             {
-                var entity = detailsByOrderId[i];
+                var entity = orderDetails[i];
                 var dto = mappedDetails[i];
 
                 if (entity.Order?.TableSessions != null && entity.Order.TableSessions.Any())

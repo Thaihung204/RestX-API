@@ -235,6 +235,28 @@ namespace RestX.WebApp.Controllers
             }
         }
 
+        // ─── Analytics ─────────────────────────────────────────────────────────
+
+        [HttpPost("analytics")]
+        //[Authorize(Roles = "Admin,System Admin")]
+        public async Task<ActionResult<AIAnalyticsResponse>> AnalyzeDashboard([FromBody] AIAnalyticsRequest request)
+        {
+            try
+            {
+                var response = await _aiMenuService.AnalyzeDashboard(request);
+                return Ok(response);
+            }
+            catch (AppException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
         private void SetSessionCookie(string sessionId)
         {
             Response.Cookies.Append(SessionCookieName, sessionId, new CookieOptions

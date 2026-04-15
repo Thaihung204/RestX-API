@@ -3,6 +3,7 @@ using RestX.BLL.DataTranferObjects.Dashboard;
 using RestX.BLL.Interfaces;
 using RestX.Models.Enum;
 using RestX.Models.Tenants;
+using RestX.Models.Tables;
 using System.Data;
 using TableStatusEnum = RestX.Models.Enum.TableStatus;
 
@@ -276,7 +277,7 @@ namespace RestX.BLL.Services
                    FROM OrderDetails od
                    JOIN Orders o ON od.OrderId = o.Id
                    JOIN Dishes d ON od.DishId = d.Id
-                   WHERE o.CreatedDate >= @from AND o.CreatedDate < @to
+                   WHERE o.CreatedDate >= @from AND o.CreatedDate < @to AND o.OrderStatusId = 1
                    GROUP BY d.Id, d.Name
                    ORDER BY {orderByClause} DESC, d.Name ASC";
 
@@ -374,7 +375,7 @@ namespace RestX.BLL.Services
             var revenueData = await Repo.ExecuteSqlSelectAsync<QueryResult.OrderRevenue>(@"
                 SELECT COUNT(o.Id) AS TotalOrders, ISNULL(SUM(o.TotalAmount), 0) AS TotalRevenue
                 FROM Orders o
-                WHERE o.CreatedDate >= @from AND o.CreatedDate < @to",
+                WHERE o.CreatedDate >= @from AND o.CreatedDate < @to AND o.OrderStatusId = 1",
                 new object[]
                 {
                     new SqlParameter("from", SqlDbType.DateTime2) { Value = fromDate },
@@ -478,6 +479,240 @@ namespace RestX.BLL.Services
                 TotalUsageCount = total?.TotalCount ?? 0,
                 TopPromotions = topPromos
             };
+        }
+
+        public async Task<List<DishTrendItem>> GetDishTrendAsync(DashboardRequest request, int top = 20)
+        {
+            var (fromDate, toDate) = CalculateDateRange(request);
+            var prevFromDate = GetPreviousPeriodStart(fromDate, request.FilterType);
+
+            var safeTop = Math.Clamp(top, 1, 50);
+            var data = await Repo.ExecuteSqlSelectAsync<RawDishTrend>($@"
+                SELECT TOP {safeTop}
+                    d.Id AS DishId,
+                    d.Name,
+                    ISNULL(SUM(CASE WHEN o.CreatedDate >= @from AND o.CreatedDate < @to THEN od.Quantity ELSE 0 END), 0) AS CurrentQty,
+                    ISNULL(SUM(CASE WHEN o.CreatedDate >= @prevFrom AND o.CreatedDate < @from THEN od.Quantity ELSE 0 END), 0) AS PrevQty,
+                    ISNULL(SUM(CASE WHEN o.CreatedDate >= @from AND o.CreatedDate < @to THEN od.Quantity * d.Price ELSE 0 END), 0) AS CurrentRevenue,
+                    ISNULL(SUM(CASE WHEN o.CreatedDate >= @prevFrom AND o.CreatedDate < @from THEN od.Quantity * d.Price ELSE 0 END), 0) AS PrevRevenue
+                FROM OrderDetails od
+                JOIN Orders o ON od.OrderId = o.Id
+                JOIN Dishes d ON od.DishId = d.Id
+                WHERE o.CreatedDate >= @prevFrom AND o.CreatedDate < @to AND o.OrderStatusId = 1
+                GROUP BY d.Id, d.Name
+                ORDER BY CurrentQty DESC, d.Name ASC",
+                new object[]
+                {
+                    new SqlParameter("from", SqlDbType.DateTime2) { Value = fromDate },
+                    new SqlParameter("to", SqlDbType.DateTime2) { Value = toDate },
+                    new SqlParameter("prevFrom", SqlDbType.DateTime2) { Value = prevFromDate }
+                });
+
+            return data.Select(r =>
+            {
+                double growth = r.PrevQty == 0
+                    ? (r.CurrentQty > 0 ? 100 : 0)
+                    : Math.Round((r.CurrentQty - r.PrevQty) / (double)r.PrevQty * 100, 2);
+
+                var trend = r.PrevQty == 0 && r.CurrentQty > 0 ? "new"
+                    : growth >= 15 ? "growing"
+                    : growth <= -15 ? "declining"
+                    : "stable";
+
+                return new DishTrendItem
+                {
+                    DishId = r.DishId,
+                    Name = r.Name,
+                    CurrentQty = r.CurrentQty,
+                    PrevQty = r.PrevQty,
+                    CurrentRevenue = r.CurrentRevenue,
+                    PrevRevenue = r.PrevRevenue,
+                    GrowthPercent = growth,
+                    Trend = trend
+                };
+            }).ToList();
+        }
+
+        public async Task<PeakHoursData> GetPeakHoursAsync(DashboardRequest request)
+        {
+            var (fromDate, toDate) = CalculateDateRange(request);
+            var dayNames = new[] { "CN", "T2", "T3", "T4", "T5", "T6", "T7" };
+
+            var data = await Repo.ExecuteSqlSelectAsync<RawPeakHour>(@"
+                SELECT
+                    DATEPART(HOUR, o.CreatedDate) AS Hour,
+                    DATEPART(WEEKDAY, o.CreatedDate) - 1 AS DayOfWeek,
+                    COUNT(o.Id) AS OrderCount
+                FROM Orders o
+                WHERE o.CreatedDate >= @from AND o.CreatedDate < @to
+                GROUP BY DATEPART(HOUR, o.CreatedDate), DATEPART(WEEKDAY, o.CreatedDate)
+                ORDER BY OrderCount DESC",
+                new object[]
+                {
+                    new SqlParameter("from", SqlDbType.DateTime2) { Value = fromDate },
+                    new SqlParameter("to", SqlDbType.DateTime2) { Value = toDate }
+                });
+
+            var points = data.Select(r => new PeakHourPoint
+            {
+                Hour = r.Hour,
+                DayOfWeek = r.DayOfWeek,
+                DayName = dayNames[Math.Clamp(r.DayOfWeek, 0, 6)],
+                OrderCount = r.OrderCount
+            }).ToList();
+
+            var peak = points.OrderByDescending(p => p.OrderCount).FirstOrDefault();
+            var offPeak = points.OrderBy(p => p.OrderCount).FirstOrDefault();
+
+            return new PeakHoursData
+            {
+                Points = points,
+                PeakHour = peak?.Hour ?? 12,
+                PeakDayOfWeek = peak != null ? dayNames[Math.Clamp(peak.DayOfWeek, 0, 6)] : "T7",
+                OffPeakHour = offPeak?.Hour ?? 15
+            };
+        }
+
+        public async Task<CancellationAnalysis> GetCancellationAnalysisAsync(DashboardRequest request)
+        {
+            var (fromDate, toDate) = CalculateDateRange(request);
+            var dayNames = new[] { "CN", "T2", "T3", "T4", "T5", "T6", "T7" };
+
+            var totals = await Repo.ExecuteSqlSelectAsync<RawCancelTotal>(@"
+                SELECT
+                    COUNT(o.Id) AS TotalOrders,
+                    SUM(CASE WHEN o.OrderStatusId = 2 THEN 1 ELSE 0 END) AS TotalCancelled
+                FROM Orders o
+                WHERE o.CreatedDate >= @from AND o.CreatedDate < @to",
+                new object[]
+                {
+                    new SqlParameter("from", SqlDbType.DateTime2) { Value = fromDate },
+                    new SqlParameter("to", SqlDbType.DateTime2) { Value = toDate }
+                });
+
+            var byHour = await Repo.ExecuteSqlSelectAsync<RawCancelByHour>(@"
+                SELECT DATEPART(HOUR, o.CreatedDate) AS Hour, COUNT(o.Id) AS Count
+                FROM Orders o
+                WHERE o.CreatedDate >= @from AND o.CreatedDate < @to AND o.OrderStatusId = 2
+                GROUP BY DATEPART(HOUR, o.CreatedDate)
+                ORDER BY Count DESC",
+                new object[]
+                {
+                    new SqlParameter("from", SqlDbType.DateTime2) { Value = fromDate },
+                    new SqlParameter("to", SqlDbType.DateTime2) { Value = toDate }
+                });
+
+            var byDow = await Repo.ExecuteSqlSelectAsync<RawCancelByDow>(@"
+                SELECT DATEPART(WEEKDAY, o.CreatedDate) - 1 AS DayIndex, COUNT(o.Id) AS Count
+                FROM Orders o
+                WHERE o.CreatedDate >= @from AND o.CreatedDate < @to AND o.OrderStatusId = 2
+                GROUP BY DATEPART(WEEKDAY, o.CreatedDate)
+                ORDER BY Count DESC",
+                new object[]
+                {
+                    new SqlParameter("from", SqlDbType.DateTime2) { Value = fromDate },
+                    new SqlParameter("to", SqlDbType.DateTime2) { Value = toDate }
+                });
+
+            var t = totals.FirstOrDefault();
+            var total = t?.TotalOrders ?? 0;
+            var cancelled = t?.TotalCancelled ?? 0;
+
+            return new CancellationAnalysis
+            {
+                TotalOrders = total,
+                TotalCancelled = cancelled,
+                CancelRate = total > 0 ? Math.Round(cancelled / (double)total * 100, 2) : 0,
+                ByHour = byHour.Select(r => new CancelByHour { Hour = r.Hour, Count = r.Count }).ToList(),
+                ByDayOfWeek = byDow.Select(r => new CancelByDow
+                {
+                    DayOfWeek = dayNames[Math.Clamp(r.DayIndex, 0, 6)],
+                    Count = r.Count
+                }).ToList()
+            };
+        }
+
+        public async Task<TableIntelligence> GetTableIntelligenceAsync(DashboardRequest request)
+        {
+            var (fromDate, toDate) = CalculateDateRange(request);
+
+            var data = await Repo.ExecuteSqlSelectAsync<RawTablePerf>(@"
+                SELECT
+                    t.Id AS TableId,
+                    t.Code AS TableName,
+                    COUNT(ts.Id) AS SessionCount,
+                    AVG(CAST(DATEDIFF(MINUTE, ts.StartedAt, ISNULL(ts.EndedAt, GETUTCDATE())) AS FLOAT)) AS AvgSessionMinutes,
+                    ISNULL(SUM(o.TotalAmount), 0) AS TotalRevenue
+                FROM Tables t
+                LEFT JOIN TableSessions ts ON ts.TableId = t.Id
+                    AND ts.StartedAt >= @from AND ts.StartedAt < @to
+                LEFT JOIN Orders o ON o.TableId = t.Id
+                    AND o.CreatedDate >= @from AND o.CreatedDate < @to
+                    AND o.OrderStatusId = 1
+                GROUP BY t.Id, t.Code
+                ORDER BY TotalRevenue DESC",
+                new object[]
+                {
+                    new SqlParameter("from", SqlDbType.DateTime2) { Value = fromDate },
+                    new SqlParameter("to", SqlDbType.DateTime2) { Value = toDate }
+                });
+
+            return new TableIntelligence
+            {
+                Tables = data.Select(r => new TablePerformance
+                {
+                    TableId = r.TableId,
+                    TableName = r.TableName,
+                    SessionCount = r.SessionCount,
+                    AvgSessionMinutes = Math.Round(r.AvgSessionMinutes, 1),
+                    TotalRevenue = r.TotalRevenue
+                }).ToList()
+            };
+        }
+
+        // Raw query result types for Phase 2 queries
+        private sealed class RawDishTrend
+        {
+            public Guid DishId { get; set; }
+            public string Name { get; set; } = string.Empty;
+            public int CurrentQty { get; set; }
+            public int PrevQty { get; set; }
+            public decimal CurrentRevenue { get; set; }
+            public decimal PrevRevenue { get; set; }
+        }
+
+        private sealed class RawPeakHour
+        {
+            public int Hour { get; set; }
+            public int DayOfWeek { get; set; }
+            public int OrderCount { get; set; }
+        }
+
+        private sealed class RawCancelTotal
+        {
+            public int TotalOrders { get; set; }
+            public int TotalCancelled { get; set; }
+        }
+
+        private sealed class RawCancelByHour
+        {
+            public int Hour { get; set; }
+            public int Count { get; set; }
+        }
+
+        private sealed class RawCancelByDow
+        {
+            public int DayIndex { get; set; }
+            public int Count { get; set; }
+        }
+
+        private sealed class RawTablePerf
+        {
+            public Guid TableId { get; set; }
+            public string TableName { get; set; } = string.Empty;
+            public int SessionCount { get; set; }
+            public double AvgSessionMinutes { get; set; }
+            public decimal TotalRevenue { get; set; }
         }
 
         private sealed class PromotionTotalRow

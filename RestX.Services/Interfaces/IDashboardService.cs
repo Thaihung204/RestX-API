@@ -12,5 +12,11 @@ namespace RestX.BLL.Interfaces
         Task<TableStatus> GetTableStatusAsync();
         Task<CustomerStats> GetCustomerStatsAsync(DashboardRequest request);
         Task<PromotionStats> GetPromotionStatsAsync(DashboardRequest request);
+
+        // Phase 2: Extended analytics
+        Task<List<DishTrendItem>> GetDishTrendAsync(DashboardRequest request, int top = 20);
+        Task<PeakHoursData> GetPeakHoursAsync(DashboardRequest request);
+        Task<CancellationAnalysis> GetCancellationAnalysisAsync(DashboardRequest request);
+        Task<TableIntelligence> GetTableIntelligenceAsync(DashboardRequest request);
     }
 }

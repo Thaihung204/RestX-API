@@ -273,10 +273,6 @@ namespace RestX.WebApp.Controllers
             try
             {
                 var order = await orderService.GetOrderByTableId(tableId);
-
-                if (order == null)
-                    return NotFound(new { success = false, message = "No active order found for this table" });
-
                 return Ok(order);
             }
             catch (Exception ex)

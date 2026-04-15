@@ -22,6 +22,7 @@ namespace RestX.BLL.Services
         private readonly IPaymentSettingService paymentSettingService;
         private readonly IReservationService reservationService;
         private readonly ITableService tableService;
+        private readonly IOrderService orderService;
         private readonly IMapper mapper;
 
         public PaymentService(
@@ -30,6 +31,7 @@ namespace RestX.BLL.Services
             IPaymentSettingService paymentSettingService,
             IReservationService reservationService,
             ITableService tableService,
+            IOrderService orderService,
             IMapper mapper,
             IEnumerable<ActiveTenant> tenant = null
         ) : base(repo, redisService, tenant)
@@ -37,6 +39,7 @@ namespace RestX.BLL.Services
             this.paymentSettingService = paymentSettingService;
             this.reservationService = reservationService;
             this.tableService = tableService;
+            this.orderService = orderService;
             this.mapper = mapper;
         }
 
@@ -109,7 +112,8 @@ namespace RestX.BLL.Services
             await Repo.CreateAsync(payment, createdBy);
             await AwardLoyaltyPointsAsync(order);
 
-            order.OrderStatusId = (int)OrderStatus.Completed;
+            await orderService.UpdateStatus(orderId, (int)OrderStatus.Completed, createdBy ?? string.Empty);
+
             order.CompletedAt = DateTime.UtcNow.AddHours(7);
             Repo.Update(order, createdBy);
 
@@ -126,6 +130,7 @@ namespace RestX.BLL.Services
             {
                 await tableService.CloseTableSession(tableId);
             }
+
             await Repo.SaveAsync();
 
             return new CashPaymentResponse
@@ -136,7 +141,6 @@ namespace RestX.BLL.Services
                 Cashback = cashback
             };
         }
-
         public async Task<CreatePaymentLinkResponse> CreatePaymentLink(Guid orderId, string? createdBy = null)
         {
             var order = await Repo.GetOneAsync<Order>(
@@ -263,7 +267,8 @@ namespace RestX.BLL.Services
                 {
                     await AwardLoyaltyPointsAsync(order);
 
-                    order.OrderStatusId = (int)OrderStatus.Completed;
+                    await orderService.UpdateStatus(order.Id, (int)OrderStatus.Completed, string.Empty);
+
                     order.CompletedAt = DateTime.UtcNow.AddHours(7);
                     Repo.Update(order);
 

@@ -152,11 +152,22 @@ namespace RestX.BLL.Helpers
                 .ForMember(dest => dest.MembershipLevel, opt => opt.MapFrom(src => src.Customer.MembershipLevel))
                 .ForMember(dest => dest.LoyaltyPoints, opt => opt.MapFrom(src => src.Customer.LoyaltyPoints));
 
+            CreateMap<Customer, CustomerListItem>()
+             .ForMember(dest => dest.Email, opt => opt.MapFrom(src =>
+                 src.ApplicationUser != null ? src.ApplicationUser.Email ?? string.Empty : string.Empty))
+             .ForMember(dest => dest.FullName, opt => opt.MapFrom(src =>
+                 src.ApplicationUser != null ? src.ApplicationUser.FullName ?? string.Empty : string.Empty))
+             .ForMember(dest => dest.PhoneNumber, opt => opt.MapFrom(src =>
+                 src.ApplicationUser != null ? src.ApplicationUser.PhoneNumber : null))
+             .ForMember(dest => dest.AvatarUrl, opt => opt.MapFrom(src =>
+                 src.ApplicationUser != null ? src.ApplicationUser.AvatarUrl : null));
+
             CreateMap<Reservation, ReservationListItem>()
                 .ForMember(dest => dest.Tables, opt => opt.MapFrom(src => src.TableSessions))
                 .ForMember(dest => dest.ReservationDateTime, opt => opt.MapFrom(src => src.Time))
                 .ForMember(dest => dest.ContactName, opt => opt.MapFrom(src => src.Customer.ApplicationUser.FullName ?? string.Empty))
                 .ForMember(dest => dest.ContactPhone, opt => opt.MapFrom(src => src.Customer.ApplicationUser.PhoneNumber))
+                .ForMember(dest => dest.Customer, opt => opt.MapFrom(src => src.Customer))
                 .ForMember(dest => dest.Status, opt => opt.MapFrom(src => src.ReservationStatus))
                 .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(src => src.CreatedDate));
 

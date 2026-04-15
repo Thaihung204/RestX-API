@@ -35,7 +35,7 @@ namespace RestX.BLL.Services
         private static readonly TimeSpan VietnamOffset = TimeSpan.FromHours(7);
         private static DateTime VnNow => DateTime.UtcNow.Add(VietnamOffset);
 
-        private const string ReservationIncludes = "TableSessions.Table.Floor,Customer.ApplicationUser,ReservationStatus";
+        private const string ReservationIncludes = "TableSessions.Table.Floor,Customer,Customer.ApplicationUser,ReservationStatus";
         private const string TablesIncludes = "TableSessions.Table";
         private const string TablesAndStatusIncludes = "TableSessions.Table,ReservationStatus";
 

@@ -1,4 +1,5 @@
 using RestX.BLL.DataTranferObjects.Common;
+using RestX.BLL.DataTranferObjects.Customer;
 using System.ComponentModel.DataAnnotations;
 
 namespace RestX.BLL.DataTranferObjects.Reservation
@@ -95,6 +96,7 @@ namespace RestX.BLL.DataTranferObjects.Reservation
         public int NumberOfGuests { get; set; }
         public string ContactName { get; set; } = string.Empty;
         public string? ContactPhone { get; set; }
+        public CustomerListItem? Customer { get; set; }
         public ReservationStatusInfo Status { get; set; } = new();
         public decimal DepositAmount { get; set; }
         public DateTime? PaymentDeadline { get; set; }

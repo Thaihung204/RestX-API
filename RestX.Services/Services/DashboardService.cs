@@ -372,34 +372,45 @@ namespace RestX.BLL.Services
                     new SqlParameter("to", SqlDbType.DateTime2) { Value = toDate }
                 });
 
+            // Dùng Payments để đồng nhất với GetSummaryAsync
             var revenueData = await Repo.ExecuteSqlSelectAsync<QueryResult.OrderRevenue>(@"
-                SELECT COUNT(o.Id) AS TotalOrders, ISNULL(SUM(o.TotalAmount), 0) AS TotalRevenue
-                FROM Orders o
-                WHERE o.CreatedDate >= @from AND o.CreatedDate < @to AND o.OrderStatusId = 1",
+                SELECT COUNT(DISTINCT o.Id) AS TotalOrders, ISNULL(SUM(p.Amount), 0) AS TotalRevenue
+                FROM Payments p
+                JOIN Orders o ON p.OrderId = o.Id
+                WHERE p.PaymentDate >= @from AND p.PaymentDate < @to
+                AND p.Status = @status AND p.Purpose = @purpose",
                 new object[]
                 {
                     new SqlParameter("from", SqlDbType.DateTime2) { Value = fromDate },
-                    new SqlParameter("to", SqlDbType.DateTime2) { Value = toDate }
+                    new SqlParameter("to", SqlDbType.DateTime2) { Value = toDate },
+                    new SqlParameter("status", SqlDbType.Int) { Value = (int)PaymentStatus.Success },
+                    new SqlParameter("purpose", SqlDbType.Int) { Value = (int)PaymentPurpose.Order }
                 });
 
             // Chỉ lấy customer có thực sự chi tiêu trong kỳ (TotalSpent > 0)
+            // FIX: dùng Payments — cùng nguồn với GetSummaryAsync để tránh conflict số liệu
             var topCustomersData = await Repo.ExecuteSqlSelectAsync<CustomerStats.TopCustomer>(@"
                 SELECT TOP 5
                     c.Id AS CustomerId,
                     au.FullName AS CustomerName,
                     ISNULL(c.LoyaltyPoints, 0) AS LoyaltyPoints,
                     c.MembershipLevel,
-                    ISNULL(SUM(o.TotalAmount), 0) AS TotalSpent
+                    ISNULL(SUM(p.Amount), 0) AS TotalSpent
                 FROM Customers c
                 JOIN AspNetUsers au ON c.ApplicationUserId = au.Id
-                JOIN Orders o ON c.Id = o.CustomerId AND o.CreatedDate >= @from AND o.CreatedDate < @to
+                JOIN Orders o ON c.Id = o.CustomerId
+                JOIN Payments p ON o.Id = p.OrderId
+                    AND p.PaymentDate >= @from AND p.PaymentDate < @to
+                    AND p.Status = @status AND p.Purpose = @purpose
                 GROUP BY c.Id, au.FullName, c.LoyaltyPoints, c.MembershipLevel
-                HAVING SUM(o.TotalAmount) > 0
+                HAVING SUM(p.Amount) > 0
                 ORDER BY TotalSpent DESC",
                 new object[]
                 {
                     new SqlParameter("from", SqlDbType.DateTime2) { Value = fromDate },
-                    new SqlParameter("to", SqlDbType.DateTime2) { Value = toDate }
+                    new SqlParameter("to", SqlDbType.DateTime2) { Value = toDate },
+                    new SqlParameter("status", SqlDbType.Int) { Value = (int)PaymentStatus.Success },
+                    new SqlParameter("purpose", SqlDbType.Int) { Value = (int)PaymentPurpose.Order }
                 });
 
             if (topCustomersData.Count == 0)
@@ -411,14 +422,20 @@ namespace RestX.BLL.Services
                         au.FullName AS CustomerName,
                         ISNULL(c.LoyaltyPoints, 0) AS LoyaltyPoints,
                         c.MembershipLevel,
-                        ISNULL(SUM(o.TotalAmount), 0) AS TotalSpent
+                        ISNULL(SUM(p.Amount), 0) AS TotalSpent
                     FROM Customers c
                     JOIN AspNetUsers au ON c.ApplicationUserId = au.Id
                     JOIN Orders o ON c.Id = o.CustomerId
+                    JOIN Payments p ON o.Id = p.OrderId
+                        AND p.Status = @status AND p.Purpose = @purpose
                     GROUP BY c.Id, au.FullName, c.LoyaltyPoints, c.MembershipLevel
-                    HAVING SUM(o.TotalAmount) > 0
+                    HAVING SUM(p.Amount) > 0
                     ORDER BY TotalSpent DESC",
-                    null);
+                    new object[]
+                    {
+                        new SqlParameter("status", SqlDbType.Int) { Value = (int)PaymentStatus.Success },
+                        new SqlParameter("purpose", SqlDbType.Int) { Value = (int)PaymentPurpose.Order }
+                    });
             }
 
             dto.NewCustomers = currentNewCustomers ?? 0;

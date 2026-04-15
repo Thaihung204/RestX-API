@@ -1,213 +1,204 @@
 namespace RestX.BLL.DataTranferObjects.AI
 {
+    /// <summary>
+    /// Streamlined AI dashboard analysis response.
+    /// Fields kept only if FE actually displays them.
+    /// Remove: FilterType (FE already has), FromDate/ToDate (FE already sent),
+    /// strategy (redundant with actions), promos[] (only need total cost),
+    /// topCustomers[] (only need #1), growthLevers, risks.
+    /// </summary>
     public class AIAnalyticsResponse
     {
-        public string? FilterType { get; set; }
-        public DateTime FromDate { get; set; }
-        public DateTime ToDate { get; set; }
+        /// <summary>Thời điểm AI tạo xong phân tích</summary>
         public DateTime GeneratedAt { get; set; } = DateTime.UtcNow.AddHours(7);
 
-        public OverviewSection Overview { get; set; } = new();
-        public StrategySection Strategy { get; set; } = new();
-        public RevenueSection Revenue { get; set; } = new();
-        public MenuSection Menu { get; set; } = new();
-        public CustomerSection Customers { get; set; } = new();
-        public PromotionSection Promotions { get; set; } = new();
+        // ══════════════════════════════════════════════════════════════════════
+        // FE DISPLAY SECTION — Những gì dashboard thực sự hiển thị
+        // ══════════════════════════════════════════════════════════════════════
+
+        /// <summary>Tóm tắt 2-3 câu: doanh thu tăng/giảm bao nhiêu%, điểm nổi bật, việc khẩn nhất.
+        /// FE hiển thị card riêng — nhưng summary giúp chủ nhà hàng đọc lướt nhanh.</summary>
+        public string Summary { get; set; } = string.Empty;
+
+        /// <summary>Số cảnh báo cần chú ý (tự tính: urgent actions + churn + critical declines)</summary>
+        public int AlertCount { get; set; }
+
+        // ── keyInsights ─────────────────────────────────────────────────────
+        // FE KHÔNG hiển thị trực tiếp — nhưng là thông tin giá trị AI phân tích ra.
+        // Tối đa 3 items: warning / opportunity / info. Mỗi item ngắn gọn.
+        public List<AIInsightItem> KeyInsights { get; set; } = new();
+
+        // ── topGrowthDrivers ────────────────────────────────────────────────
+        // FE có chart + menu table rồi — chỉ cần AI chỉ rõ ĐỘNG LỰC tăng trưởng chính.
+        public List<TopGrowthDriver> TopGrowthDrivers { get; set; } = new();
+
+        // ── topDeclineDrivers ───────────────────────────────────────────────
+        // FE có chart rồi — chỉ cần AI cảnh báo rõ món nào đang giảm và mức độ.
+        public List<TopDeclineDriver> TopDeclineDrivers { get; set; } = new();
+
+        // ── menuDecisions ──────────────────────────────────────────────────
+        // keepAndPush → topDish (FE: menu table đã hiển thị, chỉ cần AI gợi action)
+        // improveOrRemove → list (FE: chart đã hiển thị, chỉ cần AI quyết định cụ thể)
+        // seasonalOpportunities → list (FE: KHÔNG hiển thị, AI gợi ý món mùa)
+        // suggestedAdditions → list (FE: KHÔNG hiển thị, AI gợi món phổ biến chưa có)
+        // comboRecommendations → list (FE: KHÔNG hiển thị, AI gợi combo upsell)
+        public MenuDecisions MenuDecisions { get; set; } = new();
+
+        // ── topCustomer ────────────────────────────────────────────────────
+        // FE KHÔNG hiển thị table VIP — chỉ cần top 1 customer + membership level.
+        public TopCustomerInsight? TopCustomer { get; set; }
+
+        // ── promotionInsight ───────────────────────────────────────────────
+        // FE KHÔNG hiển thị table promo — chỉ cần tổng chi phí + gợi ý cải thiện.
+        public PromotionInsight PromoInsight { get; set; } = new();
+
+        // ── actions ────────────────────────────────────────────────────────
+        // FE hiển thị dashboard rồi — actions là những việc cần làm sau khi đọc xong.
+        // BỎ: shortTerm/mediumTerm trùng với thisWeek/opportunities
+        // GIỮ: urgent + thisWeek + opportunities (gộp ngắn hạn + trung hạn)
         public ActionSection Actions { get; set; } = new();
     }
 
     // ══════════════════════════════════════════════════════════════════════
-    // OVERVIEW
+    // SUB CLASSES
     // ══════════════════════════════════════════════════════════════════════
-    public class OverviewSection
+
+    /// <summary>3 loại: warning / opportunity / info. Mỗi item ngắn, có title + detail.</summary>
+    public class AIInsightItem
     {
-        /// <summary>Tóm tắt 2-3 câu: tình hình chung + điểm nổi bật + việc khẩn nhất</summary>
-        public string Summary { get; set; } = string.Empty;
-
-        /// <summary>Tổng số cảnh báo cần chú ý (tự tính)</summary>
-        public int AlertCount { get; set; }
-    }
-
-    // ══════════════════════════════════════════════════════════════════════
-    // STRATEGY — Chiến lược kinh doanh
-    // ══════════════════════════════════════════════════════════════════════
-    public class StrategySection
-    {
-        /// <summary>Chiến lược ngắn hạn 1-2 tuần</summary>
-        public List<StrategyItem> ShortTerm { get; set; } = new();
-
-        /// <summary>Định hướng trung hạn 1-3 tháng</summary>
-        public List<StrategyItem> MediumTerm { get; set; } = new();
-
-        /// <summary>Đòn bẩy tăng trưởng — cơ hội lớn nếu khai thác đúng</summary>
-        public List<GrowthLever> GrowthLevers { get; set; } = new();
-
-        /// <summary>Rủi ro cần lưu ý</summary>
-        public List<RiskItem> Risks { get; set; } = new();
-    }
-
-    public class StrategyItem
-    {
+        /// <summary>warning | opportunity | info</summary>
+        public string Type { get; set; } = string.Empty;
         public string Title { get; set; } = string.Empty;
-        /// <summary>Giải thích dựa trên data: tại sao, làm gì, ai làm</summary>
-        public string Description { get; set; } = string.Empty;
-        /// <summary>Kết quả kỳ vọng có số liệu</summary>
-        public string ExpectedOutcome { get; set; } = string.Empty;
-        /// <summary>high | medium | low</summary>
-        public string Priority { get; set; } = string.Empty;
+        public string Detail { get; set; } = string.Empty;
     }
 
-    public class GrowthLever
+    /// <summary>Động lực tăng trưởng — chỉ cần món chính + con số</summary>
+    public class TopGrowthDriver
     {
-        public string Title { get; set; } = string.Empty;
-        /// <summary>Cơ hội đến từ data nào, tại sao là đòn bẩy mạnh</summary>
-        public string Description { get; set; } = string.Empty;
-        /// <summary>+X% doanh thu / +Y đơn nếu khai thác đúng</summary>
-        public string PotentialImpact { get; set; } = string.Empty;
-        /// <summary>Bước đầu tiên làm được trong tuần này</summary>
-        public string FirstStep { get; set; } = string.Empty;
+        public string DishName { get; set; } = string.Empty;
+        public decimal Revenue { get; set; }
+        public int Quantity { get; set; }
+        /// <summary>1 câu giải thích tại sao tăng</summary>
+        public string Reason { get; set; } = string.Empty;
     }
 
-    public class RiskItem
+    /// <summary>Yếu tố suy giảm — chỉ cần món đang giảm + mức độ</summary>
+    public class TopDeclineDriver
     {
-        /// <summary>Rủi ro cụ thể từ data hiện tại</summary>
-        public string Risk { get; set; } = string.Empty;
-        /// <summary>high | medium | low</summary>
-        public string Severity { get; set; } = string.Empty;
-        /// <summary>Cách giảm thiểu: ai làm, làm gì, trong bao lâu</summary>
-        public string Mitigation { get; set; } = string.Empty;
-    }
-
-    // ══════════════════════════════════════════════════════════════════════
-    // REVENUE — Tại sao doanh thu thay đổi?
-    // ══════════════════════════════════════════════════════════════════════
-    public class RevenueSection
-    {
-        /// <summary>Yếu tố tăng trưởng</summary>
-        public List<DriverItem> GrowthFactors { get; set; } = new();
-
-        /// <summary>Yếu tố suy giảm — cần hành động</summary>
-        public List<DriverItem> DeclineFactors { get; set; } = new();
-
-        /// <summary>Ảnh hưởng bên ngoài: thời tiết, ngày lễ, mùa vụ</summary>
-        public List<string> ExternalFactors { get; set; } = new();
-    }
-
-    public class DriverItem
-    {
-        /// <summary>Mô tả + giả thuyết tại sao + đã diễn ra bao lâu</summary>
-        public string Description { get; set; } = string.Empty;
-        /// <summary>% thay đổi so kỳ trước (dương = tăng, âm = giảm)</summary>
+        public string DishName { get; set; } = string.Empty;
         public double ChangePercent { get; set; }
         /// <summary>normal | warning | critical</summary>
         public string Severity { get; set; } = string.Empty;
+        public string Reason { get; set; } = string.Empty;
     }
 
-    // ══════════════════════════════════════════════════════════════════════
-    // MENU
-    // ══════════════════════════════════════════════════════════════════════
-    public class MenuSection
+    /// <summary>Menu decisions: keep/bỏ/thêm/seasonal/combo — chỉ fields FE cần, bỏ priority/reason đầy đủ</summary>
+    public class MenuDecisions
     {
-        public List<MenuDecisionItem> KeepAndPush { get; set; } = new();
-        public List<MenuDecisionItem> ImproveOrRemove { get; set; } = new();
-        public List<MenuDecisionItem> SeasonalOpportunities { get; set; } = new();
-        public List<MenuDecisionItem> SuggestedAdditions { get; set; } = new();
-        public List<ComboRecommendation> ComboRecommendations { get; set; } = new();
+        /// <summary>Món growing/stable — chỉ cần top 1 + action gợi ý</summary>
+        public KeepAndPushItem? KeepAndPush { get; set; }
+
+        /// <summary>Món declining — chỉ cần list tên + action</summary>
+        public List<ImproveOrRemoveItem> ImproveOrRemove { get; set; } = new();
+
+        /// <summary>Cơ hội theo mùa — FE KHÔNG hiển thị, AI gợi món phù hợp tháng hiện tại</summary>
+        public List<SeasonalOpportunityItem> SeasonalOpportunities { get; set; } = new();
+
+        /// <summary>Món phổ biến F&B nhà hàng CHƯA CÓ — FE KHÔNG hiển thị, AI gợi</summary>
+        public List<SuggestedAdditionItem> SuggestedAdditions { get; set; } = new();
+
+        /// <summary>Combo gợi ý — FE KHÔNG hiển thị, AI gợi upsell</summary>
+        public List<ComboRecommendationItem> ComboRecommendations { get; set; } = new();
     }
 
-    public class MenuDecisionItem
+    public class KeepAndPushItem
     {
         public string DishName { get; set; } = string.Empty;
-        /// <summary>growing | stable | declining | new</summary>
+        /// <summary>growing | stable</summary>
         public string Trend { get; set; } = string.Empty;
-        public double ChangePercent { get; set; }
         public decimal Revenue { get; set; }
-        public int Quantity { get; set; }
-        /// <summary>high | medium | low</summary>
-        public string Priority { get; set; } = string.Empty;
+        /// <summary>1 câu: tại sao nên giữ</summary>
         public string Reason { get; set; } = string.Empty;
-        public string RecommendedAction { get; set; } = string.Empty;
+        /// <summary>1 câu: làm gì cụ thể (vd: tăng quảng cáo)</summary>
+        public string Action { get; set; } = string.Empty;
     }
 
-    public class ComboRecommendation
+    public class ImproveOrRemoveItem
     {
-        public List<string> Dishes { get; set; } = new();
+        public string DishName { get; set; } = string.Empty;
+        /// <summary>declining | zero</summary>
+        public string Trend { get; set; } = string.Empty;
+        /// <summary>1 câu: tại sao nên cải thiện / bỏ</summary>
         public string Reason { get; set; } = string.Empty;
+        /// <summary>1 câu: làm gì cụ thể (vd: họp bếp, thử thay đổi công thức, loại khỏi menu)</summary>
+        public string Action { get; set; } = string.Empty;
+    }
+
+    public class SeasonalOpportunityItem
+    {
+        public string DishName { get; set; } = string.Empty;
+        /// <summary>1 câu: tại sao phù hợp mùa này</summary>
+        public string Reason { get; set; } = string.Empty;
+        /// <summary>1 câu: thử nghiệm như thế nào</summary>
+        public string Action { get; set; } = string.Empty;
+    }
+
+    public class SuggestedAdditionItem
+    {
+        public string DishName { get; set; } = string.Empty;
+        /// <summary>1 câu: tại sao nên thêm</summary>
+        public string Reason { get; set; } = string.Empty;
+    }
+
+    public class ComboRecommendationItem
+    {
+        /// <summary>2 món trở lên</summary>
+        public List<string> Dishes { get; set; } = new();
         public decimal? SuggestedPrice { get; set; }
+        /// <summary>Ước tính tăng bao nhiêu/đơn</summary>
         public decimal? AOVIncrease { get; set; }
     }
 
-    // ══════════════════════════════════════════════════════════════════════
-    // CUSTOMERS
-    // ══════════════════════════════════════════════════════════════════════
-    public class CustomerSection
-    {
-        /// <summary>Tóm tắt: khách mới tăng/giảm %, VIP chi tiêu thế nào, rủi ro churn</summary>
-        public string Summary { get; set; } = string.Empty;
-
-        public List<TopCustomerInsight> TopCustomers { get; set; } = new();
-        public List<string> RetentionSuggestions { get; set; } = new();
-        public List<string> ChurnWarnings { get; set; } = new();
-    }
-
+    /// <summary>Top customer — FE KHÔNG hiển thị VIP table, chỉ cần top 1</summary>
     public class TopCustomerInsight
     {
         public string CustomerName { get; set; } = string.Empty;
         public decimal TotalSpent { get; set; }
         /// <summary>Bronze | Silver | Gold | Platinum</summary>
         public string MembershipLevel { get; set; } = string.Empty;
-        public string RecommendedAction { get; set; } = string.Empty;
+        /// <summary>Chiếm bao nhiêu % doanh thu</summary>
+        public string RevenueShare { get; set; } = string.Empty;
     }
 
-    // ══════════════════════════════════════════════════════════════════════
-    // PROMOTIONS
-    // ══════════════════════════════════════════════════════════════════════
-    public class PromotionSection
+    /// <summary>Promotion insight — FE KHÔNG hiển thị promo table, chỉ cần tổng + gợi ý</summary>
+    public class PromotionInsight
     {
-        /// <summary>Nhận xét tổng + kết luận: hiệu quả/bình thường/lãng phí/chưa có dữ liệu</summary>
-        public string Summary { get; set; } = string.Empty;
-
         public decimal TotalCost { get; set; }
         public int TotalUsageCount { get; set; }
-
-        public List<PromoROIItem> Promos { get; set; } = new();
-        public List<string> Suggestions { get; set; } = new();
+        /// <summary>1-2 câu: promo hiệu quả/chưa/kém</summary>
+        public string Suggestion { get; set; } = string.Empty;
     }
 
-    public class PromoROIItem
-    {
-        public string Code { get; set; } = string.Empty;
-        public string Name { get; set; } = string.Empty;
-        public decimal Cost { get; set; }
-        public int UsageCount { get; set; }
-        public decimal RevenueFromPromo { get; set; }
-        public decimal CostPerOrder { get; set; }
-        public string Reason { get; set; } = string.Empty;
-        /// <summary>tiếp tục | chỉnh sửa | dừng</summary>
-        public string RecommendedAction { get; set; } = string.Empty;
-    }
-
-    // ══════════════════════════════════════════════════════════════════════
-    // ACTIONS
-    // ══════════════════════════════════════════════════════════════════════
+    /// <summary>Actions to take — gộp shortTerm + mediumTerm vào thisWeek + opportunities</summary>
     public class ActionSection
     {
         /// <summary>Làm NGAY — ảnh hưởng doanh thu trực tiếp</summary>
         public List<ActionItem> Urgent { get; set; } = new();
 
-        /// <summary>Làm trong tuần này</summary>
+        /// <summary>Làm trong tuần này — shortTerm + mediumTerm gộp lại</summary>
         public List<ActionItem> ThisWeek { get; set; } = new();
 
-        /// <summary>Cơ hội tăng trưởng tiềm năng</summary>
+        /// <summary>Cơ hội tăng trưởng dài hạn hơn</summary>
         public List<ActionItem> Opportunities { get; set; } = new();
     }
 
     public class ActionItem
     {
+        /// <summary>≤ 10 từ</summary>
         public string Title { get; set; } = string.Empty;
-        /// <summary>Tại sao — liên kết con số cụ thể từ data</summary>
+        /// <summary>Con số cụ thể + tại sao khẩn</summary>
         public string Reason { get; set; } = string.Empty;
-        /// <summary>Làm gì cụ thể: ai, làm gì, deadline</summary>
+        /// <summary>AI làm gì + deadline</summary>
         public string Action { get; set; } = string.Empty;
         /// <summary>Ngay | Tuần này | Tháng này</summary>
         public string When { get; set; } = string.Empty;

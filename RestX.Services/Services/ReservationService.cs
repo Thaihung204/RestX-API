@@ -30,7 +30,7 @@ namespace RestX.BLL.Services
         private const string PendingCode = "PENDING";
         private const string ConfirmedCode = "CONFIRMED";
         private const string CancelledCode = "CANCELLED";
-        private const int ReservationBufferMinutes = 120;
+        private int ReservationBufferMinutes => CurrentTenant?.Configuration?.SessionBufferMinutes ?? 120;
 
         private static readonly TimeSpan VietnamOffset = TimeSpan.FromHours(7);
         private static DateTime VnNow => DateTime.UtcNow.Add(VietnamOffset);

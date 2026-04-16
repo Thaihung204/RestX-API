@@ -66,6 +66,7 @@ namespace RestX.BLL.Services
             {
                 entity = mapper.Map<StatusValue>(request);
                 entity.StatusTypeId = statusType.Id;
+                entity.IsSystem = false;
                 var maxOrder = (await Repo.GetAsync<StatusValue>(
                     filter: sv => sv.StatusTypeId == statusType.Id,
                     orderBy: q => q.OrderByDescending(sv => sv.DisplayOrder),
@@ -96,6 +97,8 @@ namespace RestX.BLL.Services
             var entity = await Repo.GetByIdAsync<StatusValue>(id);
             if (entity == null || entity.StatusTypeId != statusType.Id)
                 throw new InvalidOperationException("Status value not found");
+            if (entity.IsSystem)
+                throw new InvalidOperationException("Cannot delete a system status value");
             Repo.Delete<StatusValue>(id);
             await Repo.SaveAsync();
             await RedisService.RemoveAsync(GetCacheKey(typeCode));

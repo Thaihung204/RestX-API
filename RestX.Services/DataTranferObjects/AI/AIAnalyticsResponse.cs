@@ -1,10 +1,5 @@
 namespace RestX.BLL.DataTranferObjects.AI
 {
-    /// <summary>
-    /// AI Analytics — chỉ trả về PHÂN TÍCH CHUYÊN SÂU + CHIẾN LƯỢC.
-    /// Dashboard đã có: doanh thu, top món, xu hướng, khách VIP, promo → KHÔNG lặp lại.
-    /// Response chỉ gồm: hidden insights, chiến lược tương lai, phân tích ẩn.
-    /// </summary>
     public class AIAnalyticsResponse
     {
         public DateTime GeneratedAt { get; set; } = DateTime.UtcNow.AddHours(7);

@@ -195,14 +195,14 @@ namespace RestX.WebApp.Controllers
             }
         }
 
-        [HttpPut("content/apply-content")]
+        [HttpPost("content/campaign-pack")]
         [Authorize(Roles = "Admin,System Admin, Staff")]
-        public async Task<IActionResult> ApplyDescription([FromBody] ApplyDescriptionRequest request)
+        public async Task<ActionResult<CampaignPackResponse>> GenerateCampaignPack([FromBody] CampaignPackRequest request)
         {
             try
             {
-                await _aiMenuService.ApplyDescription(request);
-                return Ok();
+                var response = await _aiMenuService.GenerateCampaignPack(request);
+                return Ok(response);
             }
             catch (AppException ex)
             {
@@ -215,13 +215,13 @@ namespace RestX.WebApp.Controllers
             }
         }
 
-        [HttpPost("content/campaign-pack")]
-        [Authorize(Roles = "Admin,System Admin, Staff")]
-        public async Task<ActionResult<CampaignPackResponse>> GenerateCampaignPack([FromBody] CampaignPackRequest request)
+        [HttpPost("analytics")]
+        [Authorize(Roles = "Admin,System Admin")]
+        public async Task<ActionResult<AIAnalyticsResponse>> AnalyzeDashboard([FromBody] AIAnalyticsRequest request)
         {
             try
             {
-                var response = await _aiMenuService.GenerateCampaignPack(request);
+                var response = await _aiMenuService.AnalyzeDashboard(request);
                 return Ok(response);
             }
             catch (AppException ex)

@@ -247,39 +247,5 @@ namespace RestX.WebApp.Controllers
                 return BadRequest("An internal error occurred");
             }
         }
-
-        [HttpPost("merge")]
-        [Authorize(Roles = "System Admin,Admin,Staff")]
-        public async Task<ActionResult<MergeTableResponse>> MergeTable([FromBody] MergeTableRequest request)
-        {
-            try
-            {
-                ApplicationUser? currentUser = await GetCurrentUserAsync();
-                string userId = currentUser?.MemberId.ToString() ?? string.Empty;
-
-                MergeTableResponse result = await tableService.MergeTable(request, userId);
-
-                if (result.RequiresManualResolution)
-                    return Conflict(result);
-
-                await hub.BroadcastToTenant(CurrentTenant.Id, SignalrServer.TableSessionCreated, new
-                {
-                    tableIds = request.TableIds,
-                    orderId = result.OrderId,
-                    message = result.Message
-                });
-
-                return Ok(result);
-            }
-            catch (AppException ex)
-            {
-                return this.BadRequest(ex.Message);
-            }
-            catch (Exception ex)
-            {
-                this.ExceptionHandler.RaiseException(ex);
-                return BadRequest("An internal error occurred");
-            }
-        }
     }
 }

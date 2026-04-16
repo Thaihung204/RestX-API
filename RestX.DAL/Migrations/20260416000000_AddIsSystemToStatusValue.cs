@@ -15,7 +15,7 @@ namespace RestX.DAL.Migrations
                 table: "StatusValues",
                 type: "bit",
                 nullable: false,
-                defaultValue: false);
+                defaultValue: true);
         }
 
         /// <inheritdoc />

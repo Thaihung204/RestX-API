@@ -15,6 +15,5 @@ namespace RestX.BLL.DataTranferObjects.Status
         public string ColorCode { get; set; } = string.Empty;
         public bool IsDefault { get; set; }
         public int DisplayOrder { get; set; } = 1;
-        public bool? IsSystem { get; set; }
     }
 }

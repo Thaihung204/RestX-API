@@ -66,7 +66,8 @@ namespace RestX.DAL.DataSeeders
                 Name = d.Name,
                 ColorCode = d.Color,
                 IsDefault = d.IsDefault,
-                DisplayOrder = d.DisplayOrder
+                DisplayOrder = d.DisplayOrder,
+                IsSystem = true
             });
         }
     }

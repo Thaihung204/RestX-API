@@ -16,7 +16,9 @@ namespace RestX.BLL.Interfaces
 
         // Content Generation
         Task<ContentGenerateResponse> GenerateContent(ContentGenerateRequest request);
-        Task ApplyDescription(ApplyDescriptionRequest request);
         Task<CampaignPackResponse> GenerateCampaignPack(CampaignPackRequest request);
+
+        // Analytics
+        Task<AIAnalyticsResponse> AnalyzeDashboard(AIAnalyticsRequest request);
     }
 }

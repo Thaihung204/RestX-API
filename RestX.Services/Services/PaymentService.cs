@@ -258,6 +258,7 @@ namespace RestX.BLL.Services
                 if (reservation?.ReservationStatus?.Code == "DEPOSIT_PENDING")
                 {
                     await reservationService.ConfirmReservation(payment.ReservationId.Value);
+                    await reservationService.SendDepositConfirmedEmailAsync(payment.ReservationId.Value);
                 }
             }
             else if (payment.Purpose == PaymentPurpose.Order && payment.OrderId.HasValue)

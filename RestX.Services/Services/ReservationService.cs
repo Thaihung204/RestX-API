@@ -141,7 +141,7 @@ namespace RestX.BLL.Services
             {
                 var paymentLink = await CreateDepositPaymentLink(reservation.Id);
                 detail.CheckoutUrl = paymentLink;
-                await SendConfirmationEmail(request.Email, request.Name, detail, tables, paymentLink);
+                await SendConfirmationEmail(request.Email, request.Name, detail, tables);
                 var paymentDeadlineUtc = paymentDeadline!.Value.Subtract(VietnamOffset);
                 BackgroundJob.Schedule<IReservationService>(
                     s => s.AutoCancelDepositReservation(reservation.Id),
@@ -494,7 +494,8 @@ namespace RestX.BLL.Services
         }
 
         private async Task SendConfirmationEmail(
-            string email, string name, ReservationDetail detail, List<Table> tables, string? paymentLink = null)
+            string email, string name, ReservationDetail detail, List<Table> tables,
+            string? paymentLink = null, bool depositPaid = false)
         {
             try
             {
@@ -510,7 +511,8 @@ namespace RestX.BLL.Services
                     detail.PaymentDeadline,
                     paymentLink,
                     CurrentTenant?.Hostname,
-                    detail.Id);
+                    detail.Id,
+                    depositPaid);
 
                 await emailService.SendEmailAsync(email, "Reservation Confirmation – " + detail.ConfirmationCode, body);
             }
@@ -884,6 +886,31 @@ namespace RestX.BLL.Services
             {
                 await CancelReservation(reservation.Id, null);
             }
+        }
+
+        public async Task SendDepositConfirmedEmailAsync(Guid reservationId)
+        {
+            var reservation = await Repo.GetOneAsync<Reservation>(
+                filter: r => r.Id == reservationId,
+                includeProperties: "Customer.ApplicationUser,TableSessions.Table");
+            if (reservation?.Customer?.ApplicationUser == null)
+                return;
+
+            var customer = reservation.Customer;
+            var user = customer.ApplicationUser;
+            var tables = reservation.TableSessions
+                .Where(ts => ts.Table != null)
+                .Select(ts => ts.Table!)
+                .ToList();
+
+            var detail = mapper.Map<ReservationDetail>(reservation);
+
+            await SendConfirmationEmail(
+                email: user.Email ?? "",
+                name: user.FullName ?? user.PhoneNumber ?? "Guest",
+                detail: detail,
+                tables: tables,
+                depositPaid: true);
         }
 
         private async Task<(PayOSClient client, DataTranferObjects.Common.PaymentGatewaySettings settings)> GetDepositGateway()

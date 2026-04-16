@@ -316,7 +316,7 @@ namespace RestX.WebApp.Controllers
         // ── Deposit ──────────────────────────────────────────────────────────
 
         [HttpGet("{id:guid}/deposit")]
-        [Authorize(Roles = "Admin,System Admin,Staff,Customer")]
+        [AllowAnonymous]
         public async Task<IActionResult> GetDepositStatus(Guid id)
         {
             try

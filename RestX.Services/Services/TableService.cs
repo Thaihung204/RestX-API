@@ -347,6 +347,41 @@ namespace RestX.BLL.Services
             return response;
         }
 
+        #region Constraint Helpers
+
+        private async Task ThrowIfTableHasActiveConstraints(Guid tableId)
+        {
+            var hasActiveSession = await Repo.GetExistsAsync<TableSession>(
+                filter: ts => ts.TableId == tableId && ts.IsActive);
+            if (hasActiveSession)
+                throw new AppException("Cannot perform this action while the table has an active session");
+
+            var now = DateTime.UtcNow.AddHours(7);
+            var hasFutureReservation = await Repo.GetExistsAsync<TableSession>(
+                filter: ts => ts.TableId == tableId
+                           && ts.ReservationId != null
+                           && ts.Reservation.Time > now
+                           && (ts.Reservation.ReservationStatus.Code == "PENDING"
+                               || ts.Reservation.ReservationStatus.Code == "CONFIRMED"));
+            if (hasFutureReservation)
+                throw new AppException("Cannot perform this action while the table has upcoming reservations");
+        }
+
+        private async Task ThrowIfSeatingCapacityConflicts(Guid tableId, int newCapacity)
+        {
+            var now = DateTime.UtcNow.AddHours(7);
+            var hasConflict = await Repo.GetExistsAsync<TableSession>(
+                filter: ts => ts.TableId == tableId
+                           && ts.ReservationId != null
+                           && ts.Reservation.Time > now
+                           && ts.Reservation.ReservationStatus.Code == "CONFIRMED"
+                           && ts.Reservation.NumberOfGuests > newCapacity);
+            if (hasConflict)
+                throw new AppException("Cannot reduce seating capacity below the guest count of a future confirmed reservation");
+        }
+
+        #endregion
+
         #region QR Code Generation
         private string GenerateTableQRCode(Guid tableId, string tenantHostname)
         {

@@ -222,6 +222,9 @@ namespace RestX.BLL.Services
             if (currentStatusCode == CancelledCode)
                 throw new InvalidOperationException("Cannot update a reservation that is already cancelled");
 
+            if (reservation.CheckedInAt.HasValue)
+                throw new InvalidOperationException("Cannot update a reservation that has already been checked in");
+
             if (request.ReservationDateTime.HasValue)
             {
                 ValidateFutureDate(request.ReservationDateTime.Value);
@@ -415,13 +418,61 @@ namespace RestX.BLL.Services
             await Repo.SaveAsync();
         }
 
+        public async Task DeleteReservation(Guid id)
+        {
+            var reservation = await RequireReservation(id, TablesAndStatusIncludes);
+
+            var statusCode = reservation.ReservationStatus?.Code;
+            if (statusCode == ConfirmedCode)
+                throw new InvalidOperationException("Cannot delete a confirmed reservation");
+
+            var sessions = (await Repo.GetAsync<TableSession>(
+                filter: ts => ts.ReservationId == id && ts.IsActive)).ToList();
+            var hasActiveOrder = sessions.Any(ts => ts.OrderId.HasValue);
+            if (hasActiveOrder)
+                throw new InvalidOperationException("Cannot delete a reservation with an active order");
+
+            foreach (var session in sessions)
+                Repo.Delete<TableSession>(session.Id);
+
+            Repo.Delete<Reservation>(id);
+            await Repo.SaveAsync();
+        }
+
         public async Task CancelReservation(Guid id, string? userId)
         {
             var reservation = await RequireReservation(id, TablesAndStatusIncludes);
+
+            var currentCode = reservation.ReservationStatus?.Code;
+            if (currentCode == CancelledCode)
+                throw new InvalidOperationException("Reservation is already cancelled");
+
+            if (reservation.CheckedInAt.HasValue)
+                throw new InvalidOperationException("Cannot cancel a reservation that has already been checked in");
+
+            var sessions = (await Repo.GetAsync<TableSession>(
+                filter: ts => ts.ReservationId == id && ts.IsActive)).ToList();
+            var sharedOrderId = sessions.FirstOrDefault()?.OrderId;
+            if (sharedOrderId.HasValue)
+            {
+                var order = await Repo.GetOneAsync<Order>(
+                    filter: o => o.Id == sharedOrderId.Value,
+                    includeProperties: "Payments");
+                if (order != null)
+                {
+                    if (order.OrderStatusId == (int)OrderStatus.Completed)
+                        throw new InvalidOperationException("Cannot cancel a reservation whose order has been completed");
+
+                    var hasPaidOrder = order.Payments.Any(p => p.Purpose == PaymentPurpose.Order && p.Status == PaymentStatus.Success);
+                    if (hasPaidOrder)
+                        throw new InvalidOperationException("Cannot cancel a reservation whose order has already been paid");
+                }
+            }
+
             var statuses = await statusValueService.GetStatuses(ReservationStatusTypeCode);
             var cancelledStatus = statuses.FirstOrDefault(s => s.Code == CancelledCode)
                 ?? throw new InvalidOperationException("Cancelled status not configured");
-            if (reservation.ReservationStatus?.Code == PendingCode)
+            if (currentCode == PendingCode)
             {
                 var pendingPayment = await Repo.GetOneAsync<Payment>(
                     p => p.ReservationId == id && p.Purpose == PaymentPurpose.Deposit && p.Status == PaymentStatus.Pending);

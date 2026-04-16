@@ -206,7 +206,7 @@ namespace RestX.BLL.Helpers
             CreateMap<RestX.Models.Triggers.TriggerGroup, RestX.BLL.DataTransferObjects.Triggers.TriggerGroup>();
             CreateMap<Models.Reservations.TableSession, TableSessionInfo>()
                 .ForMember(dest => dest.OrderReference, opt => opt.MapFrom(src => src.Order != null ? src.Order.Reference : null))
-                .ForMember(dest => dest.OrderTotalAmount, opt => opt.MapFrom(src => src.Order != null ? src.Order.TotalAmount : (decimal?)null));
+                .ForMember(dest => dest.OrderTotalAmount, opt => opt.MapFrom(src => src.Order != null ? src.Order.TotalAmount : (decimal?)null)).ReverseMap();
             CreateMap<Notification, RestaurantNotification>().ReverseMap();
 
         }

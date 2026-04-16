@@ -71,6 +71,15 @@ namespace RestX.BLL.Services
                 if (table == null)
                     throw new InvalidOperationException("Table not found");
 
+                if (request.SeatingCapacity < 1)
+                    throw new AppException("Seating capacity must be at least 1");
+
+                if (request.SeatingCapacity < table.SeatingCapacity)
+                    await ThrowIfSeatingCapacityConflicts(id.Value, request.SeatingCapacity);
+
+                if (!request.IsActive && table.IsActive)
+                    await ThrowIfTableHasActiveConstraints(id.Value);
+
                 table.FloorId = request.FloorId;
                 table.Code = request.Code;
                 table.Type = request.Type;
@@ -147,6 +156,7 @@ namespace RestX.BLL.Services
             var table = await Repo.GetByIdAsync<Table>(id);
             if (table == null)
                 return;
+            await ThrowIfTableHasActiveConstraints(id);
             Repo.Delete<Table>(id);
             await Repo.SaveAsync();
             await RedisService.RemoveAsync($"Floor:{CurrentTenant?.Hostname}");
@@ -155,6 +165,14 @@ namespace RestX.BLL.Services
         public async Task<TableItem> ChangeTableStatus(Guid tableId, TableStatus status)
         {
             var table = await Repo.GetByIdAsync<Table>(tableId);
+
+            if (status == TableStatus.Available)
+            {
+                var hasActiveSession = await Repo.GetExistsAsync<TableSession>(
+                    filter: ts => ts.TableId == tableId && ts.IsActive);
+                if (hasActiveSession)
+                    throw new AppException("Cannot set table to Available while it has an active session");
+            }
 
             table.TableStatusId = status;
 
@@ -242,6 +260,41 @@ namespace RestX.BLL.Services
 
             return mapper.Map<List<TableSessionInfo>>(sessions);
         }
+
+        #region Constraint Helpers
+
+        private async Task ThrowIfTableHasActiveConstraints(Guid tableId)
+        {
+            var hasActiveSession = await Repo.GetExistsAsync<TableSession>(
+                filter: ts => ts.TableId == tableId && ts.IsActive);
+            if (hasActiveSession)
+                throw new AppException("Cannot perform this action while the table has an active session");
+
+            var now = DateTime.UtcNow.AddHours(7);
+            var hasFutureReservation = await Repo.GetExistsAsync<TableSession>(
+                filter: ts => ts.TableId == tableId
+                           && ts.ReservationId != null
+                           && ts.Reservation.Time > now
+                           && (ts.Reservation.ReservationStatus.Code == "PENDING"
+                               || ts.Reservation.ReservationStatus.Code == "CONFIRMED"));
+            if (hasFutureReservation)
+                throw new AppException("Cannot perform this action while the table has upcoming reservations");
+        }
+
+        private async Task ThrowIfSeatingCapacityConflicts(Guid tableId, int newCapacity)
+        {
+            var now = DateTime.UtcNow.AddHours(7);
+            var hasConflict = await Repo.GetExistsAsync<TableSession>(
+                filter: ts => ts.TableId == tableId
+                           && ts.ReservationId != null
+                           && ts.Reservation.Time > now
+                           && ts.Reservation.ReservationStatus.Code == "CONFIRMED"
+                           && ts.Reservation.NumberOfGuests > newCapacity);
+            if (hasConflict)
+                throw new AppException("Cannot reduce seating capacity below the guest count of a future confirmed reservation");
+        }
+
+        #endregion
 
         #region QR Code Generation
         private string GenerateTableQRCode(Guid tableId, string tenantHostname)

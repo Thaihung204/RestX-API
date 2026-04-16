@@ -77,8 +77,7 @@ namespace RestX.BLL.Services
 
         public async Task<CashPaymentResponse> PayByCash(Guid orderId, CashPaymentRequest request, string? createdBy = null)
         {
-            var order = await Repo.GetOneAsync<Order>(filter: o => o.Id == orderId)
-                ?? throw new KeyNotFoundException("Order not found");
+            Order order = await RecalculateOrderAmountForCheckout(orderId, createdBy);
 
             var alreadyPaid = await Repo.GetExistsAsync<Payment>(
                 p => p.OrderId == orderId && p.Status == PaymentStatus.Success);
@@ -141,12 +140,10 @@ namespace RestX.BLL.Services
                 Cashback = cashback
             };
         }
+
         public async Task<CreatePaymentLinkResponse> CreatePaymentLink(Guid orderId, string? createdBy = null)
         {
-            var order = await Repo.GetOneAsync<Order>(
-                filter: o => o.Id == orderId,
-                includeProperties: "OrderDetails.Dish")
-                ?? throw new KeyNotFoundException("Order not found");
+            Order order = await RecalculateOrderAmountForCheckout(orderId, createdBy);
 
             var alreadyPaid = await Repo.GetExistsAsync<Payment>(
                 p => p.OrderId == orderId && p.Status == PaymentStatus.Success);
@@ -166,9 +163,15 @@ namespace RestX.BLL.Services
             if (description.Length > 25)
                 description = description[..25];
 
-            var items = order.OrderDetails.Select(d =>
-                new PayOS.Models.V2.PaymentRequests.PaymentLinkItem { Name = d.Dish?.Name ?? "Item", Quantity = d.Quantity, Price = (long)(d.Dish?.Price ?? 0) }
-            ).ToList();
+            var items = order.OrderDetails
+                .Where(d => !string.Equals(d.ItemStatus?.Code, "CANCELLED", StringComparison.OrdinalIgnoreCase))
+                .Select(d => new PayOS.Models.V2.PaymentRequests.PaymentLinkItem
+                {
+                    Name = d.Dish?.Name ?? "Item",
+                    Quantity = d.Quantity,
+                    Price = (long)(d.Dish?.Price ?? 0)
+                })
+                .ToList();
 
             var linkRequest = new PayOS.Models.V2.PaymentRequests.CreatePaymentLinkRequest
             {
@@ -207,7 +210,6 @@ namespace RestX.BLL.Services
                 CheckoutUrl = link.CheckoutUrl
             };
         }
-
         public async Task CancelPaymentLink(Guid paymentId, string? reason, string? modifiedBy = null)
         {
             var payment = await Repo.GetOneAsync<Payment>(filter: p => p.Id == paymentId)
@@ -262,7 +264,7 @@ namespace RestX.BLL.Services
             }
             else if (payment.Purpose == PaymentPurpose.Order && payment.OrderId.HasValue)
             {
-                var order = await Repo.GetByIdAsync<Order>(payment.OrderId.Value);
+                Order order = await RecalculateOrderAmountForCheckout(payment.OrderId.Value);
                 if (order != null)
                 {
                     await AwardLoyaltyPointsAsync(order);
@@ -291,6 +293,32 @@ namespace RestX.BLL.Services
             await Repo.SaveAsync();
         }
 
+        private async Task<Order> RecalculateOrderAmountForCheckout(Guid orderId, string? modifiedBy = null)
+        {
+            Order order = await Repo.GetOneAsync<Order>(
+                filter: o => o.Id == orderId,
+                includeProperties: "OrderDetails.Dish,OrderDetails.ItemStatus")
+                ?? throw new KeyNotFoundException("Order not found");
+
+            decimal subTotal = order.OrderDetails
+                .Where(d =>
+                    d.Dish != null
+                    && !string.Equals(d.ItemStatus?.Code, "CANCELLED", StringComparison.OrdinalIgnoreCase))
+                .Sum(d => d.Quantity * d.Dish.Price);
+
+            order.SubTotal = subTotal;
+
+            if (order.DiscountAmount > order.SubTotal)
+            {
+                order.DiscountAmount = order.SubTotal;
+            }
+
+            order.CalculateTotalAmount();
+            Repo.Update(order, modifiedBy);
+            await Repo.SaveAsync();
+
+            return order;
+        }
 
         private async Task<(PayOSClient client, PaymentGatewaySettings settings)> GetTenantGateway()
         {

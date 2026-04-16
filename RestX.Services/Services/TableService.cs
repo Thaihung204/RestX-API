@@ -71,6 +71,15 @@ namespace RestX.BLL.Services
                 if (table == null)
                     throw new InvalidOperationException("Table not found");
 
+                if (request.SeatingCapacity < 1)
+                    throw new AppException("Seating capacity must be at least 1");
+
+                if (request.SeatingCapacity < table.SeatingCapacity)
+                    await ThrowIfSeatingCapacityConflicts(id.Value, request.SeatingCapacity);
+
+                if (!request.IsActive && table.IsActive)
+                    await ThrowIfTableHasActiveConstraints(id.Value);
+
                 table.FloorId = request.FloorId;
                 table.Code = request.Code;
                 table.Type = request.Type;
@@ -147,6 +156,7 @@ namespace RestX.BLL.Services
             var table = await Repo.GetByIdAsync<Table>(id);
             if (table == null)
                 return;
+            await ThrowIfTableHasActiveConstraints(id);
             Repo.Delete<Table>(id);
             await Repo.SaveAsync();
             await RedisService.RemoveAsync($"Floor:{CurrentTenant?.Hostname}");
@@ -155,6 +165,14 @@ namespace RestX.BLL.Services
         public async Task<TableItem> ChangeTableStatus(Guid tableId, TableStatus status)
         {
             var table = await Repo.GetByIdAsync<Table>(tableId);
+
+            if (status == TableStatus.Available)
+            {
+                var hasActiveSession = await Repo.GetExistsAsync<TableSession>(
+                    filter: ts => ts.TableId == tableId && ts.IsActive);
+                if (hasActiveSession)
+                    throw new AppException("Cannot set table to Available while it has an active session");
+            }
 
             table.TableStatusId = status;
 

@@ -215,10 +215,8 @@ namespace RestX.WebApp.Controllers
             }
         }
 
-        // ─── Analytics ─────────────────────────────────────────────────────────
-
         [HttpPost("analytics")]
-        //[Authorize(Roles = "Admin,System Admin")]
+        [Authorize(Roles = "Admin,System Admin")]
         public async Task<ActionResult<AIAnalyticsResponse>> AnalyzeDashboard([FromBody] AIAnalyticsRequest request)
         {
             try

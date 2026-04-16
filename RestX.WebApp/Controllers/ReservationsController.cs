@@ -313,6 +313,34 @@ namespace RestX.WebApp.Controllers
             }
         }
 
+        [HttpDelete("{id:guid}")]
+        [Authorize(Roles = "Admin,System Admin")]
+        public async Task<IActionResult> DeleteReservation(Guid id)
+        {
+            try
+            {
+                await reservationService.DeleteReservation(id);
+                return Ok(new { success = true, message = "Reservation deleted successfully" });
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { success = false, message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { success = false, message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest(new { success = false, message = "An internal error occurred" });
+            }
+        }
+
         // ── Deposit ──────────────────────────────────────────────────────────
 
         [HttpGet("{id:guid}/deposit")]

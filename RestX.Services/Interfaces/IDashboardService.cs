@@ -17,6 +17,5 @@ namespace RestX.BLL.Interfaces
         Task<List<DishTrendItem>> GetDishTrendAsync(DashboardRequest request, int top = 20);
         Task<PeakHoursData> GetPeakHoursAsync(DashboardRequest request);
         Task<CancellationAnalysis> GetCancellationAnalysisAsync(DashboardRequest request);
-        Task<TableIntelligence> GetTableIntelligenceAsync(DashboardRequest request);
     }
 }

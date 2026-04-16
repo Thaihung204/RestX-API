@@ -645,44 +645,6 @@ namespace RestX.BLL.Services
             };
         }
 
-        public async Task<TableIntelligence> GetTableIntelligenceAsync(DashboardRequest request)
-        {
-            var (fromDate, toDate) = CalculateDateRange(request);
-
-            var data = await Repo.ExecuteSqlSelectAsync<RawTablePerf>(@"
-                SELECT
-                    t.Id AS TableId,
-                    t.Code AS TableName,
-                    COUNT(ts.Id) AS SessionCount,
-                    AVG(CAST(DATEDIFF(MINUTE, ts.StartedAt, ISNULL(ts.EndedAt, GETUTCDATE())) AS FLOAT)) AS AvgSessionMinutes,
-                    ISNULL(SUM(o.TotalAmount), 0) AS TotalRevenue
-                FROM Tables t
-                LEFT JOIN TableSessions ts ON ts.TableId = t.Id
-                    AND ts.StartedAt >= @from AND ts.StartedAt < @to
-                LEFT JOIN Orders o ON o.TableId = t.Id
-                    AND o.CreatedDate >= @from AND o.CreatedDate < @to
-                    AND o.OrderStatusId = 1
-                GROUP BY t.Id, t.Code
-                ORDER BY TotalRevenue DESC",
-                new object[]
-                {
-                    new SqlParameter("from", SqlDbType.DateTime2) { Value = fromDate },
-                    new SqlParameter("to", SqlDbType.DateTime2) { Value = toDate }
-                });
-
-            return new TableIntelligence
-            {
-                Tables = data.Select(r => new TablePerformance
-                {
-                    TableId = r.TableId,
-                    TableName = r.TableName,
-                    SessionCount = r.SessionCount,
-                    AvgSessionMinutes = Math.Round(r.AvgSessionMinutes, 1),
-                    TotalRevenue = r.TotalRevenue
-                }).ToList()
-            };
-        }
-
         // Raw query result types for Phase 2 queries
         private sealed class RawDishTrend
         {
@@ -693,7 +655,6 @@ namespace RestX.BLL.Services
             public decimal CurrentRevenue { get; set; }
             public decimal PrevRevenue { get; set; }
         }
-
         private sealed class RawPeakHour
         {
             public int Hour { get; set; }
@@ -717,15 +678,6 @@ namespace RestX.BLL.Services
         {
             public int DayIndex { get; set; }
             public int Count { get; set; }
-        }
-
-        private sealed class RawTablePerf
-        {
-            public Guid TableId { get; set; }
-            public string TableName { get; set; } = string.Empty;
-            public int SessionCount { get; set; }
-            public double AvgSessionMinutes { get; set; }
-            public decimal TotalRevenue { get; set; }
         }
 
         private sealed class PromotionTotalRow

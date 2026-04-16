@@ -205,33 +205,140 @@ namespace RestX.BLL.Services
         }
         #endregion
 
-        public async Task DeductFromRecipe(Guid dishId, int quantity)
+        private async Task DisableDishesWhenIngredientsOutOfStock(HashSet<Guid> outOfStockIngredientIds)
         {
-            var recipes = await Repo.GetAsync<DishRecipe>(
-                filter: r => r.DishId == dishId,
-                includeProperties: "Ingredient,Ingredient.InventoryStock"
-            );
-
-            foreach (var recipe in recipes)
+            if (!outOfStockIngredientIds.Any())
             {
-                var ingredient = recipe.Ingredient;
-                if (ingredient?.InventoryStock == null) continue;
+                return;
+            }
 
-                var deduction = recipe.Quantity * quantity;
+            List<DishRecipe> impactedRecipes = (await Repo.GetAsync<DishRecipe>(
+                filter: r => outOfStockIngredientIds.Contains(r.IngredientId),
+                includeProperties: "Dish"
+            )).ToList();
 
-                if (ingredient.InventoryStock.CurrentQuantity < deduction)
+            List<Dish> dishesToDisable = impactedRecipes
+                .Where(r => r.Dish != null && r.Dish.AutoDisableByStock && r.Dish.IsActive)
+                .Select(r => r.Dish!)
+                .GroupBy(d => d.Id)
+                .Select(g => g.First())
+                .ToList();
+
+            foreach (Dish dish in dishesToDisable)
+            {
+                dish.IsActive = false;
+                Repo.Update(dish);
+            }
+        }
+
+        public async Task DeductFromRecipes(Dictionary<Guid, int> dishQuantities)
+        {
+            if (dishQuantities == null || !dishQuantities.Any())
+            {
+                return;
+            }
+
+            List<Guid> dishIds = dishQuantities
+                .Where(x => x.Value > 0)
+                .Select(x => x.Key)
+                .Distinct()
+                .ToList();
+
+            if (!dishIds.Any())
+            {
+                return;
+            }
+
+            List<DishRecipe> recipes = (await Repo.GetAsync<DishRecipe>(
+                filter: r => dishIds.Contains(r.DishId),
+                includeProperties: "Ingredient,Ingredient.InventoryStock"
+            )).ToList();
+
+            Dictionary<Guid, decimal> deductionByIngredientId = new Dictionary<Guid, decimal>();
+            Dictionary<Guid, Ingredient> ingredientsById = new Dictionary<Guid, Ingredient>();
+
+            foreach (DishRecipe recipe in recipes)
+            {
+                if (!dishQuantities.TryGetValue(recipe.DishId, out int dishQuantity) || dishQuantity <= 0)
+                {
+                    continue;
+                }
+
+                Ingredient? ingredient = recipe.Ingredient;
+                if (ingredient?.InventoryStock == null)
+                {
+                    continue;
+                }
+
+                decimal deduction = recipe.Quantity * dishQuantity;
+
+                if (deductionByIngredientId.TryGetValue(ingredient.Id, out decimal currentDeduction))
+                {
+                    deductionByIngredientId[ingredient.Id] = currentDeduction + deduction;
+                }
+                else
+                {
+                    deductionByIngredientId[ingredient.Id] = deduction;
+                }
+
+                if (!ingredientsById.ContainsKey(ingredient.Id))
+                {
+                    ingredientsById[ingredient.Id] = ingredient;
+                }
+            }
+
+            foreach (KeyValuePair<Guid, decimal> item in deductionByIngredientId)
+            {
+                Ingredient ingredient = ingredientsById[item.Key];
+                decimal deduction = item.Value;
+
+                if (ingredient.InventoryStock!.CurrentQuantity < deduction)
                 {
                     throw new AppException(
                         $"Not enough '{ingredient.Name}'. Avalablie Stock: {ingredient.InventoryStock.CurrentQuantity} {ingredient.Unit}"
                     );
                 }
-                ingredient.InventoryStock.CurrentQuantity -= deduction;
-
-                await UpdateIngredientStatus(ingredient.Id, ingredient.InventoryStock.CurrentQuantity);
             }
 
+            HashSet<Guid> outOfStockIngredientIds = new HashSet<Guid>();
+
+            foreach (KeyValuePair<Guid, decimal> item in deductionByIngredientId)
+            {
+                Ingredient ingredient = ingredientsById[item.Key];
+                decimal deduction = item.Value;
+
+                ingredient.InventoryStock!.CurrentQuantity -= deduction;
+                ingredient.InventoryStock.LastUpdated = DateTime.UtcNow.AddHours(7);
+
+                ingredient.Status = ingredient.InventoryStock.CurrentQuantity == 0
+                    ? IngredientStatus.OutOfStock
+                    : ingredient.MinStockLevel > 0 && ingredient.InventoryStock.CurrentQuantity <= ingredient.MinStockLevel
+                        ? IngredientStatus.LowStock
+                        : IngredientStatus.InStock;
+
+                if (ingredient.InventoryStock.CurrentQuantity == 0)
+                {
+                    outOfStockIngredientIds.Add(ingredient.Id);
+                }
+            }
+
+            await DisableDishesWhenIngredientsOutOfStock(outOfStockIngredientIds);
             await Repo.SaveAsync();
         }
 
+        public async Task DeductFromRecipe(Guid dishId, int quantity)
+        {
+            if (quantity <= 0)
+            {
+                return;
+            }
+
+            Dictionary<Guid, int> dishQuantities = new Dictionary<Guid, int>
+            {
+                [dishId] = quantity
+            };
+
+            await DeductFromRecipes(dishQuantities);
+        }
     }
 }

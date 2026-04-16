@@ -15,7 +15,5 @@ namespace RestX.BLL.Interfaces.Tables
         Task<TableSession?> GetActiveTableSession(Guid tableId);
         Task CloseTableSession(Guid tableId);
         Task<IEnumerable<TableSessionInfo>> GetAllTableSession(DateTime? at = null);
-        Task<MergeTableResponse> MergeTable(MergeTableRequest request, string userId);
-
     }
 }

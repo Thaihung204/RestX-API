@@ -261,91 +261,40 @@ namespace RestX.BLL.Services
             return mapper.Map<List<TableSessionInfo>>(sessions);
         }
 
-        public async Task<MergeTableResponse> MergeTable(MergeTableRequest request, string userId)
+        #region Constraint Helpers
+
+        private async Task ThrowIfTableHasActiveConstraints(Guid tableId)
         {
-            List<Guid> tableIds = (request.TableIds ?? new List<Guid>())
-                .Where(x => x != Guid.Empty)
-                .Distinct()
-                .ToList();
+            var hasActiveSession = await Repo.GetExistsAsync<TableSession>(
+                filter: ts => ts.TableId == tableId && ts.IsActive);
+            if (hasActiveSession)
+                throw new AppException("Cannot perform this action while the table has an active session");
 
-            if (!tableIds.Any())
-                throw new AppException("TableIds is required");
-
-            // Validate tables exist & active
-            var tables = (await Repo.GetAsync<Table>(t => tableIds.Contains(t.Id) && t.IsActive)).ToList();
-            if (tables.Count != tableIds.Count)
-                throw new AppException("One or more tables not found or inactive");
-
-            DateTime now = DateTime.UtcNow.AddHours(7);
-
-            // Load active sessions for these tables (include Table and Order)
-            List<TableSession> sessions = (await Repo.GetAsync<TableSession>(
-                filter: ts => tableIds.Contains(ts.TableId)
-                           && ts.IsActive
-                           && ts.StartedAt <= now
-                           && (ts.EndedAt == null || ts.EndedAt > now),
-                includeProperties: "Table,Order")).ToList();
-
-            // Create session for tables without active session
-            foreach (Guid tableId in tableIds)
-            {
-                if (!sessions.Any(s => s.TableId == tableId))
-                {
-                    TableSession newSession = await CreateTableSession(tableId, userId, request.CustomerId, request.ReservationId);
-                    newSession = await Repo.GetOneAsync<TableSession>(filter: ts => ts.Id == newSession.Id, includeProperties: "Table,Order");
-                    sessions.Add(newSession);
-                }
-            }
-
-            // Collect distinct order ids present in sessions
-            List<Guid> orderIds = sessions
-                .Where(s => s.OrderId.HasValue)
-                .Select(s => s.OrderId!.Value)
-                .Distinct()
-                .ToList();
-
-            var response = new MergeTableResponse
-            {
-                ExistingOrderIds = orderIds,
-                Sessions = mapper.Map<List<RestX.BLL.DataTranferObjects.Table.TableSessionInfo>>(sessions)
-            };
-
-            // Case: no orders -> sessions created/validated
-            if (!orderIds.Any())
-            {
-                response.OrderId = null;
-                response.RequiresManualResolution = false;
-                response.Message = "No existing order. Sessions created/validated.";
-                await Repo.SaveAsync();
-                return response;
-            }
-
-            // Case: exactly one order -> assign it to all sessions
-            if (orderIds.Count == 1)
-            {
-                Guid targetOrderId = orderIds[0];
-                foreach (var session in sessions.Where(s => s.OrderId != targetOrderId))
-                {
-                    session.OrderId = targetOrderId;
-                    Repo.Update(session);
-                }
-
-                await Repo.SaveAsync();
-
-                response.OrderId = targetOrderId;
-                response.RequiresManualResolution = false;
-                response.Message = "Merged successfully to existing order.";
-                response.Sessions = mapper.Map<List<RestX.BLL.DataTranferObjects.Table.TableSessionInfo>>(sessions);
-                return response;
-            }
-
-            // Case: multiple orders -> require manual resolution
-            response.OrderId = null;
-            response.RequiresManualResolution = true;
-            response.Message = "Multiple existing orders found. Manual resolution required.";
-            response.Sessions = mapper.Map<List<RestX.BLL.DataTranferObjects.Table.TableSessionInfo>>(sessions);
-            return response;
+            var now = DateTime.UtcNow.AddHours(7);
+            var hasFutureReservation = await Repo.GetExistsAsync<TableSession>(
+                filter: ts => ts.TableId == tableId
+                           && ts.ReservationId != null
+                           && ts.Reservation.Time > now
+                           && (ts.Reservation.ReservationStatus.Code == "PENDING"
+                               || ts.Reservation.ReservationStatus.Code == "CONFIRMED"));
+            if (hasFutureReservation)
+                throw new AppException("Cannot perform this action while the table has upcoming reservations");
         }
+
+        private async Task ThrowIfSeatingCapacityConflicts(Guid tableId, int newCapacity)
+        {
+            var now = DateTime.UtcNow.AddHours(7);
+            var hasConflict = await Repo.GetExistsAsync<TableSession>(
+                filter: ts => ts.TableId == tableId
+                           && ts.ReservationId != null
+                           && ts.Reservation.Time > now
+                           && ts.Reservation.ReservationStatus.Code == "CONFIRMED"
+                           && ts.Reservation.NumberOfGuests > newCapacity);
+            if (hasConflict)
+                throw new AppException("Cannot reduce seating capacity below the guest count of a future confirmed reservation");
+        }
+
+        #endregion
 
         #region QR Code Generation
         private string GenerateTableQRCode(Guid tableId, string tenantHostname)

@@ -232,32 +232,6 @@ namespace RestX.BLL.Services
             return null;
         }
 
-        public async Task ApplyDescription(ApplyDescriptionRequest request)
-        {
-            if (string.IsNullOrWhiteSpace(request.Description))
-                throw new AppException("Description không được để trống.");
-
-            if (request.DishId.HasValue)
-            {
-                var dish = await _dishService.GetDishById(request.DishId.Value)
-                    ?? throw new AppException("Không tìm thấy món ăn.");
-                dish.Description = request.Description;
-                await _dishService.UpsertDish(dish);
-                return;
-            }
-
-            if (request.ComboId.HasValue)
-            {
-                var combo = await _dishService.GetComboById(request.ComboId.Value)
-                    ?? throw new AppException("Không tìm thấy combo.");
-                combo.Description = request.Description;
-                await _dishService.UpsertCombo(combo);
-                return;
-            }
-
-            throw new AppException("Phải truyền vào dishId hoặc comboId.");
-        }
-
         public async Task<CampaignPackResponse> GenerateCampaignPack(CampaignPackRequest request)
         {
             var tenantName = CurrentTenant?.Name ?? "nhà hàng";

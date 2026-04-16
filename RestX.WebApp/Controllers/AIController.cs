@@ -195,26 +195,6 @@ namespace RestX.WebApp.Controllers
             }
         }
 
-        [HttpPut("content/apply-content")]
-        [Authorize(Roles = "Admin,System Admin, Staff")]
-        public async Task<IActionResult> ApplyDescription([FromBody] ApplyDescriptionRequest request)
-        {
-            try
-            {
-                await _aiMenuService.ApplyDescription(request);
-                return Ok();
-            }
-            catch (AppException ex)
-            {
-                return BadRequest(ex.Message);
-            }
-            catch (Exception ex)
-            {
-                ExceptionHandler.RaiseException(ex);
-                return BadRequest("An internal error occurred");
-            }
-        }
-
         [HttpPost("content/campaign-pack")]
         [Authorize(Roles = "Admin,System Admin, Staff")]
         public async Task<ActionResult<CampaignPackResponse>> GenerateCampaignPack([FromBody] CampaignPackRequest request)

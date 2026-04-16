@@ -900,7 +900,6 @@ namespace RestX.BLL.Services
             if (_fixedOccasions.TryGetValue(key, out var occasion))
                 return occasion;
 
-            // Mother's Day: Chủ Nhật thứ 2 của tháng 5
             if (today.Month == 5)
             {
                 var secondSunday = Enumerable.Range(1, 31)
@@ -910,7 +909,6 @@ namespace RestX.BLL.Services
                 if (secondSunday.Day == today.Day) return "Ngày của Mẹ (Mother's Day)";
             }
 
-            // Father's Day: Chủ Nhật thứ 3 của tháng 6
             if (today.Month == 6)
             {
                 var thirdSunday = Enumerable.Range(1, 30)
@@ -1265,14 +1263,7 @@ LUÔN trả về JSON hợp lệ sau, KHÔNG thêm text nào ngoài JSON:
                 peakHours = await _dashboardService.GetPeakHoursAsync(dashRequest);
                 cancel = await _dashboardService.GetCancellationAnalysisAsync(dashRequest);
             }
-            catch
-            {
-                // Dashboard query fail → vẫn gọi AI với data rỗng
-            }
-
-            // TODO: Khôi phục khi TableSessions.TableId được fix trong DB
-            // try { tableIntel = await _dashboardService.GetTableIntelligenceAsync(dashRequest); } catch { }
-
+            catch  { }
             var context = BuildAnalyticsContext(
                 request.FilterType, summary, revenueTrend, topDishes,
                 customerStats, promotionStats, dishTrend, peakHours, cancel,
@@ -1298,123 +1289,107 @@ LUÔN trả về JSON hợp lệ sau, KHÔNG thêm text nào ngoài JSON:
                 _ => "Phân tích TOÀN DIỆN — trả lời câu hỏi kinh doanh thực sự của chủ nhà hàng."
             };
 
-            // ── Đếm số lượng tối thiểu để response không bị rỗng ──────────
-            // keyInsights: 2-3 items (luôn có ≥1 warning nếu discount cao hoặc churn)
-            // TopGrowthDrivers: ≥1 (món đang tăng mạnh)
-            // TopDeclineDrivers: ≥0 (có giảm mới liệt kê)
-            // MenuDecisions.keepAndPush: 1 object hoặc null
-            // MenuDecisions.improveOrRemove: ≥0
-            // MenuDecisions.seasonalOpportunities: ≥1 (tháng hiện tại)
-            // MenuDecisions.suggestedAdditions: ≥1
-            // MenuDecisions.comboRecommendations: ≥1
-            // TopCustomer: 1 object hoặc null
-            // PromoInsight: 1 object
-            // Actions.urgent: ≥0 | thisWeek: ≥2 | opportunities: ≥2
-
             return @"Bạn là chủ nhà hàng có 20 năm kinh nghiệm tại Việt Nam.
-" + focus + @"
+                    " + focus + @"
 
-═══════════════════════════════════════════════════
-NGUYÊN TẮC quan trọng — ĐỌC TRƯỚC KHI VIẾT
-═══════════════════════════════════════════════════
+                    ═══════════════════════════════════════════════════
+                    NGUYÊN TẮC quan trọng — ĐỌC TRƯỚC KHI VIẾT
+                    ═══════════════════════════════════════════════════
 
-1. SỐ LIỆU PHẢI CHÍNH XÁC: changePercent, revenue, quantity — COPY đúng từ data, KHÔNG tự làm tròn.
-   Nếu data ghi +3618% thì phải viết 3618, không viết 100 vì ""thấy vô lý"".
-   Tổng doanh thu trong summary: dùng đúng số từ data.
+                    1. SỐ LIỆU PHẢI CHÍNH XÁC: changePercent, revenue, quantity — COPY đúng từ data, KHÔNG tự làm tròn.
+                       Nếu data ghi +3618% thì phải viết 3618, không viết 100 vì ""thấy vô lý"".
+                       Tổng doanh thu trong summary: dùng đúng số từ data.
 
-2. VIẾT NHƯ NGƯỜI THẬT, KHÔNG VIẾT NHƯ ROBOT:
-   ✗ ""Sự suy giảm doanh số đáng kể"", ""Nguyên nhân chủ yếu là do yếu tố bên ngoài""
-   ✓ ""Bánh mì thịt nướng tụt 60% trong 3 tuần liên tiếp — thử hỏi khách phản hồi thế nào trước khi đổ lỗi thời tiết""
+                    2. VIẾT NHƯ NGƯỜI THẬT, KHÔNG VIẾT NHƯ ROBOT:
+                       ✗ ""Sự suy giảm doanh số đáng kể"", ""Nguyên nhân chủ yếu là do yếu tố bên ngoài""
+                       ✓ ""Bánh mì thịt nướng tụt 60% trong 3 tuần liên tiếp — thử hỏi khách phản hồi thế nào trước khi đổ lỗi thời tiết""
 
-3. MỖI ACTION: WHAT + WHY + SPECIFIC STEP + WHEN
-   ✗ ""Cải thiện marketing""     ✓ ""Gọi điện cho 3 khách VIP tuần này, hỏi thăm và mời thử món mới""
-   ✗ ""Theo dõi thêm""          ✓ ""Đo 7 ngày, nếu tiếp tục giảm → loại bỏ khỏi menu cuối tuần sau""
+                    3. MỖI ACTION: WHAT + WHY + SPECIFIC STEP + WHEN
+                       ✗ ""Cải thiện marketing""     ✓ ""Gọi điện cho 3 khách VIP tuần này, hỏi thăm và mời thử món mới""
+                       ✗ ""Theo dõi thêm""          ✓ ""Đo 7 ngày, nếu tiếp tục giảm → loại bỏ khỏi menu cuối tuần sau""
 
-4. PROMO CHỈ DÙNG CHO KHÁCH MỚI / KHÁCH LÂU KHÔNG QUAY LẠI — KHÔNG dùng cho VIP (Gold/Platinum)
+                    4. PROMO CHỈ DÙNG CHO KHÁCH MỚI / KHÁCH LÂU KHÔNG QUAY LẠI — KHÔNG dùng cho VIP (Gold/Platinum)
 
-5. PHÂN BIỆT ĐƠN HOÀN THÀNH vs ĐANG XỬ LÝ:
-   • completed = đơn ĐÃ giao cho khách. Nếu completed/total ≥ 50% → ĐÁNH GIÁ LÀ TỐT, KHÔNG viết là ""tỷ lệ thấp""
-   • processing/cancelled = đơn đang chờ / đã hủy. KHÔNG cộng vào completed
-   • Nếu AI không rõ → viết ""kiểm tra lại"" thay vì kết luận sai
+                    5. PHÂN BIỆT ĐƠN HOÀN THÀNH vs ĐANG XỬ LÝ:
+                       • completed = đơn ĐÃ giao cho khách. Nếu completed/total ≥ 50% → ĐÁNH GIÁ LÀ TỐT, KHÔNG viết là ""tỷ lệ thấp""
+                       • processing/cancelled = đơn đang chờ / đã hủy. KHÔNG cộng vào completed
+                       • Nếu AI không rõ → viết ""kiểm tra lại"" thay vì kết luận sai
 
-6. TOP CUSTOMER — revenueShare:
-   • Nếu revenueShare > 100% → KHÔNG viết ""chiếm 106% doanh thu"" (vô lý)
-   • Viết tự nhiên: ""chiếm phần lớn doanh thu"" hoặc ""VIP chi tiêu cao nhất""
-   • KHÔNG tự tính % nếu AI không chắc chắn
+                    6. TOP CUSTOMER — revenueShare:
+                       • Nếu revenueShare > 100% → KHÔNG viết ""chiếm 106% doanh thu"" (vô lý)
+                       • Viết tự nhiên: ""chiếm phần lớn doanh thu"" hoặc ""VIP chi tiêu cao nhất""
+                       • KHÔNG tự tính % nếu AI không chắc chắn
 
-7. seasonalOpportunities: BẮT BUỘC ≥ 1 item — gợi món CỤ THỂ phù hợp tháng hiện tại (tháng 4 = hè → đồ uống lạnh, kem, salad...)
+                    7. seasonalOpportunities: BẮT BUỘC ≥ 1 item — gợi món CỤ THỂ phù hợp tháng hiện tại (tháng 4 = hè → đồ uống lạnh, kem, salad...)
 
-8. suggestedAdditions: món phổ biến ngành F&B nhà hàng CHƯA CÓ — gợi TÊN MÓN CỤ THỂ (vd: ""Trà sữa"", ""Bánh flan"", ""Kem que"")
+                    8. suggestedAdditions: món phổ biến ngành F&B nhà hàng CHƯA CÓ — gợi TÊN MÓN CỤ THỂ (vd: ""Trà sữa"", ""Bánh flan"", ""Kem que"")
 
-9. comboRecommendations: LUÔN ≥ 1 — gợi combo từ top dish + đồ uống/tráng miệng
+                    9. comboRecommendations: LUÔN ≥ 1 — gợi combo từ top dish + đồ uống/tráng miệng
 
-10. SỐ LƯỢNG TỐI THIỂU:
-   • keyInsights: 2-3 items (warning/opportunity/info)
-   • thisWeek: ≥ 2 | opportunities: ≥ 2
-   • seasonalOpportunities: ≥ 1 | suggestedAdditions: ≥ 1 | comboRecommendations: ≥ 1
-   • topGrowthDrivers: ≥ 1 (món đang tăng mạnh nhất)
-   • improveOrRemove: ≥ 0 (chỉ liệt kê khi có món declining)
+                    10. SỐ LƯỢNG TỐI THIỂU (tiết kiệm token — Groq max 12000 tokens):
+                       • keyInsights: 2-3 items (warning/opportunity/info)
+                       • seasonalOpportunities: ≥ 1 | suggestedAdditions: ≥ 1 | comboRecommendations: ≥ 1
+                       • topGrowthDrivers: ≥ 1 (món đang tăng mạnh nhất)
+                       • improveOrRemove: ≥ 0 (chỉ liệt kê khi có món declining)
+                       • actions: ĐÚNG 3 items QUAN TRỌNG NHẤT — chọn lọc từ urgent + thisWeek + opportunities, ưu tiên high impact
+                       • customerStrategies: 1-2 items — gộp acquisition + retention + vip thành list phẳng, ưu tiên nhất
 
-═══════════════════════════════════════════════════
-JSON OUTPUT — CẤU TRÚC MỚI (streamlined)
-═══════════════════════════════════════════════════
+                    ═══════════════════════════════════════════════════
+                    JSON OUTPUT — CẤU TRÚC MỚI (streamlined)
+                    ═══════════════════════════════════════════════════
 
-{
-  ""summary"": ""2-3 CÂU nói thẳng tình hình: doanh thu tăng/giảm bao nhiêu%, điểm nổi bật, việc quan trọng nhất cần làm ngay. Viết tự nhiên như đang kể cho bạn bè."",
+                    {
+                      ""summary"": ""2-3 CÂU nói thẳng tình hình: doanh thu tăng/giảm bao nhiêu%, điểm nổi bật, việc quan trọng nhất cần làm ngay. Viết tự nhiên như đang kể cho bạn bè."",
 
-  ""keyInsights"": [
-    { ""type"": ""warning"", ""title"": ""Tên cảnh báo ngắn ≤10 từ"", ""detail"": ""1-2 câu, con số cụ thể, hậu quả nếu không xử lý"" },
-    { ""type"": ""opportunity"", ""title"": ""Cơ hội ngắn ≤10 từ"", ""detail"": ""1-2 câu, tại sao đây là cơ hội, tiềm năng thế nào"" },
-    { ""type"": ""info"", ""title"": ""Thông tin ngắn ≤10 từ"", ""detail"": ""1-2 câu, sự thật thú vị từ data"" }
-  ],
+                      ""keyInsights"": [
+                        { ""type"": ""warning"", ""title"": ""Tên cảnh báo ngắn ≤10 từ"", ""detail"": ""1-2 câu, con số cụ thể, hậu quả nếu không xử lý"" },
+                        { ""type"": ""opportunity"", ""title"": ""Cơ hội ngắn ≤10 từ"", ""detail"": ""1-2 câu, tại sao đây là cơ hội, tiềm năng thế nào"" },
+                        { ""type"": ""info"", ""title"": ""Thông tin ngắn ≤10 từ"", ""detail"": ""1-2 câu, sự thật thú vị từ data"" }
+                      ],
 
-  ""topGrowthDrivers"": [
-    { ""dishName"": ""Tên món"", ""revenue"": 9000000, ""quantity"": 300, ""reason"": ""1 câu: tại sao tăng"" }
-  ],
+                      ""topGrowthDrivers"": [
+                        { ""dishName"": ""Tên món"", ""revenue"": 9000000, ""quantity"": 300, ""reason"": ""1 câu: tại sao tăng"" }
+                      ],
 
-  ""topDeclineDrivers"": [
-    { ""dishName"": ""Tên món"", ""changePercent"": -60.0, ""severity"": ""warning"", ""reason"": ""1 câu: giảm từ đâu, bao lâu rồi"" }
-  ],
+                      ""topDeclineDrivers"": [
+                        { ""dishName"": ""Tên món"", ""changePercent"": -60.0, ""severity"": ""warning"", ""reason"": ""1 câu: giảm từ đâu, bao lâu rồi"" }
+                      ],
 
-  ""menuDecisions"": {
-    ""keepAndPush"": { ""dishName"": ""Tên"", ""trend"": ""growing"", ""revenue"": 9000000, ""reason"": ""1 câu"", ""action"": ""1 câu cụ thể: quảng cáo / cải chất lượng / giữ nguyên"" },
-    ""improveOrRemove"": [
-      { ""dishName"": ""Tên"", ""trend"": ""declining"", ""reason"": ""1 câu"", ""action"": ""1 câu cụ thể: họp bếp / thử công thức / loại bỏ"" }
-    ],
-    ""seasonalOpportunities"": [
-      { ""dishName"": ""Tên món cụ thể phù hợp mùa"", ""reason"": ""1 câu: tại sao phù hợp mùa này"", ""action"": ""1 câu: thử nghiệm thế nào"" }
-    ],
-    ""suggestedAdditions"": [
-      { ""dishName"": ""Tên món cụ thể chưa có"", ""reason"": ""1 câu: tại sao nên thêm"" }
-    ],
-    ""comboRecommendations"": [
-      { ""dishes"": [""Top dish"", ""Đồ uống""], ""suggestedPrice"": 45000, ""aovIncrease"": 10000 }
-    ]
-  },
+                      ""menuDecisions"": {
+                        ""keepAndPush"": { ""dishName"": ""Tên"", ""trend"": ""growing"", ""revenue"": 9000000, ""reason"": ""1 câu"", ""action"": ""1 câu cụ thể: quảng cáo / cải chất lượng / giữ nguyên"" },
+                        ""improveOrRemove"": [
+                          { ""dishName"": ""Tên"", ""trend"": ""declining"", ""reason"": ""1 câu"", ""action"": ""1 câu cụ thể: họp bếp / thử công thức / loại bỏ"" }
+                        ],
+                        ""seasonalOpportunities"": [
+                          { ""dishName"": ""Tên món cụ thể phù hợp mùa"", ""reason"": ""1 câu: tại sao phù hợp mùa này"", ""action"": ""1 câu: thử nghiệm thế nào"" }
+                        ],
+                        ""suggestedAdditions"": [
+                          { ""dishName"": ""Tên món cụ thể chưa có"", ""reason"": ""1 câu: tại sao nên thêm"" }
+                        ],
+                        ""comboRecommendations"": [
+                          { ""dishes"": [""Top dish"", ""Đồ uống""], ""suggestedPrice"": 45000, ""aovIncrease"": 10000 }
+                        ]
+                      },
 
-  ""topCustomer"": {
-    ""customerName"": ""Tên"", ""totalSpent"": 9000000, ""membershipLevel"": ""Platinum"", ""revenueShare"": ""Chiếm X% doanh thu""
-  },
+                      ""topCustomer"": {
+                        ""customerName"": ""Tên"", ""totalSpent"": 9000000, ""membershipLevel"": ""Platinum"", ""revenueShare"": ""Chiếm X% doanh thu""
+                      },
 
-  ""promoInsight"": {
-    ""totalCost"": 900000, ""totalUsageCount"": 1,
-    ""suggestion"": ""1-2 câu: promo hiệu quả/chưa/tốn quá nhiều — ai nên dùng, ai không""
-  },
+                      ""promoInsight"": {
+                        ""totalCost"": 900000, ""totalUsageCount"": 1,
+                        ""suggestion"": ""1-2 câu: promo hiệu quả/chưa/tốn quá nhiều — ai nên dùng, ai không""
+                      },
 
-  ""actions"": {
-    ""urgent"": [
-      { ""title"": ""Tên việc ≤10 từ"", ""reason"": ""Con số cụ thể + hậu quả"", ""action"": ""Bước cụ thể + deadline"", ""when"": ""Ngay"", ""impact"": ""high"" }
-    ],
-    ""thisWeek"": [
-      { ""title"": ""Việc 1"", ""reason"": ""Data cụ thể"", ""action"": ""Bước + deadline"", ""when"": ""Tuần này"", ""impact"": ""high"" },
-      { ""title"": ""Việc 2"", ""reason"": ""..."", ""action"": ""..."", ""when"": ""Tuần này"", ""impact"": ""medium"" }
-    ],
-    ""opportunities"": [
-      { ""title"": ""Cơ hội 1"", ""reason"": ""Data nào"", ""action"": ""Test + đo kết quả"", ""when"": ""Tháng này"", ""impact"": ""medium"" },
-      { ""title"": ""Cơ hội 2"", ""reason"": ""..."", ""action"": ""..."", ""when"": ""Tháng này"", ""impact"": ""medium"" }
-    ]
-  }
-}";
+                      ""customerStrategies"": [
+                        { ""title"": ""Tên việc ≤10 từ"", ""reason"": ""1-2 câu: tại sao cần làm"", ""action"": ""1 câu cụ thể: bước đầu tiên"", ""when"": ""Ngay | Tuần này"", ""impact"": ""high"" }
+                      ],
+
+                      ""actions"": [
+                        { ""title"": ""Tên việc ≤10 từ"", ""reason"": ""Con số cụ thể + hậu quả"", ""action"": ""Bước cụ thể + deadline"", ""when"": ""Ngay"", ""impact"": ""high"" },
+                        { ""title"": ""Việc 2"", ""reason"": ""Data cụ thể"", ""action"": ""Bước + deadline"", ""when"": ""Tuần này"", ""impact"": ""high"" },
+                        { ""title"": ""Việc 3"", ""reason"": ""..."", ""action"": ""..."", ""when"": ""Tháng này"", ""impact"": ""medium"" }
+                      ]
+                    }";
         }
 
         private static string BuildAnalyticsContext(
@@ -1587,23 +1562,18 @@ JSON OUTPUT — CẤU TRÚC MỚI (streamlined)
 
                 var result = new AIAnalyticsResponse();
 
-                // Top-level: summary + alertCount
                 result.Summary = GetStr(root, "summary");
                 result.AlertCount = GetInt(root, "alertCount");
 
-                // keyInsights[]
                 if (root.TryGetProperty("keyInsights", out var ki) && ki.ValueKind == JsonValueKind.Array)
                     result.KeyInsights = ki.EnumerateArray().Select(ParseInsightItem).Where(x => !string.IsNullOrEmpty(x.Title)).ToList();
 
-                // topGrowthDrivers[]
                 if (root.TryGetProperty("topGrowthDrivers", out var tg) && tg.ValueKind == JsonValueKind.Array)
                     result.TopGrowthDrivers = tg.EnumerateArray().Select(ParseTopGrowthDriver).Where(x => !string.IsNullOrEmpty(x.DishName)).ToList();
 
-                // topDeclineDrivers[]
                 if (root.TryGetProperty("topDeclineDrivers", out var td) && td.ValueKind == JsonValueKind.Array)
                     result.TopDeclineDrivers = td.EnumerateArray().Select(ParseTopDeclineDriver).Where(x => !string.IsNullOrEmpty(x.DishName)).ToList();
 
-                // menuDecisions{}
                 if (root.TryGetProperty("menuDecisions", out var md) && md.ValueKind == JsonValueKind.Object)
                 {
                     if (md.TryGetProperty("keepAndPush", out var kp) && kp.ValueKind == JsonValueKind.Object)
@@ -1615,29 +1585,23 @@ JSON OUTPUT — CẤU TRÚC MỚI (streamlined)
                     result.MenuDecisions.ComboRecommendations = ObjArray(md, "comboRecommendations", ParseComboRecommendation);
                 }
 
-                // topCustomer{}
                 if (root.TryGetProperty("topCustomer", out var tc) && tc.ValueKind == JsonValueKind.Object)
                     result.TopCustomer = ParseTopCustomer(tc);
 
-                // promoInsight{}
                 if (root.TryGetProperty("promoInsight", out var pi) && pi.ValueKind == JsonValueKind.Object)
                 {
                     result.PromoInsight.TotalCost = GetDec(pi, "totalCost");
                     result.PromoInsight.TotalUsageCount = GetInt(pi, "totalUsageCount");
                     result.PromoInsight.Suggestion = GetStr(pi, "suggestion");
                 }
+                if (root.TryGetProperty("actions", out var ac) && ac.ValueKind == JsonValueKind.Array)
+                    result.Actions = ac.EnumerateArray().Select(ParseActionItem).Where(x => !string.IsNullOrEmpty(x.Title)).ToList();
 
-                // actions{}
-                if (root.TryGetProperty("actions", out var ac) && ac.ValueKind == JsonValueKind.Object)
-                {
-                    result.Actions.Urgent = ObjArray(ac, "urgent", ParseActionItem);
-                    result.Actions.ThisWeek = ObjArray(ac, "thisWeek", ParseActionItem);
-                    result.Actions.Opportunities = ObjArray(ac, "opportunities", ParseActionItem);
-                }
-
-                // Tự tính alertCount nếu AI không trả về
+                if (root.TryGetProperty("customerStrategies", out var cs) && cs.ValueKind == JsonValueKind.Array)
+                    result.CustomerStrategies = cs.EnumerateArray().Select(ParseCustomerStrategyItem)
+                        .Where(x => !string.IsNullOrEmpty(x.Title)).ToList();
                 if (result.AlertCount == 0)
-                    result.AlertCount = result.Actions.Urgent.Count
+                    result.AlertCount = result.Actions.Count(a => a.Impact == "high")
                         + result.TopDeclineDrivers.Count(d => d.Severity is "warning" or "critical");
 
                 return result;
@@ -1716,6 +1680,15 @@ JSON OUTPUT — CẤU TRÚC MỚI (streamlined)
             TotalSpent = GetDec(el, "totalSpent"),
             MembershipLevel = GetStr(el, "membershipLevel"),
             RevenueShare = GetStr(el, "revenueShare")
+        };
+
+        private static CustomerStrategyItem ParseCustomerStrategyItem(JsonElement el) => new()
+        {
+            Title = GetStr(el, "title"),
+            Reason = GetStr(el, "reason"),
+            Action = GetStr(el, "action"),
+            When = GetStr(el, "when"),
+            Impact = GetStr(el, "impact")
         };
 
         #endregion

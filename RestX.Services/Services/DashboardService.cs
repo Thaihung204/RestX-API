@@ -372,7 +372,6 @@ namespace RestX.BLL.Services
                     new SqlParameter("to", SqlDbType.DateTime2) { Value = toDate }
                 });
 
-            // Dùng Payments để đồng nhất với GetSummaryAsync
             var revenueData = await Repo.ExecuteSqlSelectAsync<QueryResult.OrderRevenue>(@"
                 SELECT COUNT(DISTINCT o.Id) AS TotalOrders, ISNULL(SUM(p.Amount), 0) AS TotalRevenue
                 FROM Payments p
@@ -386,9 +385,6 @@ namespace RestX.BLL.Services
                     new SqlParameter("status", SqlDbType.Int) { Value = (int)PaymentStatus.Success },
                     new SqlParameter("purpose", SqlDbType.Int) { Value = (int)PaymentPurpose.Order }
                 });
-
-            // Chỉ lấy customer có thực sự chi tiêu trong kỳ (TotalSpent > 0)
-            // FIX: dùng Payments — cùng nguồn với GetSummaryAsync để tránh conflict số liệu
             var topCustomersData = await Repo.ExecuteSqlSelectAsync<CustomerStats.TopCustomer>(@"
                 SELECT TOP 5
                     c.Id AS CustomerId,

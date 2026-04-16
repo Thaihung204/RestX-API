@@ -1,103 +1,103 @@
 namespace RestX.BLL.DataTranferObjects.AI
 {
+    /// <summary>
+    /// AI Analytics — chỉ trả về PHÂN TÍCH CHUYÊN SÂU + CHIẾN LƯỢC.
+    /// Dashboard đã có: doanh thu, top món, xu hướng, khách VIP, promo → KHÔNG lặp lại.
+    /// Response chỉ gồm: hidden insights, chiến lược tương lai, phân tích ẩn.
+    /// </summary>
     public class AIAnalyticsResponse
     {
         public DateTime GeneratedAt { get; set; } = DateTime.UtcNow.AddHours(7);
         public string Summary { get; set; } = string.Empty;
-        public int AlertCount { get; set; }
-        public List<AIInsightItem> KeyInsights { get; set; } = new();
-        public List<TopGrowthDriver> TopGrowthDrivers { get; set; } = new();
-        public List<TopDeclineDriver> TopDeclineDrivers { get; set; } = new();
-        public MenuDecisions MenuDecisions { get; set; } = new();
-        public TopCustomerInsight? TopCustomer { get; set; }
-        public PromotionInsight PromoInsight { get; set; } = new();
-        public List<CustomerStrategyItem> CustomerStrategies { get; set; } = new();
-        public List<ActionItem> Actions { get; set; } = new();
+        public List<HiddenOpportunity> HiddenOpportunities { get; set; } = new();
+        public List<HiddenRisk> HiddenRisks { get; set; } = new();
+        public MenuStrategy MenuStrategy { get; set; } = new();
+        public MarketingStrategy MarketingStrategy { get; set; } = new();
+        public CustomerStrategy CustomerStrategy { get; set; } = new();
+        public List<ActionItem> ActionPlan { get; set; } = new();
     }
 
-    public class AIInsightItem
+    public class HiddenOpportunity
     {
         public string Type { get; set; } = string.Empty;
         public string Title { get; set; } = string.Empty;
-        public string Detail { get; set; } = string.Empty;
+        public string Insight { get; set; } = string.Empty;
+        public string Action { get; set; } = string.Empty;
+        public string When { get; set; } = string.Empty;
+        public string Impact { get; set; } = string.Empty;
     }
 
-    public class TopGrowthDriver
+    public class HiddenRisk
+    {
+        public string Title { get; set; } = string.Empty;
+        public string Insight { get; set; } = string.Empty;
+        public string Action { get; set; } = string.Empty;
+        public string When { get; set; } = string.Empty;
+        public string Impact { get; set; } = string.Empty;
+    }
+
+
+    public class MenuStrategy
+    {
+        public TrendItem TrendingDish { get; set; } = new();
+
+        public List<TimeBasedDish> TimeBasedDishes { get; set; } = new();
+
+        public List<SuggestedDish> SuggestedAdditions { get; set; } = new();
+        public List<ComboSuggestion> ComboSuggestions { get; set; } = new();
+    }
+
+    public class TrendItem
     {
         public string DishName { get; set; } = string.Empty;
-        public decimal Revenue { get; set; }
-        public int Quantity { get; set; }
-        public string Reason { get; set; } = string.Empty;
-    }
-
-    public class TopDeclineDriver
-    {
-        public string DishName { get; set; } = string.Empty;
-        public double ChangePercent { get; set; }
-        public string Severity { get; set; } = string.Empty;
-        public string Reason { get; set; } = string.Empty;
-    }
-
-    public class MenuDecisions
-    {
-        public KeepAndPushItem? KeepAndPush { get; set; }
-        public List<ImproveOrRemoveItem> ImproveOrRemove { get; set; } = new();
-        public List<SeasonalOpportunityItem> SeasonalOpportunities { get; set; } = new();
-        public List<SuggestedAdditionItem> SuggestedAdditions { get; set; } = new();
-        public List<ComboRecommendationItem> ComboRecommendations { get; set; } = new();
-    }
-
-    public class KeepAndPushItem
-    {
-        public string DishName { get; set; } = string.Empty;
-        public string Trend { get; set; } = string.Empty;
-        public decimal Revenue { get; set; }
-        public string Reason { get; set; } = string.Empty;
+        public string WhyTrending { get; set; } = string.Empty;
         public string Action { get; set; } = string.Empty;
     }
 
-    public class ImproveOrRemoveItem
+    public class TimeBasedDish
     {
+        public string Context { get; set; } = string.Empty;
         public string DishName { get; set; } = string.Empty;
-        public string Trend { get; set; } = string.Empty;
         public string Reason { get; set; } = string.Empty;
-        public string Action { get; set; } = string.Empty;
     }
 
-    public class SeasonalOpportunityItem
+    public class SuggestedDish
     {
         public string DishName { get; set; } = string.Empty;
         public string Reason { get; set; } = string.Empty;
         public string Action { get; set; } = string.Empty;
     }
 
-    public class SuggestedAdditionItem
-    {
-        public string DishName { get; set; } = string.Empty;
-        public string Reason { get; set; } = string.Empty;
-    }
-
-    public class ComboRecommendationItem
+    public class ComboSuggestion
     {
         public List<string> Dishes { get; set; } = new();
         public decimal? SuggestedPrice { get; set; }
         public decimal? AOVIncrease { get; set; }
-    }
-    public class TopCustomerInsight
-    {
-        public string CustomerName { get; set; } = string.Empty;
-        public decimal TotalSpent { get; set; }
-        public string MembershipLevel { get; set; } = string.Empty;
-        public string RevenueShare { get; set; } = string.Empty;
-    }
-    public class PromotionInsight
-    {
-        public decimal TotalCost { get; set; }
-        public int TotalUsageCount { get; set; }
-        public string Suggestion { get; set; } = string.Empty;
+        public string Reason { get; set; } = string.Empty;
     }
 
-    public class CustomerStrategyItem
+    public class MarketingStrategy
+    {
+        public string Trend { get; set; } = string.Empty;
+        public string PromoStrategy { get; set; } = string.Empty;
+        public List<MarketingAction> UpcomingActions { get; set; } = new();
+    }
+
+    public class MarketingAction
+    {
+        public string Title { get; set; } = string.Empty;
+        public string Reason { get; set; } = string.Empty;
+        public string Action { get; set; } = string.Empty;
+        public string When { get; set; } = string.Empty;
+        public string Impact { get; set; } = string.Empty;
+    }
+
+    public class CustomerStrategy
+    {
+        public List<CustomerAction> Actions { get; set; } = new();
+    }
+
+    public class CustomerAction
     {
         public string Title { get; set; } = string.Empty;
         public string Reason { get; set; } = string.Empty;

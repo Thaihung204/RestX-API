@@ -514,7 +514,10 @@ namespace RestX.BLL.Services
                     detail.Id,
                     depositPaid);
 
-                await emailService.SendEmailAsync(email, "Reservation Confirmation – " + detail.ConfirmationCode, body);
+                var subject = depositPaid
+                    ? "Deposit Confirmed – " + detail.ConfirmationCode
+                    : "Reservation Confirmation – " + detail.ConfirmationCode;
+                await emailService.SendEmailAsync(email, subject, body);
             }
             catch
             {
@@ -730,7 +733,9 @@ namespace RestX.BLL.Services
 
         public async Task<DepositStatusResponse> GetDepositStatus(Guid reservationId)
         {
-            var reservation = await Repo.GetByIdAsync<Reservation>(reservationId)
+            var reservation = await Repo.GetOneAsync<Reservation>(
+                filter: r => r.Id == reservationId,
+                includeProperties: "ReservationStatus")
                 ?? throw new KeyNotFoundException("Reservation not found");
 
             var depositPayments = await Repo.GetAsync<Payment>(
@@ -745,7 +750,8 @@ namespace RestX.BLL.Services
                 PaymentDeadline = reservation.PaymentDeadline,
                 IsPaid = depositPayment?.Status == PaymentStatus.Success,
                 CheckoutUrl = depositPayment?.Status == PaymentStatus.Pending ? depositPayment.CheckoutUrl : null,
-                PaymentStatus = depositPayment?.Status
+                PaymentStatus = depositPayment?.Status,
+                ReservationStatus = reservation.ReservationStatus?.Code
             };
         }
 
@@ -834,6 +840,16 @@ namespace RestX.BLL.Services
                 throw new InvalidOperationException($"Cash received ({request.CashReceive}) is less than amount due ({reservation.DepositAmount})");
             var cashback = request.CashReceive - reservation.DepositAmount;
 
+            var pendingOnlinePayment = await Repo.GetOneAsync<Payment>(
+                p => p.ReservationId == reservationId && p.Purpose == PaymentPurpose.Deposit && p.Status == PaymentStatus.Pending);
+            if (pendingOnlinePayment?.PayOSOrderCode != null)
+            {
+                var (gatewayClient, _) = await GetDepositGateway();
+                await gatewayClient.PaymentRequests.CancelAsync(pendingOnlinePayment.PayOSOrderCode.Value, "Paid by cash");
+                pendingOnlinePayment.Status = PaymentStatus.Fail;
+                Repo.Update(pendingOnlinePayment);
+            }
+
             var payment = new Payment
             {
                 ReservationId = reservationId,
@@ -851,6 +867,7 @@ namespace RestX.BLL.Services
             await Repo.SaveAsync();
 
             await ConfirmReservation(reservationId, userId);
+            await SendDepositConfirmedEmailAsync(reservationId);
         }
 
 

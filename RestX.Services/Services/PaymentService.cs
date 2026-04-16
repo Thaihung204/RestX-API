@@ -257,7 +257,7 @@ namespace RestX.BLL.Services
                 var reservation = await Repo.GetOneAsync<Reservation>(
                     r => r.Id == payment.ReservationId,
                     includeProperties: "ReservationStatus");
-                if (reservation?.ReservationStatus?.Code == "DEPOSIT_PENDING")
+                if (reservation?.ReservationStatus?.Code == "PENDING")
                 {
                     await reservationService.ConfirmReservation(payment.ReservationId.Value);
                     await reservationService.SendDepositConfirmedEmailAsync(payment.ReservationId.Value);

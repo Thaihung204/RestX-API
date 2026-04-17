@@ -79,6 +79,10 @@ namespace RestX.BLL.Services
 
             var customerId = await ResolveCustomer(request.Phone, request.Name);
 
+            var customer = await Repo.GetFirstAsync<Customer>(c => c.Id == customerId);
+            if (customer != null && !customer.IsActive)
+                throw new InvalidOperationException("Inactive customer cannot make reservations");
+
             var tables = await ValidateReservationTables(request.TableIds);
             await ValidateTableNotOccupied(tables, request.ReservationDateTime);
             ValidateCapacity(request.NumberOfGuests, tables);

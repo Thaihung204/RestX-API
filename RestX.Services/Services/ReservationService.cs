@@ -139,6 +139,9 @@ namespace RestX.BLL.Services
 
             if (requiresDeposit)
             {
+                var emailCacheKey = $"Reservation:{CurrentTenant?.Hostname}:{reservation.Id}:email";
+                await RedisService.SetStringAsync(emailCacheKey, request.Email, TimeSpan.FromDays(7));
+
                 var paymentLink = await CreateDepositPaymentLink(reservation.Id);
                 detail.CheckoutUrl = paymentLink;
                 await SendConfirmationEmail(request.Email, request.Name, detail, tables);
@@ -973,8 +976,12 @@ namespace RestX.BLL.Services
 
             var detail = mapper.Map<ReservationDetail>(reservation);
 
+            var emailCacheKey = $"Reservation:{CurrentTenant?.Hostname}:{reservationId}:email";
+            var cachedEmail = await RedisService.GetStringAsync(emailCacheKey);
+            await RedisService.RemoveAsync(emailCacheKey);
+
             await SendConfirmationEmail(
-                email: user.Email ?? "",
+                email: !string.IsNullOrEmpty(cachedEmail) ? cachedEmail : user.Email ?? "",
                 name: user.FullName ?? user.PhoneNumber ?? "Guest",
                 detail: detail,
                 tables: tables,

@@ -35,6 +35,13 @@ namespace RestX.BLL.Services
                 SELECT #SELECT#
                 FROM Customers c
                 LEFT JOIN AspNetUsers u ON c.ApplicationUserId = u.Id
+                LEFT JOIN (
+                    SELECT CustomerId,
+                           COUNT(*) AS TotalOrders,
+                           ISNULL(SUM(CASE WHEN OrderStatusId = 1 THEN TotalAmount ELSE 0 END), 0) AS TotalSpent
+                    FROM Orders
+                    GROUP BY CustomerId
+                ) o ON o.CustomerId = c.Id
                 WHERE 1 = 1");
             queryBuilder
                 .AddBoolCondition("c.IsActive = @IsActive", "IsActive", filter.IsActive)
@@ -48,7 +55,8 @@ namespace RestX.BLL.Services
             var (countQuery, countParams) = queryBuilder.BuildCountQuery("COUNT(DISTINCT c.Id)");
             int totalCount = await Repo.ExecuteSqlCommandAsync<int>(countQuery, countParams);
             var selectColumns = @"DISTINCT c.Id, u.FullName, u.Email, u.PhoneNumber,
-                                  c.MembershipLevel, c.LoyaltyPoints, c.IsActive, c.CreatedDate, u.AvatarUrl";
+                                  c.MembershipLevel, c.LoyaltyPoints, c.IsActive, c.CreatedDate, u.AvatarUrl,
+                                  ISNULL(o.TotalOrders, 0) AS TotalOrders, ISNULL(o.TotalSpent, 0) AS TotalSpent";
             var (dataQuery, dataParams) = queryBuilder.BuildDataQuery(
                 selectColumns,
                 GetSortClause(filter.SortBy, filter.SortDescending),
@@ -258,7 +266,7 @@ namespace RestX.BLL.Services
                 SELECT
                     CustomerId,
                     COUNT(*) AS TotalOrders,
-                    ISNULL(SUM(CASE WHEN OrderStatusId = 4 THEN TotalAmount ELSE 0 END), 0) AS TotalSpent,
+                    ISNULL(SUM(CASE WHEN OrderStatusId = 1 THEN TotalAmount ELSE 0 END), 0) AS TotalSpent,
                     MAX(CompletedAt) AS LastVisit
                 FROM Orders
                 WHERE CustomerId IN ({idList})

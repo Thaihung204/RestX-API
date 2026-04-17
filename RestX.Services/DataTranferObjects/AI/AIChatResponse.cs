@@ -16,6 +16,8 @@ namespace RestX.BLL.DataTranferObjects.AI
         public Guid DishId { get; set; }
         public string DishName { get; set; } = string.Empty;
         public decimal Price { get; set; }
+        public int Quantity { get; set; } = 1;
+        public decimal TotalPrice => Price * Quantity;
         public string? ImageUrl { get; set; }
         public string Reason { get; set; } = string.Empty;
         public string Category { get; set; } = string.Empty;

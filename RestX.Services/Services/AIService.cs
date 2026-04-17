@@ -628,7 +628,9 @@ XỬ LÝ CÁC TÌNH HUỐNG:
    → suggestions=[đồ ăn vừa tiền], upsellSuggestions=[đồ uống vừa phần dư]
 
 3. SỐ NGƯỜI (""bàn 4 người"", ""2 người ăn""):
-   → Gợi ý đủ món đa dạng cho cả bàn (ưu tiên 1 món/người), tính tổng ước tính, ghi rõ ""cho X người"" trong message
+   → Gợi ý đủ món đa dạng cho cả bàn, mỗi suggestion có quantity = số lượng phù hợp (thường 1 phần/người)
+   → message nói rõ: ""cho 2 người: A×2 (130k) + B×2 (110k) = tổng 240k""
+   → Tính tổng = sum(price × quantity) của tất cả suggestions
 
 4. CHẾ ĐỘ ĂN / DỊ ỨNG:
    → ""ăn chay"" / ""vegetarian"": chỉ gợi ý món có tag (chay) trong menu
@@ -667,7 +669,7 @@ QUY TẮC ORDERDRAFT:
 JSON OUTPUT (chỉ trả JSON, không thêm text):
 {{
   ""message"": ""Nội dung tự nhiên, có cảm xúc"",
-  ""suggestions"": [{{""dishId"": ""uuid"", ""dishName"": ""Tên"", ""price"": 45000, ""reason"": ""Lý do hấp dẫn"", ""category"": ""Danh mục""}}],
+  ""suggestions"": [{{""dishId"": ""uuid"", ""dishName"": ""Tên"", ""price"": 45000, ""quantity"": 1, ""reason"": ""Lý do hấp dẫn"", ""category"": ""Danh mục""}}],
   ""upsellSuggestions"": [{{""dishId"": ""uuid"", ""dishName"": ""Tên"", ""price"": 15000, ""reason"": ""Gợi ý nhẹ"", ""category"": ""Đồ uống""}}],
   ""quickReplies"": [""Câu như khách đang nói 1"", ""Câu 2"", ""Câu 3""],
   ""orderDraft"": {{""tableId"": null, ""items"": [{{""dishId"": ""uuid"", ""dishName"": ""Tên"", ""quantity"": 2, ""price"": 45000}}]}},
@@ -801,6 +803,7 @@ JSON OUTPUT (chỉ trả JSON, không thêm text):
                             DishId = dishId,
                             DishName = s.TryGetProperty("dishName", out var name) ? name.GetString() ?? "" : "",
                             Price = s.TryGetProperty("price", out var price) ? price.GetDecimal() : 0,
+                            Quantity = s.TryGetProperty("quantity", out var qty) && qty.ValueKind == JsonValueKind.Number ? qty.GetInt32() : 1,
                             Reason = s.TryGetProperty("reason", out var reason) ? reason.GetString() ?? "" : "",
                             Category = s.TryGetProperty("category", out var cat) ? cat.GetString() ?? "" : "",
                         };

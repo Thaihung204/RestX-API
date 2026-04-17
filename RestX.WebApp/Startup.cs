@@ -209,11 +209,9 @@ namespace RestX.WebApp
             isDevlopement = isDevlopement || (Configuration.GetSection("AppSettings")["EmailProvider"] ?? "") == "Mailtrap";
             DIHelper.Setup(services, isDevlopement);
 
-            var aiApiKey = Configuration.GetSection("AISuggestion")["ApiKey"] ?? string.Empty;
-            services.AddHttpClient("OpenAI", client =>
+            services.AddHttpClient("Gemini", client =>
             {
-                client.BaseAddress = new Uri("https://api.groq.com/");
-                client.DefaultRequestHeaders.Add("Authorization", $"Bearer {aiApiKey}");
+                client.BaseAddress = new Uri("https://generativelanguage.googleapis.com/");
             });
 
             services.AddCors(options =>

@@ -150,12 +150,37 @@ namespace RestX.BLL.Services
             if (alreadyPaid)
                 throw new InvalidOperationException("Order is already paid");
 
+            var (gatewayClient, gatewaySettings) = await GetTenantGateway();
+
+            var existingPending = await Repo.GetOneAsync<Payment>(
+                p => p.OrderId == orderId &&
+                     p.Purpose == PaymentPurpose.Order &&
+                     p.Status == PaymentStatus.Pending);
+
+            if (existingPending != null)
+            {
+                var linkAge = DateTime.UtcNow.AddHours(7) - existingPending.PaymentDate;
+                if (linkAge.TotalMinutes < 15 && existingPending.CheckoutUrl != null)
+                    return new CreatePaymentLinkResponse
+                    {
+                        PaymentId = existingPending.Id,
+                        OrderCode = existingPending.PayOSOrderCode ?? 0,
+                        CheckoutUrl = existingPending.CheckoutUrl
+                    };
+
+                if (existingPending.PayOSOrderCode.HasValue)
+                {
+                    await gatewayClient.PaymentRequests.CancelAsync(existingPending.PayOSOrderCode.Value, "Recreating payment link");
+                    existingPending.Status = PaymentStatus.Fail;
+                    Repo.Update(existingPending);
+                    await Repo.SaveAsync();
+                }
+            }
+
             var depositPaid = await GetPaidDepositAmount(order.ReservationId);
             var amount = (long)(order.TotalAmount - depositPaid);
             if (amount <= 0)
                 throw new InvalidOperationException("Order total must be greater than zero");
-
-            var (gatewayClient, gatewaySettings) = await GetTenantGateway();
 
             var orderCode = GenerateOrderCode();
 

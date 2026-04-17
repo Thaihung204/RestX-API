@@ -17,12 +17,14 @@ namespace RestX.BLL.Interfaces.Reservations
         Task CompleteReservation(Guid id,string? userId = null);
         Task<CheckInResponse> CheckIn(string confirmationCode, string userId);
         Task CancelReservation(Guid id,string? userId);
+        Task DeleteReservation(Guid id);
         Task<CheckAvailabilityResponse> CheckAvailabilityReservation(CheckAvailabilityParams request);
 
         // Deposit
         Task<DepositStatusResponse> GetDepositStatus(Guid reservationId);
         Task<string> CreateDepositPaymentLink(Guid reservationId);
         Task ConfirmCashDeposit(Guid reservationId, CashPaymentRequest request, string userId);
+        Task SendDepositConfirmedEmailAsync(Guid reservationId);
         Task AutoCancelDepositReservation(Guid reservationId);
         Task AutoMarkNoShow();
         Task<byte[]> ExportAsync(ReservationFilterParams filter);

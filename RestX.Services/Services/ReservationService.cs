@@ -139,9 +139,12 @@ namespace RestX.BLL.Services
 
             if (requiresDeposit)
             {
+                var emailCacheKey = $"Reservation:{CurrentTenant?.Hostname}:{reservation.Id}:email";
+                await RedisService.SetStringAsync(emailCacheKey, request.Email, TimeSpan.FromDays(7));
+
                 var paymentLink = await CreateDepositPaymentLink(reservation.Id);
                 detail.CheckoutUrl = paymentLink;
-                await SendConfirmationEmail(request.Email, request.Name, detail, tables, paymentLink);
+                await SendConfirmationEmail(request.Email, request.Name, detail, tables);
                 var paymentDeadlineUtc = paymentDeadline!.Value.Subtract(VietnamOffset);
                 BackgroundJob.Schedule<IReservationService>(
                     s => s.AutoCancelDepositReservation(reservation.Id),
@@ -221,6 +224,9 @@ namespace RestX.BLL.Services
             var currentStatusCode = reservation.ReservationStatus?.Code;
             if (currentStatusCode == CancelledCode)
                 throw new InvalidOperationException("Cannot update a reservation that is already cancelled");
+
+            if (reservation.CheckedInAt.HasValue)
+                throw new InvalidOperationException("Cannot update a reservation that has already been checked in");
 
             if (request.ReservationDateTime.HasValue)
             {
@@ -415,13 +421,61 @@ namespace RestX.BLL.Services
             await Repo.SaveAsync();
         }
 
+        public async Task DeleteReservation(Guid id)
+        {
+            var reservation = await RequireReservation(id, TablesAndStatusIncludes);
+
+            var statusCode = reservation.ReservationStatus?.Code;
+            if (statusCode == ConfirmedCode)
+                throw new InvalidOperationException("Cannot delete a confirmed reservation");
+
+            var sessions = (await Repo.GetAsync<TableSession>(
+                filter: ts => ts.ReservationId == id && ts.IsActive)).ToList();
+            var hasActiveOrder = sessions.Any(ts => ts.OrderId.HasValue);
+            if (hasActiveOrder)
+                throw new InvalidOperationException("Cannot delete a reservation with an active order");
+
+            foreach (var session in sessions)
+                Repo.Delete<TableSession>(session.Id);
+
+            Repo.Delete<Reservation>(id);
+            await Repo.SaveAsync();
+        }
+
         public async Task CancelReservation(Guid id, string? userId)
         {
             var reservation = await RequireReservation(id, TablesAndStatusIncludes);
+
+            var currentCode = reservation.ReservationStatus?.Code;
+            if (currentCode == CancelledCode)
+                throw new InvalidOperationException("Reservation is already cancelled");
+
+            if (reservation.CheckedInAt.HasValue)
+                throw new InvalidOperationException("Cannot cancel a reservation that has already been checked in");
+
+            var sessions = (await Repo.GetAsync<TableSession>(
+                filter: ts => ts.ReservationId == id && ts.IsActive)).ToList();
+            var sharedOrderId = sessions.FirstOrDefault()?.OrderId;
+            if (sharedOrderId.HasValue)
+            {
+                var order = await Repo.GetOneAsync<Order>(
+                    filter: o => o.Id == sharedOrderId.Value,
+                    includeProperties: "Payments");
+                if (order != null)
+                {
+                    if (order.OrderStatusId == (int)OrderStatus.Completed)
+                        throw new InvalidOperationException("Cannot cancel a reservation whose order has been completed");
+
+                    var hasPaidOrder = order.Payments.Any(p => p.Purpose == PaymentPurpose.Order && p.Status == PaymentStatus.Success);
+                    if (hasPaidOrder)
+                        throw new InvalidOperationException("Cannot cancel a reservation whose order has already been paid");
+                }
+            }
+
             var statuses = await statusValueService.GetStatuses(ReservationStatusTypeCode);
             var cancelledStatus = statuses.FirstOrDefault(s => s.Code == CancelledCode)
                 ?? throw new InvalidOperationException("Cancelled status not configured");
-            if (reservation.ReservationStatus?.Code == PendingCode)
+            if (currentCode == PendingCode)
             {
                 var pendingPayment = await Repo.GetOneAsync<Payment>(
                     p => p.ReservationId == id && p.Purpose == PaymentPurpose.Deposit && p.Status == PaymentStatus.Pending);
@@ -494,7 +548,8 @@ namespace RestX.BLL.Services
         }
 
         private async Task SendConfirmationEmail(
-            string email, string name, ReservationDetail detail, List<Table> tables, string? paymentLink = null)
+            string email, string name, ReservationDetail detail, List<Table> tables,
+            string? paymentLink = null, bool depositPaid = false)
         {
             try
             {
@@ -510,9 +565,13 @@ namespace RestX.BLL.Services
                     detail.PaymentDeadline,
                     paymentLink,
                     CurrentTenant?.Hostname,
-                    detail.Id);
+                    detail.Id,
+                    depositPaid);
 
-                await emailService.SendEmailAsync(email, "Reservation Confirmation – " + detail.ConfirmationCode, body);
+                var subject = depositPaid
+                    ? "Deposit Confirmed – " + detail.ConfirmationCode
+                    : "Reservation Confirmation – " + detail.ConfirmationCode;
+                await emailService.SendEmailAsync(email, subject, body);
             }
             catch
             {
@@ -728,7 +787,9 @@ namespace RestX.BLL.Services
 
         public async Task<DepositStatusResponse> GetDepositStatus(Guid reservationId)
         {
-            var reservation = await Repo.GetByIdAsync<Reservation>(reservationId)
+            var reservation = await Repo.GetOneAsync<Reservation>(
+                filter: r => r.Id == reservationId,
+                includeProperties: "ReservationStatus")
                 ?? throw new KeyNotFoundException("Reservation not found");
 
             var depositPayments = await Repo.GetAsync<Payment>(
@@ -743,7 +804,8 @@ namespace RestX.BLL.Services
                 PaymentDeadline = reservation.PaymentDeadline,
                 IsPaid = depositPayment?.Status == PaymentStatus.Success,
                 CheckoutUrl = depositPayment?.Status == PaymentStatus.Pending ? depositPayment.CheckoutUrl : null,
-                PaymentStatus = depositPayment?.Status
+                PaymentStatus = depositPayment?.Status,
+                ReservationStatus = reservation.ReservationStatus?.Code
             };
         }
 
@@ -832,6 +894,16 @@ namespace RestX.BLL.Services
                 throw new InvalidOperationException($"Cash received ({request.CashReceive}) is less than amount due ({reservation.DepositAmount})");
             var cashback = request.CashReceive - reservation.DepositAmount;
 
+            var pendingOnlinePayment = await Repo.GetOneAsync<Payment>(
+                p => p.ReservationId == reservationId && p.Purpose == PaymentPurpose.Deposit && p.Status == PaymentStatus.Pending);
+            if (pendingOnlinePayment?.PayOSOrderCode != null)
+            {
+                var (gatewayClient, _) = await GetDepositGateway();
+                await gatewayClient.PaymentRequests.CancelAsync(pendingOnlinePayment.PayOSOrderCode.Value, "Paid by cash");
+                pendingOnlinePayment.Status = PaymentStatus.Fail;
+                Repo.Update(pendingOnlinePayment);
+            }
+
             var payment = new Payment
             {
                 ReservationId = reservationId,
@@ -849,6 +921,7 @@ namespace RestX.BLL.Services
             await Repo.SaveAsync();
 
             await ConfirmReservation(reservationId, userId);
+            await SendDepositConfirmedEmailAsync(reservationId);
         }
 
 
@@ -884,6 +957,35 @@ namespace RestX.BLL.Services
             {
                 await CancelReservation(reservation.Id, null);
             }
+        }
+
+        public async Task SendDepositConfirmedEmailAsync(Guid reservationId)
+        {
+            var reservation = await Repo.GetOneAsync<Reservation>(
+                filter: r => r.Id == reservationId,
+                includeProperties: "Customer.ApplicationUser,TableSessions.Table");
+            if (reservation?.Customer?.ApplicationUser == null)
+                return;
+
+            var customer = reservation.Customer;
+            var user = customer.ApplicationUser;
+            var tables = reservation.TableSessions
+                .Where(ts => ts.Table != null)
+                .Select(ts => ts.Table!)
+                .ToList();
+
+            var detail = mapper.Map<ReservationDetail>(reservation);
+
+            var emailCacheKey = $"Reservation:{CurrentTenant?.Hostname}:{reservationId}:email";
+            var cachedEmail = await RedisService.GetStringAsync(emailCacheKey);
+            await RedisService.RemoveAsync(emailCacheKey);
+
+            await SendConfirmationEmail(
+                email: !string.IsNullOrEmpty(cachedEmail) ? cachedEmail : user.Email ?? "",
+                name: user.FullName ?? user.PhoneNumber ?? "Guest",
+                detail: detail,
+                tables: tables,
+                depositPaid: true);
         }
 
         private async Task<(PayOSClient client, DataTranferObjects.Common.PaymentGatewaySettings settings)> GetDepositGateway()

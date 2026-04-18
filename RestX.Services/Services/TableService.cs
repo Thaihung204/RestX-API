@@ -253,14 +253,29 @@ namespace RestX.BLL.Services
 
         public async Task<IEnumerable<TableSessionInfo>> GetAllTableSession(DateTime? at = null)
         {
-            DateTime targetTime = at ?? DateTime.UtcNow.AddHours(7);
+            List<TableSession> sessions;
+            DateTime targetTime;
 
-            List<TableSession> sessions = (await Repo.GetAsync<TableSession>(
-                filter: ts => ts.IsActive
-                           && ts.StartedAt <= targetTime
-                           && (ts.EndedAt == null || ts.EndedAt > targetTime),
-                includeProperties: "Table,Order"
-            )).ToList();
+            if (at.HasValue)
+            {
+                targetTime = at.Value;
+
+                sessions = (await Repo.GetAsync<TableSession>(
+                    filter: ts => ts.StartedAt <= targetTime
+                               && (ts.EndedAt == null || ts.EndedAt >= targetTime),
+                    includeProperties: "Table,Order,Reservation"
+                )).ToList();
+            }
+            else
+            {
+                targetTime = DateTime.UtcNow.AddHours(7);
+
+                sessions = (await Repo.GetAsync<TableSession>(
+                    filter: ts => ts.IsActive
+                               && ts.StartedAt <= targetTime,
+                    includeProperties: "Table,Order,Reservation"
+                )).ToList();
+            }
 
             sessions = sessions
                 .OrderBy(ts => ts.Table?.Code, NaturalTableCodeComparer.Instance)

@@ -129,15 +129,33 @@ namespace RestX.BLL.Services
                 throw new AppException("Danh sách category không hợp lệ.");
             }
 
+            List<CategoryItem> invalidItems = categories
+                .Where(c => !c.Id.HasValue || c.DisplayOrder <= 0)
+                .ToList();
+
+            if (invalidItems.Count > 0)
+            {
+                throw new AppException("Danh sách category có phần tử thiếu Id hoặc DisplayOrder không hợp lệ.");
+            }
+
             List<Guid> ids = categories
-                .Where(c => c.Id.HasValue)
                 .Select(c => c.Id!.Value)
                 .Distinct()
                 .ToList();
 
             if (ids.Count != categories.Count)
             {
-                throw new AppException("Danh sách category có phần tử thiếu Id hoặc bị trùng Id.");
+                throw new AppException("Danh sách category bị trùng Id.");
+            }
+
+            List<int> displayOrders = categories
+                .Select(c => c.DisplayOrder)
+                .Distinct()
+                .ToList();
+
+            if (displayOrders.Count != categories.Count)
+            {
+                throw new AppException("Danh sách category bị trùng DisplayOrder.");
             }
 
             List<Category> dbCategories = (await Repo.GetAsync<Category>(c => ids.Contains(c.Id))).ToList();
@@ -146,11 +164,10 @@ namespace RestX.BLL.Services
                 throw new AppException("Một hoặc nhiều category không tồn tại.");
             }
 
-            for (int i = 0; i < categories.Count; i++)
+            foreach (CategoryItem item in categories)
             {
-                Guid categoryId = categories[i].Id!.Value;
-                Category category = dbCategories.First(c => c.Id == categoryId);
-                category.DisplayOrder = i + 1;
+                Category category = dbCategories.First(c => c.Id == item.Id!.Value);
+                category.DisplayOrder = item.DisplayOrder;
                 Repo.Update(category);
             }
 

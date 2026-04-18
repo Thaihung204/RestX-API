@@ -130,5 +130,26 @@ namespace RestX.WebApp.Controllers
                 return BadRequest("An internal error occurred");
             }
         }
+
+        [HttpPut("display-order")]
+        [Authorize(Roles = "Admin,System Admin")]
+        public async Task<IActionResult> UpdateDisplayOrder([FromBody] List<CategoryItem> categories)
+        {
+            try
+            {
+                await categoryService.UpdateDisplayOrder(categories);
+                return Ok(new { success = true });
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                this.ExceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
     }
 }

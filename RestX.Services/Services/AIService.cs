@@ -575,6 +575,7 @@ namespace RestX.BLL.Services
             var tenantName = CurrentTenant?.Name ?? "nhà hàng";
             var now = DateTime.UtcNow.AddHours(7);
             var timeContext = $"\nThời điểm hiện tại: {now:dddd, dd/MM/yyyy HH:mm} (múi giờ Việt Nam). Gợi ý món phù hợp với buổi {(now.Hour < 10 ? "sáng" : now.Hour < 14 ? "trưa" : now.Hour < 18 ? "chiều" : "tối")}.";
+            var locationContext = BuildLocationContext();
 
             var menuText = new StringBuilder();
             foreach (var category in menu)
@@ -602,7 +603,7 @@ namespace RestX.BLL.Services
                 ? $"\nKhách này trước đây hay đặt: {string.Join(", ", orderHistory)}. Ưu tiên gợi ý các món tương tự hoặc phù hợp khẩu vị đó."
                 : "";
 
-            return $@"Bạn là Foody — trợ lý AI ẩm thực của nhà hàng {tenantName}. Trò chuyện như người bạn thân: tự nhiên, vui, đôi khi hài hước nhẹ. Luôn trả lời tiếng Việt.{timeContext}{tableContext}{historyContext}
+            return $@"Bạn là Foody — trợ lý AI ẩm thực của nhà hàng {tenantName}. Trò chuyện như người bạn thân: tự nhiên, vui, đôi khi hài hước nhẹ. Luôn trả lời tiếng Việt.{timeContext}{locationContext}{tableContext}{historyContext}
 
 GIỚI HẠN VAI TRÒ:
 - Chỉ tư vấn món ăn, thực đơn, đặt hàng tại {tenantName}. Từ chối mọi câu hỏi khác (tài chính, nhân viên, dữ liệu nội bộ, kỹ thuật).
@@ -947,6 +948,30 @@ JSON OUTPUT (chỉ trả JSON, không thêm text):
             {
                 return string.Empty;
             }
+        }
+
+        private string BuildLocationContext()
+        {
+            var t = CurrentTenant;
+            if (t == null) return string.Empty;
+
+            var parts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(t.BusinessAddressLine1)) parts.Add(t.BusinessAddressLine1);
+            if (!string.IsNullOrWhiteSpace(t.BusinessAddressLine2)) parts.Add(t.BusinessAddressLine2);
+            if (!string.IsNullOrWhiteSpace(t.BusinessAddressLine3)) parts.Add(t.BusinessAddressLine3);
+            if (!string.IsNullOrWhiteSpace(t.BusinessAddressLine4)) parts.Add(t.BusinessAddressLine4);
+            if (!string.IsNullOrWhiteSpace(t.BusinessCounty)) parts.Add(t.BusinessCounty);
+            if (!string.IsNullOrWhiteSpace(t.BusinessCountry)) parts.Add(t.BusinessCountry);
+
+            var sb = new StringBuilder();
+            if (parts.Any())
+                sb.AppendLine($"\nĐịa điểm nhà hàng: {string.Join(", ", parts)}");
+            if (!string.IsNullOrWhiteSpace(t.BusinessOpeningHours))
+                sb.AppendLine($"Giờ mở cửa: {t.BusinessOpeningHours}");
+            if (!string.IsNullOrWhiteSpace(t.AboutUs))
+                sb.AppendLine($"Về nhà hàng: {t.AboutUs}");
+
+            return sb.ToString();
         }
 
         private static string? GetSpecialOccasion()
@@ -1324,7 +1349,7 @@ LUÔN trả về JSON hợp lệ sau, KHÔNG thêm text nào ngoài JSON:
             var context = BuildAnalyticsContext(
                 request.FilterType, summary, revenueTrend, topDishes,
                 customerStats, promotionStats, dishTrend, peakHours, cancel,
-                request.AnalysisType);
+                request.AnalysisType, BuildLocationContext());
 
             var systemPrompt = BuildAnalyticsSystemPrompt(request.AnalysisType);
             var rawResponse = await CallGemini(systemPrompt, new List<ChatMessage>(), context, maxTokens: 7000);
@@ -1350,18 +1375,28 @@ LUÔN trả về JSON hợp lệ sau, KHÔNG thêm text nào ngoài JSON:
 {focus}
 
 QUY TẮC BẮT BUỘC:
-1. MỌI phân tích PHẢI có trường ""evidence"" = số liệu cụ thể trích từ data (để hội đồng không thể phản biện).
-   ✗ ""Doanh thu tăng mạnh""
-   ✓ evidence: ""T3: 18.5M (+22% so T2: 15.2M), top 3 món chiếm 61% tổng DT""
+1. MỌI evidence PHẢI hiển thị chuỗi tính toán đầy đủ để chủ nhà hàng tự kiểm chứng:
+   ✗ ""Bánh mì thịt nướng chiếm 33,5% doanh thu""
+   ✓ ""300 phần × 30.000đ = 9.000.000đ ÷ 26.816.000đ = 33,5% tổng DT""
+   → Dùng trực tiếp số liệu từ mục 'CHỈ SỐ TÍNH TOÁN SẴN' trong data.
 
-2. MỌI so sánh phải rõ: kỳ này vs kỳ trước, hoặc món này vs món kia.
-   ✓ ""312 phần (+45% so 215 phần kỳ trước)""
+2. MỌI đánh giá risk/opportunity PHẢI có benchmark ngành để so sánh:
+   ✗ ""Tỷ lệ khách quay lại thấp""
+   ✓ ""Khách quay lại: 1 ÷ 5 = 20% — thấp hơn chuẩn ngành F&B Việt Nam 35-40%""
+   → Benchmark: Tỷ lệ hủy đơn < 5% | Khách quay lại 35-40% | Revenue concentration < 20%/khách
 
-3. Đề xuất món: PHẢI là LIST có rank (no1, no2, no3) — không bao giờ chỉ 1 món.
+3. MỌI so sánh phải rõ: kỳ này vs kỳ trước + delta tuyệt đối + delta phần trăm.
+   ✓ ""312 phần vs 215 phần kỳ trước (+97 phần, +45,1%)""
 
-4. Thời gian hành động: chỉ dùng ""Tháng này"" | ""Quý này"" | ""Năm nay"" — KHÔNG dùng ngày/tuần.
+4. suggestedDishes: PHẢI trích dẫn cụ thể từ 'CƠ HỘI THEO MÙA' trong data. KHÔNG dùng lý do chung chung.
+   ✗ ""Mùa hè nên bán đồ uống lạnh""
+   ✓ ""Tháng 4 là Tết Đoan Ngọ / mùa nóng đỉnh điểm tại Việt Nam — nhu cầu đồ uống giải nhiệt tăng 40-60% theo xu hướng ngành""
 
-5. Tối giản token — mỗi section chỉ lấy những gì chủ nhà hàng thật sự cần:
+5. Đề xuất món: PHẢI là LIST có rank (no1, no2, no3) — không bao giờ chỉ 1 món.
+
+6. Thời gian hành động: chỉ dùng ""Tháng này"" | ""Quý này"" | ""Năm nay"" — KHÔNG dùng ngày/tuần.
+
+7. Tối giản token — mỗi section chỉ lấy những gì chủ nhà hàng thật sự cần:
    • insights: 3-4 items (opportunity/risk/marketing — gộp chung, ưu tiên high impact)
    • menu.topDishes: top 3 (chỉ từ data thực tế)
    • menu.suggestedDishes: top 3 (món CHƯA CÓ trong menu, có dẫn chứng xu hướng/mùa)
@@ -1424,7 +1459,8 @@ JSON OUTPUT (chỉ trả về JSON, không thêm text):
             List<DishTrendItem> dishTrend,
             PeakHoursData peakHours,
             CancellationAnalysis cancel,
-            string? analysisType)
+            string? analysisType,
+            string? locationContext = null)
         {
             var sb = new StringBuilder();
             var today = DateTime.UtcNow.AddHours(7);
@@ -1435,6 +1471,8 @@ JSON OUTPUT (chỉ trả về JSON, không thêm text):
             sb.AppendLine($"=== DATA PHÂN TÍCH ({filterType?.ToUpper() ?? "CUSTOM"}) ===");
             sb.AppendLine($"Kỳ: {summary.FromDate:dd/MM/yyyy} – {summary.ToDate:dd/MM/yyyy}");
             sb.AppendLine($"Ngày phân tích: {today:dd/MM/yyyy}");
+            if (!string.IsNullOrEmpty(locationContext))
+                sb.AppendLine(locationContext.Trim());
             if (!string.IsNullOrEmpty(occasion))
                 sb.AppendLine($"Sự kiện/mùa đặc biệt: {occasion}");
             sb.AppendLine();
@@ -1451,6 +1489,41 @@ JSON OUTPUT (chỉ trả về JSON, không thêm text):
                 var maxPeriod = revTrend.FirstOrDefault(r => r.Value == maxRev);
                 var minPeriod = revTrend.FirstOrDefault(r => r.Value == minRev);
                 sb.AppendLine($"Kỳ cao nhất: {maxPeriod?.Label} ({maxRev:N0}đ) | Kỳ thấp nhất: {minPeriod?.Label} ({minRev:N0}đ)");
+            }
+            sb.AppendLine();
+
+            // ── Pre-computed metrics for AI evidence transparency ────────────
+            sb.AppendLine("=== CHỈ SỐ TÍNH TOÁN SẴN (dùng trực tiếp vào evidence) ===");
+            if (summary.Orders.Completed > 0 && summary.Revenue.Total > 0)
+                sb.AppendLine($"Doanh thu/đơn hoàn thành: {summary.Revenue.Total:N0}đ ÷ {summary.Orders.Completed} đơn = {summary.Revenue.Total / summary.Orders.Completed:N0}đ/đơn");
+            if (summary.Orders.Total > 0)
+            {
+                var cancelRate = (double)summary.Orders.Cancelled / summary.Orders.Total * 100;
+                sb.AppendLine($"Tỷ lệ hủy thực tế: {summary.Orders.Cancelled} ÷ {summary.Orders.Total} = {cancelRate:F1}% (chuẩn ngành F&B Việt Nam: < 5%)");
+            }
+            var totalCustomers = customerStats.NewCustomers + customerStats.ReturningCustomers;
+            if (totalCustomers > 0)
+            {
+                var returnRate = (double)customerStats.ReturningCustomers / totalCustomers * 100;
+                sb.AppendLine($"Tỷ lệ khách quay lại: {customerStats.ReturningCustomers} ÷ {totalCustomers} = {returnRate:F1}% (chuẩn ngành F&B Việt Nam: 35-40%)");
+                var benchmark = returnRate < 20 ? "⚠ THẤP HƠN CHUẨN NGÀNH" : returnRate < 35 ? "Dưới chuẩn ngành" : "Đạt chuẩn";
+                sb.AppendLine($"  → Đánh giá: {benchmark}");
+            }
+            if (summary.Revenue.Total > 0 && customerStats.TopCustomers.Any())
+            {
+                var topSpender = customerStats.TopCustomers.First();
+                var concentration = (double)topSpender.TotalSpent / (double)summary.Revenue.Total * 100;
+                sb.AppendLine($"Tập trung doanh thu: khách #{1} '{topSpender.CustomerName}' = {topSpender.TotalSpent:N0}đ ÷ {summary.Revenue.Total:N0}đ = {concentration:F1}% tổng DT");
+                if (concentration > 50) sb.AppendLine($"  → ⚠ RỦI RO CAO: 1 khách chiếm {concentration:F1}% DT (ngưỡng an toàn: < 20%)");
+            }
+            if (summary.Revenue.Total > 0)
+            {
+                foreach (var d in topDishes.Dishes.Take(5))
+                {
+                    var pct = (double)d.Revenue / (double)summary.Revenue.Total * 100;
+                    var avgPrice = d.Quantity > 0 ? d.Revenue / d.Quantity : 0;
+                    sb.AppendLine($"  [{d.Name}]: {d.Quantity} phần × {avgPrice:N0}đ = {d.Revenue:N0}đ = {pct:F1}% tổng DT");
+                }
             }
             sb.AppendLine();
 

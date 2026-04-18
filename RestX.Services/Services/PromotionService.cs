@@ -36,14 +36,6 @@ namespace RestX.BLL.Services
 
         public async Task<List<DataTranferObjects.Promotion.Promotion>> GetActivePromotions()
         {
-            string cacheKey = $"{CurrentTenant.Hostname}:Promotions:Active";
-
-            List<DataTranferObjects.Promotion.Promotion>? cached = await RedisService.GetAsync<List<DataTranferObjects.Promotion.Promotion>>(cacheKey);
-            if (cached != null)
-            {
-                return cached;
-            }
-
             DateTime now = DateTime.UtcNow.AddHours(7);
 
             List<Models.Promotions.Promotion> promotions = (await Repo.GetAsync<Models.Promotions.Promotion>(
@@ -53,7 +45,6 @@ namespace RestX.BLL.Services
 
             List<DataTranferObjects.Promotion.Promotion> result = promotions.Select(MapToPromotionItem).ToList();
 
-            await RedisService.SetAsync(cacheKey, result, TimeSpan.FromMinutes(10));
             return result;
         }
 

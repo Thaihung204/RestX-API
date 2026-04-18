@@ -663,8 +663,6 @@ namespace RestX.BLL.Services
 
             if (order == null) throw new AppException("No order");
 
-            if (userId != string.Empty) order.HandledBy = Guid.Parse(userId);
-
             order.OrderStatusId = statusId;
 
             if (statusId == (int)OrderStatus.Cancelled)

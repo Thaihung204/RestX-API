@@ -1,4 +1,5 @@
-﻿using System;
+﻿using RestX.BLL.DataTranferObjects.Reservation;
+using System;
 
 namespace RestX.BLL.DataTranferObjects.Table
 {
@@ -9,7 +10,7 @@ namespace RestX.BLL.DataTranferObjects.Table
         public string TableCode { get; set; }
         public Guid? OrderId { get; set; } 
         public Guid? ReservationId { get; set; }
-
+        public ReservationDetail Reservation { get; set; }
         public DateTime StartedAt { get; set; }
         public DateTime? EndedAt { get; set; }
         public bool IsActive { get; set; }

@@ -8,6 +8,7 @@ using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Auth;
 using RestX.BLL.Interfaces.Customers;
 using RestX.Models.Customers;
+using RestX.Models.Enum;
 using RestX.Models.Identity;
 using RestX.Models.Loyalty;
 using RestX.Models.Tenants;
@@ -148,6 +149,10 @@ namespace RestX.BLL.Services
                 await userAccountService.UploadAvatarAsync(user.Id, dto.Avatar);
 
             UpdateCustomerFields(customer, dto);
+
+            if (dto.LoyaltyPoints.HasValue)
+                await RecalculateMembershipLevelAsync(customer);
+
             Repo.Update(customer);
             await Repo.SaveAsync();
 
@@ -161,6 +166,20 @@ namespace RestX.BLL.Services
                 c => c.Id == id,
                 includeProperties: "ApplicationUser");
             if (customer == null) return false;
+
+            var activeOrderCount = await Repo.GetCountAsync<RestX.Models.Orders.Order>(
+                o => o.CustomerId == id && o.OrderStatusId == (int)OrderStatus.Open);
+            if (activeOrderCount > 0)
+                throw new InvalidOperationException("Cannot deactivate customer with open orders");
+
+            var activeReservationCount = await Repo.ExecuteSqlCommandAsync<int>(@"
+                SELECT COUNT(*) FROM Reservations r
+                INNER JOIN StatusValues sv ON r.ReservationStatusId = sv.Id
+                WHERE r.CustomerId = @CustomerId AND sv.Code NOT IN ('CANCELLED')",
+                new SqlParameter("CustomerId", id));
+            if (activeReservationCount > 0)
+                throw new InvalidOperationException("Cannot deactivate customer with active reservations");
+
             customer.IsActive = false;
             Repo.Update(customer);
             if (customer.ApplicationUser != null)
@@ -332,6 +351,16 @@ namespace RestX.BLL.Services
             };
             await Repo.CreateAsync(customer);
             return customer;
+        }
+
+        private async Task RecalculateMembershipLevelAsync(Customer customer)
+        {
+            var bands = await Repo.GetAsync<LoyaltyPointBand>(b => b.IsActive);
+            var matchedBand = bands.FirstOrDefault(b =>
+                b.Min <= customer.LoyaltyPoints &&
+                (b.Max == null || b.Max >= customer.LoyaltyPoints));
+            if (matchedBand != null)
+                customer.MembershipLevel = matchedBand.Name;
         }
 
         private async Task<LoyaltyPointBand?> GetLowestBandAsync()

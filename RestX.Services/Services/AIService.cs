@@ -1320,9 +1320,7 @@ LUÔN trả về JSON hợp lệ sau, KHÔNG thêm text nào ngoài JSON:
         {
             var dashRequest = new DashboardRequest
             {
-                FilterType = request.FilterType,
-                FromDate = request.FromDate,
-                ToDate = request.ToDate
+                FilterType = request.FilterType ?? "month"
             };
 
             var summary = new DashboardSummary();
@@ -1349,9 +1347,9 @@ LUÔN trả về JSON hợp lệ sau, KHÔNG thêm text nào ngoài JSON:
             var context = BuildAnalyticsContext(
                 request.FilterType, summary, revenueTrend, topDishes,
                 customerStats, promotionStats, dishTrend, peakHours, cancel,
-                request.AnalysisType, BuildLocationContext());
+                BuildLocationContext());
 
-            var systemPrompt = BuildAnalyticsSystemPrompt(request.AnalysisType);
+            var systemPrompt = BuildAnalyticsSystemPrompt();
             var rawResponse = await CallGemini(systemPrompt, new List<ChatMessage>(), context, maxTokens: 7000);
             return ParseAnalyticsResponse(rawResponse);
         }
@@ -1360,19 +1358,10 @@ LUÔN trả về JSON hợp lệ sau, KHÔNG thêm text nào ngoài JSON:
 
         #region Private: Analytics Prompts & Context
 
-        private static string BuildAnalyticsSystemPrompt(string? analysisType)
+        private static string BuildAnalyticsSystemPrompt()
         {
-            var focus = analysisType?.ToLower() switch
-            {
-                "revenue" => "Tập trung: insights (opportunity/risk), menu.topDishes, actionPlan.",
-                "menu" => "Tập trung: menu.topDishes, menu.suggestedDishes, menu.combosToCreate.",
-                "customer" => "Tập trung: customers, insights (opportunity/risk), actionPlan.",
-                "operations" => "Tập trung: insights (risk), actionPlan.",
-                _ => "Phân tích TOÀN DIỆN — tất cả sections."
-            };
-
             return $@"Bạn là chuyên gia phân tích F&B tại Việt Nam, 20 năm kinh nghiệm vận hành nhà hàng.
-{focus}
+Phân tích TOÀN DIỆN — tất cả sections.
 
 QUY TẮC BẮT BUỘC:
 1. MỌI evidence PHẢI hiển thị chuỗi tính toán đầy đủ để chủ nhà hàng tự kiểm chứng:
@@ -1459,7 +1448,6 @@ JSON OUTPUT (chỉ trả về JSON, không thêm text):
             List<DishTrendItem> dishTrend,
             PeakHoursData peakHours,
             CancellationAnalysis cancel,
-            string? analysisType,
             string? locationContext = null)
         {
             var sb = new StringBuilder();

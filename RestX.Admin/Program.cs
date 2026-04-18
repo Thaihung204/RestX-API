@@ -20,7 +20,6 @@ using System.Security.Claims;
 using System.Text;
 using System.Text.Json.Serialization;
 
-QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add DB Context 

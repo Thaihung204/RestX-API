@@ -166,72 +166,36 @@ namespace RestX.BLL.Services
 
         public async Task<ContentGenerateResponse> GenerateContent(ContentGenerateRequest request)
         {
-            var descType = request.DishId.HasValue ? "dish"
-                : request.ComboId.HasValue ? "combo"
-                : request.PromotionId.HasValue ? "promotion"
-                : throw new AppException("Phải truyền vào dishId, comboId hoặc promotionId.");
+            string descType;
+            string entityContext;
 
-            var tenantName = CurrentTenant?.Name ?? "nhà hàng";
-            var entityContext = await BuildEntityContext(request);
+            if (!string.IsNullOrWhiteSpace(request.DishName))
+            {
+                descType = "dish";
+                entityContext = $"Món ăn: {request.DishName}";
+            }
+            else if (!string.IsNullOrWhiteSpace(request.ComboName))
+            {
+                descType = "combo";
+                var dishesStr = request.ComboDishes?.Any() == true
+                    ? string.Join(", ", request.ComboDishes)
+                    : "chưa có món";
+                entityContext = $"Combo: {request.ComboName}\n  Bao gồm: {dishesStr}";
+            }
+            else if (!string.IsNullOrWhiteSpace(request.PromotionName))
+            {
+                descType = "promotion";
+                var discountStr = request.DiscountValue.HasValue ? $"giảm {request.DiscountValue}%" : "";
+                entityContext = $"Khuyến mãi: {request.PromotionName}\n  Ưu đãi: {discountStr}";
+            }
+            else
+            {
+                throw new AppException("Phải truyền vào DishName, ComboName hoặc PromotionName.");
+            }
 
-            var systemPrompt = BuildContentPrompt(
-                descType, request.Tone, tenantName,
-                request.CustomContext, request.Variants, entityContext);
-
+            var systemPrompt = BuildContentPrompt(descType, entityContext);
             var rawResponse = await CallGemini(systemPrompt, new List<ChatMessage>(), "Tạo mô tả theo yêu cầu.");
             return ParseContentResponse(rawResponse, descType);
-        }
-
-        private async Task<string?> BuildEntityContext(ContentGenerateRequest request)
-        {
-            if (request.DishId.HasValue)
-            {
-                var dish = await _dishService.GetDishById(request.DishId.Value);
-                if (dish == null) return null;
-                var tags = new List<string>();
-                if (dish.IsVegetarian) tags.Add("chay");
-                if (dish.IsSpicy) tags.Add("cay");
-                if (dish.IsBestSeller) tags.Add("best seller");
-                var tagStr = tags.Any() ? $" [{string.Join(", ", tags)}]" : "";
-                var desc = !string.IsNullOrWhiteSpace(dish.Description) ? $"\n  Mô tả hiện tại: {dish.Description}" : "";
-                return $"THÔNG TIN MÓN ĂN CẦN VIẾT MÔ TẢ:\n" +
-                       $"  Tên: {dish.Name}{tagStr}\n" +
-                       $"  Giá: {dish.Price:N0}đ{desc}\n" +
-                       $"Hãy viết mô tả hấp dẫn, giàu cảm xúc cho MÓN NÀY. Đây là mô tả xuất hiện trên menu — cần ngắn gọn, gợi thèm ăn.";
-            }
-
-            if (request.ComboId.HasValue)
-            {
-                var combo = await _dishService.GetComboById(request.ComboId.Value);
-                if (combo == null) return null;
-                var items = combo.Details.Select(d => $"{d.DishName} x{d.Quantity}").ToList();
-                var itemsStr = items.Any() ? string.Join(", ", items) : "chưa có món";
-                var desc = !string.IsNullOrWhiteSpace(combo.Description) ? $"\n  Mô tả hiện tại: {combo.Description}" : "";
-                return $"THÔNG TIN COMBO CẦN VIẾT MÔ TẢ:\n" +
-                       $"  Tên: {combo.Name}\n" +
-                       $"  Giá: {combo.Price:N0}đ\n" +
-                       $"  Bao gồm: {itemsStr}{desc}\n" +
-                       $"Hãy viết mô tả hấp dẫn cho COMBO NÀY — nêu bật sự tiết kiệm, sự kết hợp hài hòa của các món.";
-            }
-
-            if (request.PromotionId.HasValue)
-            {
-                var promo = await _promotionService.GetPromotionById(request.PromotionId.Value);
-                if (promo == null) return null;
-                var discountStr = promo.DiscountType == "PERCENTAGE"
-                    ? $"giảm {promo.DiscountValue}%"
-                    : $"giảm {promo.DiscountValue:N0}đ";
-                var maxStr = promo.MaxDiscountAmount > 0 ? $", tối đa {promo.MaxDiscountAmount:N0}đ" : "";
-                var minStr = promo.MinOrderAmount > 0 ? $", đơn tối thiểu {promo.MinOrderAmount:N0}đ" : "";
-                return $"THÔNG TIN KHUYẾN MÃI CẦN VIẾT MÔ TẢ:\n" +
-                       $"  Tên: {promo.Name}\n" +
-                       $"  Mã: {promo.Code}\n" +
-                       $"  Ưu đãi: {discountStr}{maxStr}{minStr}\n" +
-                       $"  Hiệu lực: {promo.ValidFrom:dd/MM/yyyy} – {promo.ValidTo:dd/MM/yyyy}\n" +
-                       $"Hãy viết nội dung quảng bá cho KHUYẾN MÃI NÀY — tạo cảm giác FOMO, nêu rõ lợi ích thực tế, thúc đẩy hành động ngay.";
-            }
-
-            return null;
         }
 
         public async Task<CampaignPackResponse> GenerateCampaignPack(CampaignPackRequest request)
@@ -1024,87 +988,34 @@ JSON OUTPUT (chỉ trả JSON, không thêm text):
             };
         }
 
-        private static string BuildContentPrompt(string descType, string tone,
-            string tenantName, string? customContext, int variants, string? entityContext)
+        private static string BuildContentPrompt(string descType, string entityContext)
         {
-            var toneGuide = tone switch
+            var taskGuide = descType switch
             {
-                "luxury" =>
-                    "GIỌNG ĐIỆU — SANG TRỌNG & TINH TẾ:\n" +
-                    "• Dùng ngôn từ cao cấp, gợi cảm giác đẳng cấp và trải nghiệm độc đáo.\n" +
-                    "• Câu văn dài, mượt mà, giàu hình ảnh. Tránh từ bình dân, tránh emoji ồn ào.\n" +
-                    "• Ví dụ từ ngữ: \"tinh tế\", \"thượng hạng\", \"hảo hạng\", \"nghệ nhân\", \"đẳng cấp\".",
-                "funny" =>
-                    "GIỌNG ĐIỆU — HÀI HƯỚC & VUI TƯƠI:\n" +
-                    "• Dùng wordplay, so sánh bất ngờ, câu chuyện vui liên quan đến ẩm thực.\n" +
-                    "• Viết như đang nói chuyện với bạn bè, nhẹ nhàng gây cười chứ không gượng gạo.",
-                _ =>
-                    "GIỌNG ĐIỆU — THÂN THIỆN & ẤM ÁP:\n" +
-                    "• Gần gũi như người bạn đang chia sẻ trải nghiệm ăn uống thật sự.\n" +
-                    "• Dùng ngôn ngữ tự nhiên, chân thật, gợi lên cảm xúc: ấm lòng, háo hức, thỏa mãn."
+                "dish" => "Viết mô tả món ăn xuất hiện trên menu — gợi thèm ăn, khai thác hương vị, kết cấu, cảm xúc khi thưởng thức.",
+                "combo" => "Viết mô tả combo — nêu bật sự kết hợp hài hòa giữa các món, giá trị tiết kiệm, bối cảnh phù hợp.",
+                _ => "Viết mô tả khuyến mãi — trình bày rõ ưu đãi, tạo FOMO nhẹ nhàng, kết thúc bằng CTA thúc đẩy hành động."
             };
 
-            var typeGuide = descType switch
-            {
-                "dish" =>
-                    "NHIỆM VỤ — MÔ TẢ MÓN ĂN (hiển thị trên menu):\n" +
-                    "• Mỗi variant là 1 cách mô tả khác nhau — khác về góc nhìn (giác quan / câu chuyện / trải nghiệm).\n" +
-                    "• Khai thác đa giác quan: hương thơm, màu sắc, kết cấu (giòn/mềm/dai/tan), vị (đậm đà/thanh mát/cay nồng).\n" +
-                    "• Có thể gợi nguồn gốc, nguyên liệu đặc biệt, bối cảnh thưởng thức lý tưởng, hoặc cảm giác sau khi ăn.\n" +
-                    "• Độ dài: 4-6 câu — đủ chi tiết để người đọc hình dung và muốn gọi ngay.\n" +
-                    "• headline: tiêu đề ngắn gọn, hấp dẫn cho món (5-10 từ, gợi cảm xúc hoặc đặc trưng nổi bật).",
+            return $@"Bạn là chuyên gia viết mô tả F&B tại Việt Nam. {taskGuide}
 
-                "combo" =>
-                    "NHIỆM VỤ — MÔ TẢ COMBO:\n" +
-                    "• Mỗi variant là 1 cách mô tả khác nhau — khác về điểm nhấn (tiết kiệm / đa dạng / trải nghiệm).\n" +
-                    "• Nêu sự kết hợp hài hòa của các món, lý do chúng \"đi cùng nhau\" ngon hơn.\n" +
-                    "• Nhấn mạnh giá trị: tiết kiệm, đầy đủ, tiện lợi. Gợi bối cảnh phù hợp.\n" +
-                    "• Độ dài: 4-6 câu — đủ hấp dẫn, rõ lợi ích.\n" +
-                    "• headline: tiêu đề ngắn gọn cho combo (5-10 từ, nêu bật điểm đặc trưng hoặc giá trị).",
+THÔNG TIN:
+{entityContext}
 
-                _ =>
-                    "NHIỆM VỤ — MÔ TẢ KHUYẾN MÃI:\n" +
-                    "• Mỗi variant là 1 cách truyền thông khác nhau — khác về tone (khẩn cấp / thân thiện / hào phóng).\n" +
-                    "• Trình bày rõ ưu đãi: giảm bao nhiêu, điều kiện, thời hạn — ngắn gọn, dễ hiểu ngay.\n" +
-                    "• Tạo FOMO nhẹ nhàng, kết thúc bằng CTA rõ ràng.\n" +
-                    "• Độ dài: 4-6 câu.\n" +
-                    "• headline: dòng tóm tắt ưu đãi (dùng số/% nếu có)."
-            };
+YÊU CẦU:
+• 3 phiên bản, mỗi phiên bản khác nhau về góc tiếp cận (giác quan / cảm xúc / câu chuyện).
+• Giọng thân thiện, gần gũi, tiếng Việt tự nhiên.
+• content: tối đa 200 ký tự.
+• headline: 5-10 từ, gợi cảm xúc hoặc điểm nổi bật.
 
-            var entitySection = !string.IsNullOrWhiteSpace(entityContext) ? $"\n{entityContext}" : "";
-            var customSection = !string.IsNullOrWhiteSpace(customContext) ? $"\nYÊU CẦU BỔ SUNG: {customContext}" : "";
-
-            return $@"Bạn là chuyên gia viết mô tả thực đơn F&B, với nhiều năm kinh nghiệm giúp các nhà hàng tại Việt Nam tăng tỷ lệ chọn món qua ngôn từ hấp dẫn.
-Nhiệm vụ: Viết mô tả cho nhà hàng **{tenantName}** bằng tiếng Việt tự nhiên, trôi chảy.
-
-{toneGuide}
-
-{typeGuide}
-{entitySection}{customSection}
-
-YÊU CẦU OUTPUT:
-• Tạo đúng {variants} phiên bản — mỗi variant khác biệt rõ rệt về góc tiếp cận và điểm nhấn cảm xúc.
-• Mỗi variant hoàn chỉnh, đọc được độc lập.
-• score: chất lượng mô tả từ 1-10 (dựa trên độ gợi cảm, chi tiết, phù hợp tone).
-• scoreNote: 1 câu giải thích ngắn tại sao điểm đó.
-
-LUÔN trả về JSON hợp lệ, KHÔNG thêm text nào ngoài JSON:
+Trả về JSON, KHÔNG thêm text ngoài JSON:
 {{
   ""variants"": [
-    {{
-      ""headline"": ""..."",
-      ""content"": ""..."",
-      ""score"": 8,
-      ""scoreNote"": ""...""
-    }}
+    {{ ""headline"": ""..."", ""content"": ""..."" }},
+    {{ ""headline"": ""..."", ""content"": ""..."" }},
+    {{ ""headline"": ""..."", ""content"": ""..."" }}
   ]
-}}
-
-RÀNG BUỘC:
-• content và headline: không bao giờ null.
-• score: số nguyên 1-10, không null.
-• scoreNote: chuỗi ngắn (1 câu), không null.
-• Không thêm field nào khác ngoài headline, content, score, scoreNote.";
+}}";
         }
 
         private static string BuildCampaignPackPrompt(string theme, string tone, string language,
@@ -1250,10 +1161,8 @@ LUÔN trả về JSON hợp lệ sau, KHÔNG thêm text nào ngoài JSON:
                     foreach (var v in variantsEl.EnumerateArray())
                         response.Variants.Add(new ContentVariant
                         {
+                            Headline = v.TryGetProperty("headline", out var h) ? h.GetString() ?? "" : "",
                             Content = v.TryGetProperty("content", out var c) ? c.GetString() ?? "" : "",
-                            Headline = v.TryGetProperty("headline", out var h) ? h.GetString() : null,
-                            Score = v.TryGetProperty("score", out var sc) && sc.ValueKind == JsonValueKind.Number ? sc.GetInt32() : null,
-                            ScoreNote = v.TryGetProperty("scoreNote", out var sn) ? sn.GetString() : null,
                         });
 
                 return response;

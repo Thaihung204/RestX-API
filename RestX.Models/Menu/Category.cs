@@ -27,6 +27,8 @@ namespace RestX.Models.Menu
 
         public bool IsActive { get; set; } = true;
 
+        public int DisplayOrder { get; set; } = 0;
+
         public virtual Category? ParentCategory { get; set; }
         public virtual ICollection<Category> SubCategories { get; set; } = new HashSet<Category>();
         public virtual ICollection<Dish> Dishes { get; set; } = new HashSet<Dish>();

@@ -18,6 +18,8 @@ namespace RestX.BLL.DataTranferObjects.Category
 
         public bool IsActive { get; set; }
 
+        public int DisplayOrder { get; set; }
+
         public List<CategoryItem>? CategoryChildrens { get; set; } = new();
     }
 }

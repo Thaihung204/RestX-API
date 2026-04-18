@@ -342,6 +342,7 @@ namespace RestX.BLL.Services
                 }
                 else
                 {
+                    order.CustomerId = activeSession.Reservation.CustomerId;
                     order.ReservationId = activeSession.ReservationId;
                 }
 

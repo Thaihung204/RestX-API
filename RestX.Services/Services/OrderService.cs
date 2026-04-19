@@ -990,6 +990,104 @@ namespace RestX.BLL.Services
             return await GetOrderById(sessionWithOrder.OrderId!.Value);
         }
 
+        public async Task<DataTranferObjects.Orders.Order> PreOrderByReservation(
+            Guid reservationId,
+            DataTranferObjects.Orders.Order order,
+            string userId)
+        {
+            if (reservationId == Guid.Empty)
+            {
+                throw new AppException("ReservationId is required.");
+            }
+
+            Models.Reservations.Reservation? reservation = await Repo.GetOneAsync<Models.Reservations.Reservation>(
+                filter: r => r.Id == reservationId,
+                includeProperties: "ReservationStatus,TableSessions"
+            );
+
+            if (reservation == null)
+            {
+                throw new AppException("Reservation not found.");
+            }
+
+            string reservationStatusCode = reservation.ReservationStatus?.Code ?? string.Empty;
+            if (string.Equals(reservationStatusCode, "CANCELLED", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new AppException("Cannot pre-order for a cancelled reservation.");
+            }
+
+            if (reservation.CheckedInAt.HasValue)
+            {
+                throw new AppException("Reservation already checked in. Please order by table/session flow.");
+            }
+
+            DateTime now = DateTime.UtcNow.AddHours(7);
+            if (reservation.Time <= now)
+            {
+                throw new AppException("Reservation time has started. Please order by table/session flow.");
+            }
+
+            List<Models.Reservations.TableSession> sessions = (await Repo.GetAsync<Models.Reservations.TableSession>(
+                filter: ts => ts.ReservationId == reservationId && ts.IsActive
+            )).ToList();
+
+            if (!sessions.Any())
+            {
+                throw new AppException("No active table session found for this reservation.");
+            }
+
+            Models.Orders.Order? existingOrder = await Repo.GetFirstAsync<Models.Orders.Order>(
+                filter: o => o.ReservationId == reservationId,
+                orderBy: q => q.OrderByDescending(o => o.CreatedDate)
+            );
+
+            if (existingOrder != null && existingOrder.OrderStatusId == (int)OrderStatus.Completed)
+            {
+                throw new AppException("Reservation order was already completed.");
+            }
+
+            order.CustomerId = reservation.CustomerId;
+            order.ReservationId = reservationId;
+
+            Models.Orders.Order savedOrder;
+
+            if (existingOrder != null && existingOrder.OrderStatusId != (int)OrderStatus.Cancelled)
+            {
+                order.Id = existingOrder.Id;
+                order.Reference ??= existingOrder.Reference;
+                order.DiscountAmount ??= existingOrder.DiscountAmount;
+                order.TaxAmount ??= existingOrder.TaxAmount;
+                order.ServiceCharge ??= existingOrder.ServiceCharge;
+                order.CompletedAt ??= existingOrder.CompletedAt;
+                order.CancelledAt ??= existingOrder.CancelledAt;
+                order.HandledBy ??= existingOrder.HandledBy;
+
+                await UpdateOrder(existingOrder.Id, order, userId);
+
+                savedOrder = await Repo.GetByIdAsync<Models.Orders.Order>(existingOrder.Id)
+                    ?? throw new AppException("Order not found after update.");
+            }
+            else
+            {
+                order.Id = null;
+                savedOrder = await UpsertOrder(order, userId);
+            }
+
+            foreach (Models.Reservations.TableSession session in sessions)
+            {
+                if (session.OrderId != savedOrder.Id)
+                {
+                    session.OrderId = savedOrder.Id;
+                    Repo.Update(session, userId);
+                }
+            }
+
+            await Repo.SaveAsync();
+
+            DataTranferObjects.Orders.Order? result = await GetOrderById(savedOrder.Id);
+            return result ?? mapper.Map<DataTranferObjects.Orders.Order>(savedOrder);
+        }
+
         public async Task<byte[]> ExportAsync(OrderSearch filter)
         {
             ExcelPackage.License.SetNonCommercialPersonal("RestX");

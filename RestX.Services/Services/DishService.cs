@@ -230,6 +230,46 @@ namespace RestX.BLL.Services
             return dishItem;
         }
 
+        public async Task<List<DishItem>> GetDishByCategory(Guid categoryId)
+        {
+            List<Dish> dishes = (await Repo.GetAsync<Dish>(
+                filter: d => d.CategoryId == categoryId && d.IsActive,
+                orderBy: q => q.OrderBy(d => d.Name),
+                includeProperties: "DishImages"
+            )).ToList();
+
+            List<DishItem> result = dishes.Select(d => new DishItem
+            {
+                Id = d.Id,
+                CategoryId = d.CategoryId,
+                Name = d.Name,
+                Description = d.Description,
+                Price = d.Price,
+                Unit = d.Unit,
+                Quantity = d.Quantity,
+                IsVegetarian = d.IsVegetarian,
+                IsSpicy = d.IsSpicy,
+                IsBestSeller = d.IsBestSeller,
+                IsActive = d.IsActive,
+                AutoDisableByStock = d.AutoDisableByStock,
+                Images = d.DishImages
+                    .Where(i => i.IsActive)
+                    .OrderBy(i => i.DisplayOrder)
+                    .ThenBy(i => i.Id)
+                    .Select(i => new DishImageItem
+                    {
+                        Id = i.Id,
+                        ImageUrl = i.ImageUrl,
+                        ImageType = i.ImageType,
+                        DisplayOrder = i.DisplayOrder,
+                        IsActive = i.IsActive
+                    })
+                    .ToList()
+            }).ToList();
+
+            return result;
+        }
+
         public async Task<Guid> UpsertDish(DishItem dishItem)
         {
             Dish dish;

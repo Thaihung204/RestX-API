@@ -70,6 +70,26 @@ namespace RestX.WebApp.Controllers
             }
         }
 
+        [HttpGet("category/{categoryId:guid}")]
+        [AllowAnonymous]
+        public async Task<ActionResult<IEnumerable<DishItem>>> GetDishByCategory([Required] Guid categoryId)
+        {
+            try
+            {
+                List<DishItem> dishes = await dishService.GetDishByCategory(categoryId);
+                return Ok(dishes);
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                this.ExceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
         [HttpPut("{id}")]
         [Authorize(Roles = "Admin,System Admin")]
         public async Task<IActionResult> EditDish([Required] Guid id, [FromForm] DishItem dish)

@@ -215,6 +215,27 @@ namespace RestX.WebApp.Controllers
             }
         }
 
+        [HttpPost("analytics/download")]
+        [Authorize(Roles = "Admin,System Admin")]
+        public IActionResult DownloadAnalyticsPdf([FromBody] AIAnalyticsResponse data, [FromQuery] string filterType = "month")
+        {
+            try
+            {
+                var pdf = _aiMenuService.ExportAnalyticsPdf(data, filterType);
+                var fileName = $"ai-report-{filterType}-{DateTime.Now:yyyyMMdd-HHmm}.pdf";
+                return File(pdf, "application/pdf", fileName);
+            }
+            catch (AppException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
         [HttpPost("analytics")]
         [Authorize(Roles = "Admin,System Admin")]
         public async Task<ActionResult<AIAnalyticsResponse>> AnalyzeDashboard([FromBody] AIAnalyticsRequest request)

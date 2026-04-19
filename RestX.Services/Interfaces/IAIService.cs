@@ -20,5 +20,6 @@ namespace RestX.BLL.Interfaces
 
         // Analytics
         Task<AIAnalyticsResponse> AnalyzeDashboard(AIAnalyticsRequest request);
+        byte[] ExportAnalyticsPdf(AIAnalyticsResponse data, string filterType);
     }
 }

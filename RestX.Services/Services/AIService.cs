@@ -1,6 +1,8 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using RestX.BLL.DataTranferObjects.AI;
+using QuestPDF.Fluent;
+using RestX.BLL.Services.Reports;
 using RestX.BLL.DataTranferObjects.Dashboard;
 using RestX.BLL.DataTranferObjects.Dish;
 using RestX.BLL.DataTranferObjects.Orders;
@@ -1261,6 +1263,13 @@ LUÔN trả về JSON hợp lệ sau, KHÔNG thêm text nào ngoài JSON:
             var systemPrompt = BuildAnalyticsSystemPrompt();
             var rawResponse = await CallGemini(systemPrompt, new List<ChatMessage>(), context, maxTokens: 7000);
             return ParseAnalyticsResponse(rawResponse);
+        }
+
+        public byte[] ExportAnalyticsPdf(AIAnalyticsResponse data, string filterType)
+        {
+            var tenantName = CurrentTenant?.Name ?? "Nhà hàng";
+            var doc = new AIAnalyticsReportDocument(data, tenantName, filterType);
+            return doc.GeneratePdf();
         }
 
         #endregion

@@ -14,6 +14,7 @@ namespace RestX.App
     {
         public static void Main(string[] args)
         {
+            QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
             var environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
             var SerilogEventLevel = (Environment.GetEnvironmentVariable("SerilogEventLevel") ?? "Information") switch
             {

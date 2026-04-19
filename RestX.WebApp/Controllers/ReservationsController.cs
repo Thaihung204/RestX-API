@@ -163,7 +163,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpGet("{id:guid}")]
-        [Authorize(Roles = "Admin,System Admin,Staff,Customer")]
+        [AllowAnonymous]
         public async Task<IActionResult> GetReservationById(Guid id)
         {
             try

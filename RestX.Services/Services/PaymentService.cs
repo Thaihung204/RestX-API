@@ -94,21 +94,48 @@ namespace RestX.BLL.Services
 
             var employee = await Repo.GetOneAsync<Employee>(e => e.ApplicationUser.Id.ToString() == createdBy);
 
-            var payment = new Payment
-            {
-                OrderId = orderId,
-                ReservationId = order.ReservationId,
-                PaymentMethodId = PaymentConstants.Method.Cash,
-                Amount = amountDue,
-                CashReceive = request.CashReceive,
-                Cashback = cashback,
-                Status = PaymentStatus.Success,
-                Purpose = PaymentPurpose.Order,
-                PaymentDate = DateTime.UtcNow.AddHours(7),
-                ProcessedBy = employee != null ? Guid.Parse(employee.Id.ToString()) : null
-            };
+            var existingPending = await Repo.GetOneAsync<Payment>(
+                p => p.OrderId == orderId &&
+                     p.Purpose == PaymentPurpose.Order &&
+                     p.Status == PaymentStatus.Pending);
 
-            await Repo.CreateAsync(payment, createdBy);
+            Payment payment;
+            if (existingPending != null)
+            {
+                if (existingPending.PayOSOrderCode.HasValue)
+                {
+                    var (gatewayClient, _) = await GetTenantGateway();
+                    await gatewayClient.PaymentRequests.CancelAsync(existingPending.PayOSOrderCode.Value, "Paid by cash");
+                }
+                existingPending.PaymentMethodId = PaymentConstants.Method.Cash;
+                existingPending.Amount = amountDue;
+                existingPending.CashReceive = request.CashReceive;
+                existingPending.Cashback = cashback;
+                existingPending.Status = PaymentStatus.Success;
+                existingPending.PaymentDate = DateTime.UtcNow.AddHours(7);
+                existingPending.PayOSOrderCode = null;
+                existingPending.CheckoutUrl = null;
+                existingPending.ProcessedBy = employee?.Id;
+                Repo.Update(existingPending, createdBy);
+                payment = existingPending;
+            }
+            else
+            {
+                payment = new Payment
+                {
+                    OrderId = orderId,
+                    ReservationId = order.ReservationId,
+                    PaymentMethodId = PaymentConstants.Method.Cash,
+                    Amount = amountDue,
+                    CashReceive = request.CashReceive,
+                    Cashback = cashback,
+                    Status = PaymentStatus.Success,
+                    Purpose = PaymentPurpose.Order,
+                    PaymentDate = DateTime.UtcNow.AddHours(7),
+                    ProcessedBy = employee?.Id
+                };
+                await Repo.CreateAsync(payment, createdBy);
+            }
             await AwardLoyaltyPointsAsync(order);
 
             await orderService.UpdateStatus(orderId, (int)OrderStatus.Completed, createdBy ?? string.Empty);
@@ -150,12 +177,42 @@ namespace RestX.BLL.Services
             if (alreadyPaid)
                 throw new InvalidOperationException("Order is already paid");
 
+            var (gatewayClient, gatewaySettings) = await GetTenantGateway();
+
             var depositPaid = await GetPaidDepositAmount(order.ReservationId);
             var amount = (long)(order.TotalAmount - depositPaid);
             if (amount <= 0)
                 throw new InvalidOperationException("Order total must be greater than zero");
 
-            var (gatewayClient, gatewaySettings) = await GetTenantGateway();
+            var existingPending = await Repo.GetOneAsync<Payment>(
+                p => p.OrderId == orderId &&
+                     p.Purpose == PaymentPurpose.Order &&
+                     p.Status == PaymentStatus.Pending);
+
+            if (existingPending != null)
+            {
+                var linkAge = DateTime.UtcNow.AddHours(7) - existingPending.PaymentDate;
+                if (linkAge.TotalMinutes < 15 && existingPending.CheckoutUrl != null && existingPending.PayOSOrderCode.HasValue)
+                {
+                    var payosPayment = await gatewayClient.PaymentRequests.GetAsync(existingPending.PayOSOrderCode.Value);
+                    if (string.Equals(payosPayment?.Status.ToString(), "PENDING", StringComparison.OrdinalIgnoreCase))
+                        return new CreatePaymentLinkResponse
+                        {
+                            PaymentId = existingPending.Id,
+                            OrderCode = existingPending.PayOSOrderCode ?? 0,
+                            CheckoutUrl = existingPending.CheckoutUrl
+                        };
+
+                    existingPending.Status = PaymentStatus.Fail;
+                    Repo.Update(existingPending, createdBy);
+                    await Repo.SaveAsync();
+                    existingPending = null;
+                }
+                else if (existingPending.PayOSOrderCode.HasValue)
+                {
+                    await gatewayClient.PaymentRequests.CancelAsync(existingPending.PayOSOrderCode.Value, "Recreating payment link");
+                }
+            }
 
             var orderCode = GenerateOrderCode();
 
@@ -184,6 +241,23 @@ namespace RestX.BLL.Services
             };
 
             var link = await gatewayClient.PaymentRequests.CreateAsync(linkRequest);
+
+            if (existingPending != null)
+            {
+                existingPending.PayOSOrderCode = orderCode;
+                existingPending.CheckoutUrl = link.CheckoutUrl;
+                existingPending.Amount = (decimal)amount;
+                existingPending.PaymentDate = DateTime.UtcNow.AddHours(7);
+                Repo.Update(existingPending, createdBy);
+                await Repo.SaveAsync();
+                return new CreatePaymentLinkResponse
+                {
+                    PaymentId = existingPending.Id,
+                    OrderCode = orderCode,
+                    CheckoutUrl = link.CheckoutUrl
+                };
+            }
+
             var employee = await Repo.GetOneAsync<Employee>(e => e.ApplicationUser.Id.ToString() == createdBy);
 
             var payment = new Payment
@@ -238,7 +312,17 @@ namespace RestX.BLL.Services
             var data = await gatewayClient.Webhooks.VerifyAsync(webhookBody);
 
             if (webhookBody.Code != "00")
+            {
+                var cancelledPayment = await Repo.GetOneAsync<Payment>(
+                    filter: p => p.PayOSOrderCode == data.OrderCode);
+                if (cancelledPayment != null && cancelledPayment.Status == PaymentStatus.Pending)
+                {
+                    cancelledPayment.Status = PaymentStatus.Fail;
+                    Repo.Update(cancelledPayment);
+                    await Repo.SaveAsync();
+                }
                 return;
+            }
 
             var payment = await Repo.GetOneAsync<Payment>(
                 filter: p => p.PayOSOrderCode == data.OrderCode)

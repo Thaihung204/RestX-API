@@ -79,6 +79,10 @@ namespace RestX.BLL.Services
 
             var customerId = await ResolveCustomer(request.Phone, request.Name);
 
+            var customer = await Repo.GetFirstAsync<Customer>(c => c.Id == customerId);
+            if (customer != null && !customer.IsActive)
+                throw new InvalidOperationException("Inactive customer cannot make reservations");
+
             var tables = await ValidateReservationTables(request.TableIds);
             await ValidateTableNotOccupied(tables, request.ReservationDateTime);
             ValidateCapacity(request.NumberOfGuests, tables);
@@ -828,13 +832,27 @@ namespace RestX.BLL.Services
 
             var existingUnpaid = await Repo.GetOneAsync<Payment>(
                 p => p.ReservationId == reservationId && p.Purpose == PaymentPurpose.Deposit && p.Status == PaymentStatus.Pending);
-            if (existingUnpaid?.PayOSOrderCode != null)
+
+            if (existingUnpaid != null)
             {
-                var (gatewayClient, _) = await GetDepositGateway();
-                await gatewayClient.PaymentRequests.CancelAsync(existingUnpaid.PayOSOrderCode.Value, "Recreating deposit link");
-                existingUnpaid.Status = PaymentStatus.Fail;
-                Repo.Update(existingUnpaid);
-                await Repo.SaveAsync();
+                var linkAge = VnNow - existingUnpaid.PaymentDate;
+                if (linkAge.TotalMinutes < 15 && existingUnpaid.CheckoutUrl != null && existingUnpaid.PayOSOrderCode.HasValue)
+                {
+                    var (gatewayClientVerify, _) = await GetDepositGateway();
+                    var payosPayment = await gatewayClientVerify.PaymentRequests.GetAsync(existingUnpaid.PayOSOrderCode.Value);
+                    if (string.Equals(payosPayment?.Status.ToString(), "PENDING", StringComparison.OrdinalIgnoreCase))
+                        return existingUnpaid.CheckoutUrl;
+
+                    existingUnpaid.Status = PaymentStatus.Fail;
+                    Repo.Update(existingUnpaid);
+                    await Repo.SaveAsync();
+                    existingUnpaid = null;
+                }
+                else if (existingUnpaid.PayOSOrderCode.HasValue)
+                {
+                    var (gatewayClientCancel, _) = await GetDepositGateway();
+                    await gatewayClientCancel.PaymentRequests.CancelAsync(existingUnpaid.PayOSOrderCode.Value, "Recreating deposit link");
+                }
             }
 
             var (client, settings) = await GetDepositGateway();
@@ -856,6 +874,16 @@ namespace RestX.BLL.Services
             };
 
             var link = await client.PaymentRequests.CreateAsync(linkRequest);
+
+            if (existingUnpaid != null)
+            {
+                existingUnpaid.PayOSOrderCode = orderCode;
+                existingUnpaid.CheckoutUrl = link.CheckoutUrl;
+                existingUnpaid.PaymentDate = VnNow;
+                Repo.Update(existingUnpaid);
+                await Repo.SaveAsync();
+                return link.CheckoutUrl;
+            }
 
             var payment = new Payment
             {
@@ -896,28 +924,43 @@ namespace RestX.BLL.Services
 
             var pendingOnlinePayment = await Repo.GetOneAsync<Payment>(
                 p => p.ReservationId == reservationId && p.Purpose == PaymentPurpose.Deposit && p.Status == PaymentStatus.Pending);
-            if (pendingOnlinePayment?.PayOSOrderCode != null)
+
+            Payment payment;
+            if (pendingOnlinePayment != null)
             {
-                var (gatewayClient, _) = await GetDepositGateway();
-                await gatewayClient.PaymentRequests.CancelAsync(pendingOnlinePayment.PayOSOrderCode.Value, "Paid by cash");
-                pendingOnlinePayment.Status = PaymentStatus.Fail;
-                Repo.Update(pendingOnlinePayment);
+                if (pendingOnlinePayment.PayOSOrderCode.HasValue)
+                {
+                    var (gatewayClient, _) = await GetDepositGateway();
+                    await gatewayClient.PaymentRequests.CancelAsync(pendingOnlinePayment.PayOSOrderCode.Value, "Paid by cash");
+                }
+                pendingOnlinePayment.PaymentMethodId = "CASH";
+                pendingOnlinePayment.Amount = reservation.DepositAmount;
+                pendingOnlinePayment.CashReceive = request.CashReceive;
+                pendingOnlinePayment.Cashback = cashback;
+                pendingOnlinePayment.Status = PaymentStatus.Success;
+                pendingOnlinePayment.PaymentDate = VnNow;
+                pendingOnlinePayment.PayOSOrderCode = null;
+                pendingOnlinePayment.CheckoutUrl = null;
+                pendingOnlinePayment.ProcessedBy = employee?.Id;
+                Repo.Update(pendingOnlinePayment, userId);
+                payment = pendingOnlinePayment;
             }
-
-            var payment = new Payment
+            else
             {
-                ReservationId = reservationId,
-                PaymentMethodId = "CASH",
-                Amount = reservation.DepositAmount,
-                CashReceive = request.CashReceive,
-                Cashback = cashback,
-                Status = PaymentStatus.Success,
-                Purpose = PaymentPurpose.Deposit,
-                PaymentDate = VnNow,
-                ProcessedBy = string.IsNullOrEmpty(userId) ? null : Guid.Parse(employee.Id.ToString())
-            };
-
-            await Repo.CreateAsync(payment, userId);
+                payment = new Payment
+                {
+                    ReservationId = reservationId,
+                    PaymentMethodId = "CASH",
+                    Amount = reservation.DepositAmount,
+                    CashReceive = request.CashReceive,
+                    Cashback = cashback,
+                    Status = PaymentStatus.Success,
+                    Purpose = PaymentPurpose.Deposit,
+                    PaymentDate = VnNow,
+                    ProcessedBy = string.IsNullOrEmpty(userId) ? null : employee?.Id
+                };
+                await Repo.CreateAsync(payment, userId);
+            }
             await Repo.SaveAsync();
 
             await ConfirmReservation(reservationId, userId);

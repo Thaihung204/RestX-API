@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.Extensions.FileSystemGlobbing.Internal;
 using OfficeOpenXml;
 using PayOS.Resources.V1.Payouts.Batch;
@@ -16,6 +17,7 @@ using RestX.Models.Common;
 using RestX.Models.Customers;
 using RestX.Models.Enum;
 using RestX.Models.Enum;
+using RestX.Models.Identity;
 using RestX.Models.Loyalty;
 using RestX.Models.Menu;
 using RestX.Models.Orders;
@@ -23,7 +25,9 @@ using RestX.Models.Promotions;
 using RestX.Models.Reservations;
 using RestX.Models.Tables;
 using RestX.Models.Tenants;
+using StackExchange.Redis;
 using System.Data;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Channels;
 
@@ -333,7 +337,12 @@ namespace RestX.BLL.Services
 
         public async Task<DataTranferObjects.Orders.Order> CheckSessionBeforeOrder(DataTranferObjects.Orders.Order order, string userId)
         {
-            var activeSession = await tableService.GetActiveTableSession(order.TableId);
+            var activeSession = await Repo.GetOneAsync<TableSession>(
+                filter: ts => ts.TableId == order.TableId && ts.IsActive
+                           && ts.StartedAt <= DateTime.UtcNow.AddHours(7)
+            );
+
+            //var activeSession = await tableService.GetActiveTableSession(order.TableId);
 
             if (activeSession != null)
             {
@@ -737,7 +746,10 @@ namespace RestX.BLL.Services
         }
         public async Task<bool> UpdateOrderDetailStatus(Guid orderDetailId, int statusId, string userId)
         {
-            Models.Orders.OrderDetail? orderDetail = await Repo.GetByIdAsync<Models.Orders.OrderDetail>(orderDetailId);
+            Models.Orders.OrderDetail? orderDetail = await Repo.GetOneAsync<Models.Orders.OrderDetail>(
+                filter: od => od.Id == orderDetailId,
+                includeProperties: "Dish,Order");
+
             if (orderDetail == null)
                 return false;
 
@@ -791,6 +803,24 @@ namespace RestX.BLL.Services
                             ? IngredientStatus.LowStock
                             : IngredientStatus.InStock;
                 }
+            }
+
+            if (cancelledStatus != null
+                && oldStatusId != cancelledStatus.Id
+                && statusId == cancelledStatus.Id
+                && orderDetail.Order != null)
+            {
+                decimal dishPrice = orderDetail.Dish?.Price ?? 0m;
+                decimal cancelledAmount = orderDetail.Quantity * dishPrice;
+
+                orderDetail.Order.SubTotal -= cancelledAmount;
+                if (orderDetail.Order.SubTotal < 0)
+                {
+                    orderDetail.Order.SubTotal = 0;
+                }
+
+                orderDetail.Order.CalculateTotalAmount();
+                Repo.Update(orderDetail.Order, userId);
             }
 
             orderDetail.ItemStatusId = statusId;
@@ -909,8 +939,7 @@ namespace RestX.BLL.Services
             var activeSessions = (await Repo.GetAsync<Models.Reservations.TableSession>(
                     filter: ts => ts.TableId == tableId
                                && ts.IsActive
-                               && ts.StartedAt <= now
-                               && (ts.EndedAt == null || ts.EndedAt > now),
+                               && ts.StartedAt <= now,
                     orderBy: query => query.OrderByDescending(ts => ts.StartedAt)
                 )).ToList();
 

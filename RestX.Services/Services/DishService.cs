@@ -232,6 +232,8 @@ namespace RestX.BLL.Services
 
         public async Task<Guid> UpsertDish(DishItem dishItem)
         {
+            await ValidateDishData(dishItem);
+
             Dish dish;
 
             if (dishItem.Id == null)
@@ -298,6 +300,74 @@ namespace RestX.BLL.Services
             return dish.Id;
         }
 
+        private async Task ValidateDishData(DishItem dishItem)
+        {
+            if (dishItem == null)
+            {
+                throw new AppException("Dish data is required.");
+            }
+
+            if (dishItem.CategoryId == Guid.Empty)
+            {
+                throw new AppException("Category is required.");
+            }
+
+            bool categoryExists = await Repo.GetExistsAsync<Category>(c => c.Id == dishItem.CategoryId);
+            if (!categoryExists)
+            {
+                throw new AppException("Category not found.");
+            }
+
+            dishItem.Name = (dishItem.Name ?? string.Empty).Trim();
+            dishItem.Description = (dishItem.Description ?? string.Empty).Trim();
+            dishItem.Unit = (dishItem.Unit ?? string.Empty).Trim();
+
+            if (string.IsNullOrWhiteSpace(dishItem.Name))
+            {
+                throw new AppException("Dish name is required.");
+            }
+
+            if (dishItem.Name.Length > 255)
+            {
+                throw new AppException("Dish name cannot exceed 255 characters.");
+            }
+
+            if (dishItem.Description.Length > 2000)
+            {
+                throw new AppException("Dish description cannot exceed 2000 characters.");
+            }
+
+            if (string.IsNullOrWhiteSpace(dishItem.Unit))
+            {
+                throw new AppException("Dish unit is required.");
+            }
+
+            if (dishItem.Unit.Length > 20)
+            {
+                throw new AppException("Dish unit cannot exceed 20 characters.");
+            }
+
+            if (dishItem.Price < 0)
+            {
+                throw new AppException("Dish price must be greater than or equal to 0.");
+            }
+
+            if (dishItem.Quantity < 0)
+            {
+                throw new AppException("Dish quantity must be greater than or equal to 0.");
+            }
+
+            string normalizedName = dishItem.Name.ToLower();
+            bool duplicateName = await Repo.GetExistsAsync<Dish>(d =>
+                d.CategoryId == dishItem.CategoryId
+                && d.Name.ToLower() == normalizedName
+                && (!dishItem.Id.HasValue || d.Id != dishItem.Id.Value));
+
+            if (duplicateName)
+            {
+                throw new AppException("Dish name already exists in this category.");
+            }
+        }
         private async Task<DishImage> HandleImageUpload(DishImageItem dishImageItem, Guid dishId, Guid newImageId)
         {
             using var stream = dishImageItem.File.OpenReadStream();

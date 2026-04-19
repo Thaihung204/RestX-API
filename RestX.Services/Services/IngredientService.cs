@@ -48,6 +48,8 @@ namespace RestX.BLL.Services
 
         public async Task<Guid> UpsertIngredient(IngredientItem ingredientItem)
         {
+            await ValidateIngredientData(ingredientItem);
+
             Ingredient ingredient;
             if (ingredientItem.Id != null)
             {
@@ -58,6 +60,7 @@ namespace RestX.BLL.Services
 
                 if (ingredient == null)
                     return Guid.Empty;
+
                 ingredient.Name = ingredientItem.Name;
                 ingredient.Unit = ingredientItem.Unit;
                 ingredient.MinStockLevel = ingredientItem.MinStockLevel;
@@ -65,14 +68,16 @@ namespace RestX.BLL.Services
                 ingredient.SupplierId = ingredientItem.SupplierId;
                 ingredient.Type = ingredientItem.Type;
                 ingredient.IsActive = ingredientItem.IsActive;
+
                 if (ingredient.InventoryStock == null)
                 {
                     ingredient.InventoryStock = new InventoryStock();
                 }
+
                 ingredient.InventoryStock.CurrentQuantity = ingredientItem.CurrentQuantity;
                 ingredient.InventoryStock.LastUpdated = DateTime.UtcNow;
-                Repo.Update(ingredient);
 
+                Repo.Update(ingredient);
                 await Repo.SaveAsync();
                 return ingredient.Id;
             }
@@ -93,10 +98,81 @@ namespace RestX.BLL.Services
                     LastUpdated = DateTime.UtcNow
                 }
             };
+
             await Repo.CreateAsync(ingredient);
             return ingredient.Id;
         }
 
+        private async Task ValidateIngredientData(IngredientItem ingredientItem)
+        {
+            if (ingredientItem == null)
+            {
+                throw new AppException("Ingredient data is required.");
+            }
+
+            ingredientItem.Name = (ingredientItem.Name ?? string.Empty).Trim();
+            ingredientItem.Unit = (ingredientItem.Unit ?? string.Empty).Trim();
+            ingredientItem.Type = ingredientItem.Type?.Trim();
+
+            if (string.IsNullOrWhiteSpace(ingredientItem.Name))
+            {
+                throw new AppException("Ingredient name is required.");
+            }
+
+            if (ingredientItem.Name.Length > 255)
+            {
+                throw new AppException("Ingredient name cannot exceed 255 characters.");
+            }
+
+            if (string.IsNullOrWhiteSpace(ingredientItem.Unit))
+            {
+                throw new AppException("Ingredient unit is required.");
+            }
+
+            if (ingredientItem.Unit.Length > 20)
+            {
+                throw new AppException("Ingredient unit cannot exceed 20 characters.");
+            }
+
+            if (!string.IsNullOrEmpty(ingredientItem.Type) && ingredientItem.Type.Length > 50)
+            {
+                throw new AppException("Ingredient type cannot exceed 50 characters.");
+            }
+
+            if (ingredientItem.MinStockLevel < 0 || ingredientItem.MaxStockLevel < 0)
+            {
+                throw new AppException("MinStockLevel and MaxStockLevel must be greater than or equal to 0.");
+            }
+
+            if (ingredientItem.MaxStockLevel > 0 && ingredientItem.MaxStockLevel < ingredientItem.MinStockLevel)
+            {
+                throw new AppException("MaxStockLevel must be greater than or equal to MinStockLevel.");
+            }
+
+            if (ingredientItem.CurrentQuantity < 0)
+            {
+                throw new AppException("CurrentQuantity must be greater than or equal to 0.");
+            }
+
+            if (ingredientItem.SupplierId.HasValue)
+            {
+                bool supplierExists = await Repo.GetExistsAsync<Supplier>(s => s.Id == ingredientItem.SupplierId.Value);
+                if (!supplierExists)
+                {
+                    throw new AppException("Supplier not found.");
+                }
+            }
+
+            string normalizedName = ingredientItem.Name.ToLower();
+            bool duplicateName = await Repo.GetExistsAsync<Ingredient>(i =>
+                i.Name.ToLower() == normalizedName
+                && (!ingredientItem.Id.HasValue || i.Id != ingredientItem.Id.Value));
+
+            if (duplicateName)
+            {
+                throw new AppException("Ingredient name already exists.");
+            }
+        }
         private async Task<string> GenerateNextIngredientCodeAsync()
         {
             int number = await Repo.GetCountAsync<Ingredient>() + 1;

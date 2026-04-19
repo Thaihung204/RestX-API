@@ -836,10 +836,19 @@ namespace RestX.BLL.Services
             if (existingUnpaid != null)
             {
                 var linkAge = VnNow - existingUnpaid.PaymentDate;
-                if (linkAge.TotalMinutes < 15 && existingUnpaid.CheckoutUrl != null)
-                    return existingUnpaid.CheckoutUrl;
+                if (linkAge.TotalMinutes < 15 && existingUnpaid.CheckoutUrl != null && existingUnpaid.PayOSOrderCode.HasValue)
+                {
+                    var (gatewayClientVerify, _) = await GetDepositGateway();
+                    var payosPayment = await gatewayClientVerify.PaymentRequests.GetAsync(existingUnpaid.PayOSOrderCode.Value);
+                    if (string.Equals(payosPayment?.Status.ToString(), "PENDING", StringComparison.OrdinalIgnoreCase))
+                        return existingUnpaid.CheckoutUrl;
 
-                if (existingUnpaid.PayOSOrderCode.HasValue)
+                    existingUnpaid.Status = PaymentStatus.Fail;
+                    Repo.Update(existingUnpaid);
+                    await Repo.SaveAsync();
+                    existingUnpaid = null;
+                }
+                else if (existingUnpaid.PayOSOrderCode.HasValue)
                 {
                     var (gatewayClientCancel, _) = await GetDepositGateway();
                     await gatewayClientCancel.PaymentRequests.CancelAsync(existingUnpaid.PayOSOrderCode.Value, "Recreating deposit link");

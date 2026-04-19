@@ -606,6 +606,7 @@ namespace RestX.BLL.Services
                     ComboDetails = (comboSummary.Details ?? new List<ComboDetailItem>())
                         .Select(d => new ComboDetail
                         {
+                            ComboId = Guid.Empty, 
                             DishId = d.DishId,
                             Quantity = d.Quantity > 0 ? d.Quantity : 1
                         })
@@ -661,20 +662,34 @@ namespace RestX.BLL.Services
                     {
                         Repo.Delete(oldDetail);
                     }
+
+                    combo.ComboDetails.Clear();
                 }
 
-                combo.ComboDetails = (comboSummary.Details ?? new List<ComboDetailItem>())
+                List<ComboDetail> newComboDetails = (comboSummary.Details ?? new List<ComboDetailItem>())
                     .Select(d => new ComboDetail
                     {
+                        ComboId = combo.Id,
                         DishId = d.DishId,
                         Quantity = d.Quantity > 0 ? d.Quantity : 1
                     })
                     .ToList();
 
-                Repo.Update(combo);
+                foreach (ComboDetail comboDetail in newComboDetails)
+                {
+                    combo.ComboDetails.Add(comboDetail);
+                    await Repo.CreateAsync(comboDetail);
+                }
             }
 
-            await Repo.SaveAsync();
+            try
+            {
+                await Repo.SaveAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                throw new AppException("Combo was modified or deleted by another user. Please reload and try again.");
+            }
 
             await RedisService.RemoveAsync($"{CurrentTenant.Hostname}:Combos");
             await RedisService.RemoveAsync($"{CurrentTenant.Hostname}:Menu");

@@ -134,7 +134,7 @@ namespace RestX.BLL.Services
             Repo.Update(reservation);
             foreach (var table in tables)
             {
-               await tableService.CreateTableSession(table.Id, null, customerId, reservation.Id);
+                await tableService.CreateTableSession(table.Id, null, customerId, reservation.Id);
             }
             await Repo.SaveAsync();
 
@@ -288,7 +288,7 @@ namespace RestX.BLL.Services
                 }
                 foreach (var table in newTables.Where(t => addedTableIds.Contains(t.Id)))
                 {
-                   await tableService.CreateTableSession(table.Id, String.Empty, reservation.CustomerId, reservation.Id);
+                    await tableService.CreateTableSession(table.Id, String.Empty, reservation.CustomerId, reservation.Id);
                 }
             }
             else if (dateChanged)
@@ -836,10 +836,19 @@ namespace RestX.BLL.Services
             if (existingUnpaid != null)
             {
                 var linkAge = VnNow - existingUnpaid.PaymentDate;
-                if (linkAge.TotalMinutes < 15 && existingUnpaid.CheckoutUrl != null)
-                    return existingUnpaid.CheckoutUrl;
+                if (linkAge.TotalMinutes < 15 && existingUnpaid.CheckoutUrl != null && existingUnpaid.PayOSOrderCode.HasValue)
+                {
+                    var (gatewayClientVerify, _) = await GetDepositGateway();
+                    var payosPayment = await gatewayClientVerify.PaymentRequests.GetAsync(existingUnpaid.PayOSOrderCode.Value);
+                    if (string.Equals(payosPayment?.Status.ToString(), "PENDING", StringComparison.OrdinalIgnoreCase))
+                        return existingUnpaid.CheckoutUrl;
 
-                if (existingUnpaid.PayOSOrderCode.HasValue)
+                    existingUnpaid.Status = PaymentStatus.Fail;
+                    Repo.Update(existingUnpaid);
+                    await Repo.SaveAsync();
+                    existingUnpaid = null;
+                }
+                else if (existingUnpaid.PayOSOrderCode.HasValue)
                 {
                     var (gatewayClientCancel, _) = await GetDepositGateway();
                     await gatewayClientCancel.PaymentRequests.CancelAsync(existingUnpaid.PayOSOrderCode.Value, "Recreating deposit link");

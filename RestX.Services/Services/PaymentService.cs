@@ -192,16 +192,26 @@ namespace RestX.BLL.Services
             if (existingPending != null)
             {
                 var linkAge = DateTime.UtcNow.AddHours(7) - existingPending.PaymentDate;
-                if (linkAge.TotalMinutes < 15 && existingPending.CheckoutUrl != null)
-                    return new CreatePaymentLinkResponse
-                    {
-                        PaymentId = existingPending.Id,
-                        OrderCode = existingPending.PayOSOrderCode ?? 0,
-                        CheckoutUrl = existingPending.CheckoutUrl
-                    };
+                if (linkAge.TotalMinutes < 15 && existingPending.CheckoutUrl != null && existingPending.PayOSOrderCode.HasValue)
+                {
+                    var payosPayment = await gatewayClient.PaymentRequests.GetAsync(existingPending.PayOSOrderCode.Value);
+                    if (string.Equals(payosPayment?.Status.ToString(), "PENDING", StringComparison.OrdinalIgnoreCase))
+                        return new CreatePaymentLinkResponse
+                        {
+                            PaymentId = existingPending.Id,
+                            OrderCode = existingPending.PayOSOrderCode ?? 0,
+                            CheckoutUrl = existingPending.CheckoutUrl
+                        };
 
-                if (existingPending.PayOSOrderCode.HasValue)
+                    existingPending.Status = PaymentStatus.Fail;
+                    Repo.Update(existingPending, createdBy);
+                    await Repo.SaveAsync();
+                    existingPending = null;
+                }
+                else if (existingPending.PayOSOrderCode.HasValue)
+                {
                     await gatewayClient.PaymentRequests.CancelAsync(existingPending.PayOSOrderCode.Value, "Recreating payment link");
+                }
             }
 
             var orderCode = GenerateOrderCode();
@@ -302,7 +312,17 @@ namespace RestX.BLL.Services
             var data = await gatewayClient.Webhooks.VerifyAsync(webhookBody);
 
             if (webhookBody.Code != "00")
+            {
+                var cancelledPayment = await Repo.GetOneAsync<Payment>(
+                    filter: p => p.PayOSOrderCode == data.OrderCode);
+                if (cancelledPayment != null && cancelledPayment.Status == PaymentStatus.Pending)
+                {
+                    cancelledPayment.Status = PaymentStatus.Fail;
+                    Repo.Update(cancelledPayment);
+                    await Repo.SaveAsync();
+                }
                 return;
+            }
 
             var payment = await Repo.GetOneAsync<Payment>(
                 filter: p => p.PayOSOrderCode == data.OrderCode)

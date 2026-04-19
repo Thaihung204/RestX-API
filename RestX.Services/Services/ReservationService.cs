@@ -134,7 +134,7 @@ namespace RestX.BLL.Services
             Repo.Update(reservation);
             foreach (var table in tables)
             {
-                await tableService.CreateTableSession(table.Id, null, customerId, reservation.Id);
+               await tableService.CreateTableSession(table.Id, null, customerId, reservation.Id);
             }
             await Repo.SaveAsync();
 
@@ -288,7 +288,7 @@ namespace RestX.BLL.Services
                 }
                 foreach (var table in newTables.Where(t => addedTableIds.Contains(t.Id)))
                 {
-                    await tableService.CreateTableSession(table.Id, String.Empty, reservation.CustomerId, reservation.Id);
+                   await tableService.CreateTableSession(table.Id, String.Empty, reservation.CustomerId, reservation.Id);
                 }
             }
             else if (dateChanged)

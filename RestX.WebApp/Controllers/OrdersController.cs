@@ -4,9 +4,11 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using RestX.BLL.DataTranferObjects.Feedback;
 using RestX.BLL.DataTranferObjects.Orders;
 using RestX.BLL.Exceptionhandling;
 using RestX.BLL.Interfaces;
+using RestX.BLL.Interfaces.Feedbacks;
 using RestX.Models.Identity;
 using RestX.Models.Tenants;
 using RestX.WebApp.Controllers.BaseControllers;
@@ -22,10 +24,12 @@ namespace RestX.WebApp.Controllers
     {
         private readonly IOrderService orderService;
         private readonly IHubContext<SignalrServer> hubContext;
+        private readonly IFeedbackService feedbackService;
 
         public OrdersController(
             IOrderService orderService,
             IHubContext<SignalrServer> hubContext,
+            IFeedbackService feedbackService,
             IMapper mapper,
             UserManager<ApplicationUser> userManager,
             IExceptionHandler exceptionHandler,
@@ -34,6 +38,7 @@ namespace RestX.WebApp.Controllers
         {
             this.orderService = orderService;
             this.hubContext = hubContext;
+            this.feedbackService = feedbackService;
         }
 
         [HttpGet("export/csv")]
@@ -334,6 +339,32 @@ namespace RestX.WebApp.Controllers
             catch (Exception ex)
             {
                 ExceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
+        [HttpPost("{orderId:guid}/feedbacks")]
+        [Authorize(Roles = "Customer,System Admin,Admin")]
+        public async Task<ActionResult<FeedbackItem>> CreateFeedback([Required] Guid orderId, [FromForm] FeedbackCreate request)
+        {
+            try
+            {
+                var currentUser = await GetCurrentUserAsync();
+                var userId = currentUser?.Id;
+
+                if (!userId.HasValue)
+                    return Unauthorized();
+
+                FeedbackItem result = await feedbackService.CreateFeedback(orderId, userId.Value, request);
+                return Ok(result);
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                this.ExceptionHandler.RaiseException(ex);
                 return BadRequest("An internal error occurred");
             }
         }

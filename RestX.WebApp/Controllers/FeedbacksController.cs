@@ -113,9 +113,9 @@ namespace RestX.WebApp.Controllers
             }
         }
 
-        [HttpGet("/api/admin/feedbacks")]
+        [HttpGet]
         [Authorize(Roles = "System Admin,Admin")]
-        public async Task<ActionResult> GetAdminFeedbacks([FromQuery] FeedbackFilterParams filter)
+        public async Task<ActionResult> GetAllFeedbacks([FromQuery] FeedbackFilterParams filter)
         {
             try
             {

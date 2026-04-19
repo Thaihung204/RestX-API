@@ -5,6 +5,7 @@ using RestX.BLL.DataTranferObjects.Feedback;
 using RestX.BLL.Exceptionhandling;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Feedbacks;
+using RestX.Models.Customers;
 using RestX.Models.Enum;
 using RestX.Models.Feedbacks;
 using RestX.Models.Orders;
@@ -27,10 +28,17 @@ namespace RestX.BLL.Services
             this.cloudinaryService = cloudinaryService;
             this.mapper = mapper;
         }
-
-        public async Task<FeedbackItem> CreateFeedback(Guid orderId, Guid customerId, FeedbackCreate request)
+        public async Task<FeedbackItem> CreateFeedback(Guid orderId, Guid userId, FeedbackCreate request)
         {
-            if (customerId == Guid.Empty)
+            if (userId == Guid.Empty)
+            {
+                throw new AppException("User not found");
+            }
+
+            Customer? customer = await Repo.GetFirstAsync<Customer>(
+                filter: c => c.ApplicationUserId == userId);
+
+            if (customer == null)
             {
                 throw new AppException("Customer not found");
             }
@@ -39,11 +47,6 @@ namespace RestX.BLL.Services
             if (order == null)
             {
                 throw new AppException("Order not found");
-            }
-
-            if (order.OrderStatusId != (int)OrderStatus.Completed)
-            {
-                throw new AppException("Only completed orders can be reviewed");
             }
 
             bool hasFeedback = await Repo.GetExistsAsync<Feedback>(f => f.OrderId == orderId);
@@ -56,14 +59,14 @@ namespace RestX.BLL.Services
             {
                 Id = Guid.NewGuid(),
                 OrderId = orderId,
-                CustomerId = customerId,
+                CustomerId = customer.Id,
                 Rating = request.Rating,
                 Comment = request.Comment,
                 IsAnonymous = request.IsAnonymous,
                 IsPublished = false
             };
 
-            await Repo.CreateAsync(feedback);
+            await Repo.CreateAsync(feedback, userId.ToString());
 
             await CreateFeedbackImages(feedback.Id, request.Images);
 
@@ -78,7 +81,6 @@ namespace RestX.BLL.Services
 
             return MapFeedback(created);
         }
-
         public async Task<FeedbackItem?> GetFeedbackById(Guid id, Guid? callerCustomerId = null, bool isAdmin = false)
         {
             Feedback? feedback = await Repo.GetFirstAsync<Feedback>(
@@ -309,7 +311,7 @@ namespace RestX.BLL.Services
                 };
             }
 
-            List<FeedbackImageItem> images = feedback.FeedbackImages
+            List<FeedbackImageItem> images = (feedback.FeedbackImages ?? new List<FeedbackImage>())
                 .OrderBy(i => i.DisplayOrder)
                 .Select(i => new FeedbackImageItem
                 {
@@ -320,7 +322,19 @@ namespace RestX.BLL.Services
                 })
                 .ToList();
 
-            return mapper.Map<FeedbackItem>(feedback);
+            return new FeedbackItem
+            {
+                Id = feedback.Id,
+                OrderId = feedback.OrderId,
+                CustomerId = feedback.CustomerId,
+                Rating = feedback.Rating,
+                Comment = feedback.Comment,
+                IsPublished = feedback.IsPublished,
+                IsAnonymous = feedback.IsAnonymous,
+                CreatedDate = feedback.CreatedDate,
+                Customer = customer,
+                FeedbackImages = images
+            };
         }
     }
 }

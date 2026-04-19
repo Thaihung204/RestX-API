@@ -344,7 +344,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpPost("{orderId:guid}/feedbacks")]
-        [Authorize(Roles = "Customer,System Admin,Admin")]
+        [AllowAnonymous]
         public async Task<ActionResult<FeedbackItem>> CreateFeedback([Required] Guid orderId, [FromForm] FeedbackCreate request)
         {
             try

@@ -135,7 +135,10 @@ namespace RestX.BLL.Services
                 o.CompletedAt,
                 o.CancelledAt,
                 o.HandledBy,
-                o.CreatedDate
+                o.CreatedDate,
+                o.ModifiedDate,
+                o.CreatedBy,
+                o.ModifiedBy
             ";
 
             var mainQuery = query.ToString().Replace("#SELECT#", selectItems);
@@ -801,16 +804,18 @@ namespace RestX.BLL.Services
         public async Task<IEnumerable<DataTranferObjects.Orders.OrderDetail>> GetAllOrderDetails()
         {
             var orderDetailStatuses = await statusValueService.GetStatuses("order-detail");
-            var initialStatus = orderDetailStatuses.FirstOrDefault(x => x.IsDefault)
-                                ?? orderDetailStatuses.FirstOrDefault();
+            var preparingStatus = orderDetailStatuses.FirstOrDefault(x => x.Code == "PREPARING");
 
-            if (initialStatus == null)
+            if (preparingStatus == null)
                 return Enumerable.Empty<DataTranferObjects.Orders.OrderDetail>();
 
             var startOfDay = DateTime.UtcNow.AddHours(7).Date;
 
             var orderDetails = (await Repo.GetAsync<Models.Orders.OrderDetail>(
-                filter: od => od.ItemStatusId == initialStatus.Id && od.CreatedDate >= startOfDay,
+                filter: od => od.ItemStatusId == preparingStatus.Id
+                              && od.CreatedDate >= startOfDay
+                              && od.Order != null
+                              && od.Order.OrderStatusId == (int)OrderStatus.Open,
                 orderBy: query => query.OrderBy(od => od.CreatedDate),
                 includeProperties: "ItemStatus,Dish,Order,Order.TableSessions,Order.TableSessions.Table"
             )).ToList();

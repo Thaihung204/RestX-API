@@ -1282,18 +1282,19 @@ LUÔN trả về JSON hợp lệ sau, KHÔNG thêm text nào ngoài JSON:
 Phân tích TOÀN DIỆN — tất cả sections.
 
 QUY TẮC BẮT BUỘC:
-1. MỌI evidence PHẢI hiển thị chuỗi tính toán đầy đủ để chủ nhà hàng tự kiểm chứng:
-   ✗ ""Bánh mì thịt nướng chiếm 33,5% doanh thu""
-   ✓ ""300 phần × 30.000đ = 9.000.000đ ÷ 26.816.000đ = 33,5% tổng DT""
-   → Dùng trực tiếp số liệu từ mục 'CHỈ SỐ TÍNH TOÁN SẴN' trong data.
+1. MỌI evidence chỉ hiển thị KẾT QUẢ, KHÔNG viết công thức tính:
+   ✗ ""300 phần × 30.000đ = 9.000.000đ ÷ 26.816.000đ = 33,5% tổng DT""
+   ✓ ""Bánh mì thịt nướng chiếm 33,5% tổng doanh thu""
+   → Dùng trực tiếp số liệu đã tính sẵn từ mục 'CHỈ SỐ TÍNH TOÁN SẴN' trong data.
 
-2. MỌI đánh giá risk/opportunity PHẢI có benchmark ngành để so sánh:
-   ✗ ""Tỷ lệ khách quay lại thấp""
-   ✓ ""Khách quay lại: 1 ÷ 5 = 20% — thấp hơn chuẩn ngành F&B Việt Nam 35-40%""
+2. MỌI đánh giá risk/opportunity PHẢI có benchmark ngành, chỉ hiển thị kết quả so sánh:
+   ✗ ""Khách quay lại: 1 ÷ 5 = 20% — thấp hơn chuẩn ngành F&B Việt Nam 35-40%""
+   ✓ ""Tỷ lệ khách quay lại: 20% (chuẩn ngành F&B: 35-40%)""
    → Benchmark: Tỷ lệ hủy đơn < 5% | Khách quay lại 35-40% | Revenue concentration < 20%/khách
 
-3. MỌI so sánh phải rõ: kỳ này vs kỳ trước + delta tuyệt đối + delta phần trăm.
-   ✓ ""312 phần vs 215 phần kỳ trước (+97 phần, +45,1%)""
+3. MỌI so sánh phải rõ: kỳ này vs kỳ trước + delta phần trăm, không dùng ký hiệu toán học.
+   ✗ ""312 phần vs 215 phần kỳ trước (+97 phần, +45,1%)""
+   ✓ ""312 phần, tăng 45,1% so kỳ trước""
 
 4. suggestedDishes: PHẢI trích dẫn cụ thể từ 'CƠ HỘI THEO MÙA' trong data. KHÔNG dùng lý do chung chung.
    ✗ ""Mùa hè nên bán đồ uống lạnh""
@@ -1398,37 +1399,34 @@ JSON OUTPUT (chỉ trả về JSON, không thêm text):
             }
             sb.AppendLine();
 
-            // ── Pre-computed metrics for AI evidence transparency ────────────
+            // ── Pre-computed metrics ────────────────────────────────────────────
             sb.AppendLine("=== CHỈ SỐ TÍNH TOÁN SẴN (dùng trực tiếp vào evidence) ===");
             if (summary.Orders.Completed > 0 && summary.Revenue.Total > 0)
-                sb.AppendLine($"Doanh thu/đơn hoàn thành: {summary.Revenue.Total:N0}đ ÷ {summary.Orders.Completed} đơn = {summary.Revenue.Total / summary.Orders.Completed:N0}đ/đơn");
+                sb.AppendLine($"Doanh thu/đơn hoàn thành: {summary.Revenue.Total / summary.Orders.Completed:N0}đ/đơn");
             if (summary.Orders.Total > 0)
             {
                 var cancelRate = (double)summary.Orders.Cancelled / summary.Orders.Total * 100;
-                sb.AppendLine($"Tỷ lệ hủy thực tế: {summary.Orders.Cancelled} ÷ {summary.Orders.Total} = {cancelRate:F1}% (chuẩn ngành F&B Việt Nam: < 5%)");
+                sb.AppendLine($"Tỷ lệ hủy: {cancelRate:F1}% (chuẩn ngành: < 5%)");
             }
             var totalCustomers = customerStats.NewCustomers + customerStats.ReturningCustomers;
             if (totalCustomers > 0)
             {
                 var returnRate = (double)customerStats.ReturningCustomers / totalCustomers * 100;
-                sb.AppendLine($"Tỷ lệ khách quay lại: {customerStats.ReturningCustomers} ÷ {totalCustomers} = {returnRate:F1}% (chuẩn ngành F&B Việt Nam: 35-40%)");
-                var benchmark = returnRate < 20 ? "⚠ THẤP HƠN CHUẨN NGÀNH" : returnRate < 35 ? "Dưới chuẩn ngành" : "Đạt chuẩn";
-                sb.AppendLine($"  → Đánh giá: {benchmark}");
+                var benchmark = returnRate < 20 ? "⚠ thấp hơn chuẩn ngành" : returnRate < 35 ? "dưới chuẩn ngành" : "đạt chuẩn";
+                sb.AppendLine($"Tỷ lệ khách quay lại: {returnRate:F1}% (chuẩn ngành F&B: 35-40% — {benchmark})");
             }
             if (summary.Revenue.Total > 0 && customerStats.TopCustomers.Any())
             {
                 var topSpender = customerStats.TopCustomers.First();
                 var concentration = (double)topSpender.TotalSpent / (double)summary.Revenue.Total * 100;
-                sb.AppendLine($"Tập trung doanh thu: khách #{1} '{topSpender.CustomerName}' = {topSpender.TotalSpent:N0}đ ÷ {summary.Revenue.Total:N0}đ = {concentration:F1}% tổng DT");
-                if (concentration > 50) sb.AppendLine($"  → ⚠ RỦI RO CAO: 1 khách chiếm {concentration:F1}% DT (ngưỡng an toàn: < 20%)");
+                sb.AppendLine($"Tập trung DT vào khách '{topSpender.CustomerName}': {concentration:F1}% tổng DT (ngưỡng an toàn: < 20%)");
             }
             if (summary.Revenue.Total > 0)
             {
                 foreach (var d in topDishes.Dishes.Take(5))
                 {
                     var pct = (double)d.Revenue / (double)summary.Revenue.Total * 100;
-                    var avgPrice = d.Quantity > 0 ? d.Revenue / d.Quantity : 0;
-                    sb.AppendLine($"  [{d.Name}]: {d.Quantity} phần × {avgPrice:N0}đ = {d.Revenue:N0}đ = {pct:F1}% tổng DT");
+                    sb.AppendLine($"  [{d.Name}]: {d.Quantity} phần, {d.Revenue:N0}đ, chiếm {pct:F1}% tổng DT");
                 }
             }
             sb.AppendLine();

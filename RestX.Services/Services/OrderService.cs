@@ -376,8 +376,61 @@ namespace RestX.BLL.Services
 
         }
 
+        private async Task ValidateOrderInput(DataTranferObjects.Orders.Order order)
+        {
+            if (order == null)
+            {
+                throw new AppException("Order data is required.");
+            }
+
+            if (order.CustomerId == Guid.Empty)
+            {
+                throw new AppException("CustomerId is required.");
+            }
+
+            bool customerExists = await Repo.GetExistsAsync<Customer>(c => c.Id == order.CustomerId);
+            if (!customerExists)
+            {
+                throw new AppException("Customer not found.");
+            }
+
+            decimal discountAmount = order.DiscountAmount ?? 0m;
+            decimal taxAmount = order.TaxAmount ?? 0m;
+            decimal serviceCharge = order.ServiceCharge ?? 0m;
+
+            if (discountAmount < 0 || taxAmount < 0 || serviceCharge < 0)
+            {
+                throw new AppException("DiscountAmount, TaxAmount, ServiceCharge cannot be negative.");
+            }
+
+            List<DataTranferObjects.Orders.OrderDetail> details = order.OrderDetails ?? new List<DataTranferObjects.Orders.OrderDetail>();
+            if (!details.Any())
+            {
+                throw new AppException("Order must contain at least one order detail.");
+            }
+
+            foreach (DataTranferObjects.Orders.OrderDetail detail in details)
+            {
+                if (detail.DishId == Guid.Empty)
+                {
+                    throw new AppException("DishId is required.");
+                }
+
+                if (detail.Quantity <= 0)
+                {
+                    throw new AppException("Quantity must be greater than 0.");
+                }
+
+                if (!string.IsNullOrWhiteSpace(detail.Note) && detail.Note.Trim().Length > 500)
+                {
+                    throw new AppException("Order detail note cannot exceed 500 characters.");
+                }
+            }
+        }
+
         public async Task<Models.Orders.Order> UpsertOrder(DataTranferObjects.Orders.Order order, string userId)
         {
+            await ValidateOrderInput(order);
             Models.Orders.Order orderEntity;
 
             // CREATE
@@ -520,6 +573,8 @@ namespace RestX.BLL.Services
 
         public async Task<Guid> UpdateOrder(Guid id, DataTranferObjects.Orders.Order order, string userId)
         {
+            await ValidateOrderInput(order);
+
             Models.Orders.Order? orderEntity = await Repo.GetOneAsync<Models.Orders.Order>(
                 filter: o => o.Id == id,
                 includeProperties: "OrderDetails,Payments"
@@ -656,6 +711,11 @@ namespace RestX.BLL.Services
 
         public async Task<bool> UpdateStatus(Guid orderId, int statusId, string userId)
         {
+            if (!Enum.IsDefined(typeof(OrderStatus), statusId))
+            {
+                throw new AppException("Invalid order status.");
+            }
+
             Models.Orders.Order? order = await Repo.GetOneAsync<Models.Orders.Order>(
                 filter: o => o.Id == orderId,
                 includeProperties: "OrderDetails"
@@ -738,10 +798,16 @@ namespace RestX.BLL.Services
             if (orderDetail == null)
                 return false;
 
-            int oldStatusId = orderDetail.ItemStatusId;
-
             List<RestX.BLL.DataTranferObjects.Status.StatusValues> orderDetailStatuses =
                 (await statusValueService.GetStatuses("order-detail")).ToList();
+
+            bool statusExists = orderDetailStatuses.Any(x => x.Id == statusId);
+            if (!statusExists)
+            {
+                throw new AppException("Invalid order detail status.");
+            }
+
+            int oldStatusId = orderDetail.ItemStatusId;
 
             RestX.BLL.DataTranferObjects.Status.StatusValues? preparingStatus = orderDetailStatuses.FirstOrDefault(x =>
                 string.Equals(x.Code, "PREPARING", StringComparison.OrdinalIgnoreCase));

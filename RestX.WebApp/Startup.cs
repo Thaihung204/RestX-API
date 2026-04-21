@@ -195,6 +195,7 @@ namespace RestX.WebApp
             // Registering the Singleton SocketsHttpHandler lets you reuse it across any HttpClient in your application
             services.AddSingleton<SocketsHttpHandler>(socketsHttpHandler);
             services.AddSignalR();
+            services.AddScoped<IRealtimeNotifier, RealtimeNotifier>();
             services.AddScoped<ICookieManager, RestXCookieManager>();
             services.AddScoped<IExceptionHandler, ExceptionHandler>();
             services.AddScoped<ITenantService, TenantService>();

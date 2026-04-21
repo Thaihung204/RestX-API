@@ -87,6 +87,7 @@ namespace RestX.WebApp.Controllers
                     return BadRequest(new { success = false, message = "Invalid data", errors = ModelState });
                 var user = await GetCurrentUserAsync();
                 var floorId = await floorService.UpsertFloor(request, user?.Id.ToString());
+                await hub.BroadcastToTenant(CurrentTenant.Id, SignalrServer.TableLayoutUpdated, new { floorId });
                 return Ok(new { success = true, message = "Floor created successfully", data = new { id = floorId } });
             }
             catch (AppException ex)
@@ -111,6 +112,7 @@ namespace RestX.WebApp.Controllers
                 request.Id = id;
                 var user = await GetCurrentUserAsync();
                 var floorId = await floorService.UpsertFloor(request, user?.Id.ToString());
+                await hub.BroadcastToTenant(CurrentTenant.Id, SignalrServer.TableLayoutUpdated, new { floorId });
                 return Ok(new { success = true, message = "Floor updated successfully", data = new { id = floorId } });
             }
             catch (AppException ex)
@@ -186,6 +188,7 @@ namespace RestX.WebApp.Controllers
                 var success = await floorService.DeleteFloor(id);
                 if (!success)
                     return NotFound(new { success = false, message = "Floor not found" });
+                await hub.BroadcastToTenant(CurrentTenant.Id, SignalrServer.TableLayoutUpdated, new { floorId = id });
                 return Ok(new { success = true, message = "Floor deleted successfully" });
             }
             catch (AppException ex)

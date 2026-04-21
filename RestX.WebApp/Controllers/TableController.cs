@@ -81,7 +81,9 @@ namespace RestX.WebApp.Controllers
         {
             try
             {
-                return Ok(await tableService.UpsertTable(id, request));
+                var result = await tableService.UpsertTable(id, request);
+                await hub.BroadcastToTenant(CurrentTenant.Id, SignalrServer.TableLayoutUpdated, new { tableId = id, floorId = result.FloorId });
+                return Ok(result);
             }
             catch (AppException ex)
             {
@@ -100,7 +102,9 @@ namespace RestX.WebApp.Controllers
         {
             try
             {
-                return Ok(await tableService.UpsertTable(null, request));
+                var result = await tableService.UpsertTable(null, request);
+                await hub.BroadcastToTenant(CurrentTenant.Id, SignalrServer.TableLayoutUpdated, new { tableId = result.Id, floorId = result.FloorId });
+                return Ok(result);
             }
             catch (AppException ex)
             {
@@ -120,6 +124,7 @@ namespace RestX.WebApp.Controllers
             try
             {
                 await tableService.DeleteTable(id);
+                await hub.BroadcastToTenant(CurrentTenant.Id, SignalrServer.TableLayoutUpdated, new { tableId = id });
                 return Ok();
             }
             catch (AppException ex)

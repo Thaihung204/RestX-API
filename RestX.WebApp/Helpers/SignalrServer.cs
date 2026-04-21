@@ -21,6 +21,13 @@ namespace RestX.WebApp.Helpers
         public const string DashboardSummaryUpdated = "dashboard.summary_updated";
         public const string DashboardTableStatusUpdated = "dashboard.table_status_updated";
 
+        public const string PaymentCompleted = "payments.completed";
+        public const string PaymentCancelled = "payments.cancelled";
+
+        public const string ReservationCreated = "reservations.created";
+        public const string ReservationUpdated = "reservations.updated";
+        public const string ReservationDeleted = "reservations.deleted";
+
         public async Task JoinTenantGroup(string tenantId)
             => await Groups.AddToGroupAsync(Context.ConnectionId, $"tenant_{tenantId.ToLower()}");
 

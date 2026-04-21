@@ -23,6 +23,7 @@ namespace RestX.BLL.Services
         private readonly IReservationService reservationService;
         private readonly ITableService tableService;
         private readonly IOrderService orderService;
+        private readonly IRealtimeNotifier notifier;
         private readonly IMapper mapper;
 
         public PaymentService(
@@ -32,6 +33,7 @@ namespace RestX.BLL.Services
             IReservationService reservationService,
             ITableService tableService,
             IOrderService orderService,
+            IRealtimeNotifier notifier,
             IMapper mapper,
             IEnumerable<ActiveTenant> tenant = null
         ) : base(repo, redisService, tenant)
@@ -40,6 +42,7 @@ namespace RestX.BLL.Services
             this.reservationService = reservationService;
             this.tableService = tableService;
             this.orderService = orderService;
+            this.notifier = notifier;
             this.mapper = mapper;
         }
 
@@ -139,6 +142,7 @@ namespace RestX.BLL.Services
             await AwardLoyaltyPointsAsync(order);
 
             await orderService.UpdateStatus(orderId, (int)OrderStatus.Completed, createdBy ?? string.Empty);
+            await notifier.OrderUpdatedAsync(CurrentTenant.Id, orderId);
 
             order.CompletedAt = DateTime.UtcNow.AddHours(7);
             Repo.Update(order, createdBy);
@@ -146,6 +150,7 @@ namespace RestX.BLL.Services
             if (order.ReservationId.HasValue)
             {
                 await reservationService.CompleteReservation(order.ReservationId.Value, createdBy);
+                await notifier.ReservationUpdatedAsync(CurrentTenant.Id, order.ReservationId.Value);
             }
 
             List<TableSession> activeSessions = (await Repo.GetAsync<TableSession>(
@@ -155,6 +160,7 @@ namespace RestX.BLL.Services
             foreach (Guid tableId in activeSessions.Select(ts => ts.TableId).Distinct())
             {
                 await tableService.CloseTableSession(tableId);
+                await notifier.TableSessionClosedAsync(CurrentTenant.Id, tableId);
             }
 
             await Repo.SaveAsync();
@@ -306,7 +312,7 @@ namespace RestX.BLL.Services
             await Repo.SaveAsync();
         }
 
-        public async Task HandleWebhook(Webhook webhookBody)
+        public async Task<bool> HandleWebhook(Webhook webhookBody)
         {
             var (gatewayClient, _) = await GetTenantGateway();
             var data = await gatewayClient.Webhooks.VerifyAsync(webhookBody);
@@ -321,7 +327,7 @@ namespace RestX.BLL.Services
                     Repo.Update(cancelledPayment);
                     await Repo.SaveAsync();
                 }
-                return;
+                return false;
             }
 
             var payment = await Repo.GetOneAsync<Payment>(
@@ -329,7 +335,7 @@ namespace RestX.BLL.Services
                 ?? throw new KeyNotFoundException($"Payment not found for orderCode {data.OrderCode}");
 
             if (payment.Status == PaymentStatus.Success)
-                return;
+                return true;
 
             payment.Status = PaymentStatus.Success;
             payment.TransactionId = data.Reference;
@@ -345,6 +351,7 @@ namespace RestX.BLL.Services
                 {
                     await reservationService.ConfirmReservation(payment.ReservationId.Value);
                     await reservationService.SendDepositConfirmedEmailAsync(payment.ReservationId.Value);
+                    await notifier.ReservationUpdatedAsync(CurrentTenant.Id, payment.ReservationId.Value);
                 }
             }
             else if (payment.Purpose == PaymentPurpose.Order && payment.OrderId.HasValue)
@@ -355,6 +362,7 @@ namespace RestX.BLL.Services
                     await AwardLoyaltyPointsAsync(order);
 
                     await orderService.UpdateStatus(order.Id, (int)OrderStatus.Completed, string.Empty);
+                    await notifier.OrderUpdatedAsync(CurrentTenant.Id, order.Id);
 
                     order.CompletedAt = DateTime.UtcNow.AddHours(7);
                     Repo.Update(order);
@@ -362,6 +370,7 @@ namespace RestX.BLL.Services
                     if (order.ReservationId.HasValue)
                     {
                         await reservationService.CompleteReservation(order.ReservationId.Value);
+                        await notifier.ReservationUpdatedAsync(CurrentTenant.Id, order.ReservationId.Value);
                     }
 
                     List<TableSession> activeSessions = (await Repo.GetAsync<TableSession>(
@@ -371,11 +380,13 @@ namespace RestX.BLL.Services
                     foreach (Guid tableId in activeSessions.Select(ts => ts.TableId).Distinct())
                     {
                         await tableService.CloseTableSession(tableId);
+                        await notifier.TableSessionClosedAsync(CurrentTenant.Id, tableId);
                     }
                 }
             }
 
             await Repo.SaveAsync();
+            return true;
         }
 
         private async Task<Order> RecalculateOrderAmountForCheckout(Guid orderId, string? modifiedBy = null)

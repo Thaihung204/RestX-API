@@ -552,6 +552,32 @@ namespace RestX.BLL.Services
                 throw new AppException($"Unexpected error while deleting tenant: {ex.Message}");
             }
         }
+
+        public async Task ChangeTenantStatus(Guid id, bool status)
+        {
+            if (id == Guid.Empty)
+            {
+                throw new AppException("Tenant id is required.");
+            }
+
+            Tenant? tenant = await adminRepo.GetByIdAsync<Tenant>(id);
+            if (tenant == null)
+            {
+                throw new AppException("Tenant not found.");
+            }
+
+            if (tenant.Status == status)
+            {
+                return;
+            }
+
+            tenant.Status = status;
+            adminRepo.Update(tenant);
+            await adminRepo.SaveAsync();
+
+            await RedisService.RemoveAsync($"{tenant.Hostname}:Tenant");
+            await RedisService.RemoveAsync($"{tenant.Hostname.ToLower()}:Tenant");
+        }
         private static async Task DropTenantDatabaseAsync(string tenantConnectionString)
         {
             if (string.IsNullOrWhiteSpace(tenantConnectionString))

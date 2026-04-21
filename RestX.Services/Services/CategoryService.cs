@@ -241,10 +241,30 @@ namespace RestX.BLL.Services
 
         public async Task DeleteCategory(Guid id)
         {
-            var category = await Repo.GetByIdAsync<Category>(id);
+            if (id == Guid.Empty)
+            {
+                throw new AppException("Category id is required.");
+            }
+
+            Category? category = await Repo.GetByIdAsync<Category>(id);
             if (category == null)
-                return;
-            await cloudinaryService.DeleteAsync($"{CurrentTenant.Name.Replace(" ", "")}/categories/{id}/{id}");
+            {
+                throw new AppException("Category not found.");
+            }
+
+            bool hasSubCategories = await Repo.GetExistsAsync<Category>(c => c.ParentId == id);
+            if (hasSubCategories)
+            {
+                throw new AppException("Cannot delete category because it has sub-categories.");
+            }
+
+            bool hasDishes = await Repo.GetExistsAsync<Dish>(d => d.CategoryId == id);
+            if (hasDishes)
+            {
+                throw new AppException("Cannot delete category because it is being used by one or more dishes.");
+            }
+
+            await cloudinaryService.DeleteAsync($"{CurrentTenant.Name.Replace(" ", "")}/categories/{id}");
 
             Repo.Delete<Category>(id);
             await Repo.SaveAsync();

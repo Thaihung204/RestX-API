@@ -1,6 +1,9 @@
 using AutoMapper;
 using PayOS;
 using PayOS.Models.Webhooks;
+using QuestPDF.Fluent;
+using QuestPDF.Helpers;
+using QuestPDF.Infrastructure;
 using RestX.BLL.DataTranferObjects.Common;
 using RestX.BLL.DataTranferObjects.Payments;
 using RestX.BLL.Helpers;
@@ -41,23 +44,38 @@ namespace RestX.BLL.Services
             this.tableService = tableService;
             this.orderService = orderService;
             this.mapper = mapper;
+            QuestPDF.Settings.License = LicenseType.Community;
         }
 
-        public async Task<IEnumerable<PaymentDetail>> GetAllPayments(DateTime? from, DateTime? to, string? method, string? statusCode)
+        public async Task<IEnumerable<PaymentDetail>> GetAllPayments(DateTime? from, DateTime? to, string? method, string? statusCode, string? purpose)
         {
             PaymentStatus? statusFilter = null;
             if (!string.IsNullOrEmpty(statusCode) && System.Enum.TryParse<PaymentStatus>(statusCode, true, out var parsed))
                 statusFilter = parsed;
+
+            PaymentPurpose? purposeFilter = null;
+            if (!string.IsNullOrEmpty(purpose) && System.Enum.TryParse<PaymentPurpose>(purpose, true, out var parsedPurpose))
+                purposeFilter = parsedPurpose;
 
             var payments = await Repo.GetAsync<Payment>(
                 filter: p =>
                     (from == null || p.PaymentDate >= from) &&
                     (to == null || p.PaymentDate <= to) &&
                     (method == null || p.PaymentMethodId.ToLower() == method.ToLower()) &&
-                    (statusFilter == null || p.Status == statusFilter),
-                orderBy: q => q.OrderByDescending(p => p.PaymentDate));
+                    (statusFilter == null || p.Status == statusFilter) &&
+                    (purposeFilter == null || p.Purpose == purposeFilter),
+                orderBy: q => q.OrderByDescending(p => p.PaymentDate),
+                includeProperties: "Order.Customer.ApplicationUser,Reservation.Customer.ApplicationUser");
 
-            return mapper.Map<IEnumerable<PaymentDetail>>(payments);
+            var result = mapper.Map<IEnumerable<PaymentDetail>>(payments).ToList();
+            var paymentList = payments.ToList();
+            for (int i = 0; i < result.Count; i++)
+            {
+                var p = paymentList[i];
+                result[i].CustomerName = p.Order?.Customer?.ApplicationUser?.FullName
+                    ?? p.Reservation?.Customer?.ApplicationUser?.FullName;
+            }
+            return result;
         }
 
         public async Task<IEnumerable<PaymentDetail>> GetPaymentsByOrder(Guid orderId)
@@ -71,8 +89,77 @@ namespace RestX.BLL.Services
 
         public async Task<PaymentDetail?> GetPaymentById(Guid id)
         {
-            var payment = await Repo.GetOneAsync<Payment>(filter: p => p.Id == id);
-            return payment == null ? null : mapper.Map<PaymentDetail>(payment);
+            var payment = await Repo.GetOneAsync<Payment>(
+                filter: p => p.Id == id,
+                includeProperties: "Order.Customer.ApplicationUser,Order.OrderDetails.Dish,Order.OrderDetails.ItemStatus,Order.PromotionHistories.Promotion,Reservation.Customer.ApplicationUser");
+
+            if (payment == null) return null;
+
+            var detail = mapper.Map<PaymentDetail>(payment);
+
+            var customer = payment.Order?.Customer ?? payment.Reservation?.Customer;
+            if (customer != null)
+            {
+                detail.CustomerName = customer.ApplicationUser?.FullName;
+                detail.Customer = new PaymentCustomerInfo
+                {
+                    Id = customer.Id,
+                    FullName = customer.ApplicationUser?.FullName ?? string.Empty,
+                    Phone = customer.ApplicationUser?.PhoneNumber,
+                    Email = customer.ApplicationUser?.Email,
+                    MembershipLevel = customer.MembershipLevel,
+                    LoyaltyPoints = customer.LoyaltyPoints,
+                };
+            }
+
+            if (payment.Order != null)
+            {
+                var order = payment.Order;
+                detail.Order = new PaymentOrderInfo
+                {
+                    Id = order.Id,
+                    Reference = order.Reference,
+                    SubTotal = order.SubTotal,
+                    DiscountAmount = order.DiscountAmount,
+                    TaxAmount = order.TaxAmount,
+                    ServiceCharge = order.ServiceCharge,
+                    TotalAmount = order.TotalAmount,
+                    Items = order.OrderDetails
+                        .Select(d => new PaymentOrderItem
+                        {
+                            Id = d.Id,
+                            DishName = d.Dish?.Name ?? string.Empty,
+                            Price = d.Dish?.Price ?? 0,
+                            Quantity = d.Quantity,
+                            Note = d.Note,
+                            ItemStatus = d.ItemStatus?.Code,
+                        }).ToList(),
+                    Promotions = order.PromotionHistories
+                        .Select(ph => new PaymentPromotionInfo
+                        {
+                            Code = ph.Promotion?.Code ?? string.Empty,
+                            Name = ph.Promotion?.Name ?? string.Empty,
+                            DiscountAmount = ph.DiscountAmount,
+                        }).ToList(),
+                };
+            }
+
+            if (payment.Reservation != null)
+            {
+                var res = payment.Reservation;
+                detail.Reservation = new PaymentReservationInfo
+                {
+                    Id = res.Id,
+                    ConfirmationCode = res.ConfirmationCode,
+                    NumberOfGuests = res.NumberOfGuests,
+                    Time = res.Time,
+                    SpecialRequests = res.SpecialRequests,
+                    DepositAmount = res.DepositAmount,
+                };
+                detail.DepositPaid = await GetPaidDepositAmount(res.Id);
+            }
+
+            return detail;
         }
 
         public async Task<CashPaymentResponse> PayByCash(Guid orderId, CashPaymentRequest request, string? createdBy = null)
@@ -458,5 +545,340 @@ namespace RestX.BLL.Services
             var suffix = Random.Shared.Next(100, 999);
             return long.Parse($"{timestamp}{suffix}");
         }
+
+        #region Receipt
+
+        public async Task<byte[]> GenerateReceiptAsync(Guid paymentId)
+        {
+            var payment = await Repo.GetOneAsync<Payment>(
+                filter: p => p.Id == paymentId,
+                includeProperties: "Reservation")
+                ?? throw new KeyNotFoundException("Payment not found");
+
+            var tenant = CurrentTenant;
+
+            if (payment.Purpose == PaymentPurpose.Deposit && payment.ReservationId.HasValue)
+                return await GenerateDepositReceiptAsync(payment, tenant);
+
+            if (!payment.OrderId.HasValue)
+                throw new InvalidOperationException("Payment has no associated order");
+
+            var order = await Repo.GetOneAsync<Order>(
+                filter: o => o.Id == payment.OrderId,
+                includeProperties: "OrderDetails.Dish,OrderDetails.ItemStatus,PromotionHistories.Promotion,Customer.ApplicationUser")
+                ?? throw new KeyNotFoundException("Order not found");
+
+            decimal depositPaid = await GetPaidDepositAmount(order.ReservationId);
+
+            var promotionDiscount = order.PromotionHistories?.Sum(ph => ph.DiscountAmount) ?? 0;
+            decimal membershipDiscount = 0;
+            if (order.DiscountAmount > promotionDiscount)
+                membershipDiscount = order.DiscountAmount - promotionDiscount;
+
+            var activeItems = order.OrderDetails
+                .Where(d => !string.Equals(d.ItemStatus?.Code, "CANCELLED", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            var document = Document.Create(container =>
+            {
+                container.Page(page =>
+                {
+                    page.Size(PageSizes.A5);
+                    page.Margin(28);
+                    page.DefaultTextStyle(x => x.FontSize(9).FontFamily("Arial"));
+
+                    page.Content().Column(col =>
+                    {
+                        col.Item().AlignCenter().Text(tenant?.BusinessName ?? tenant?.Name ?? "Restaurant")
+                            .FontSize(18).Bold();
+
+                        if (!string.IsNullOrEmpty(tenant?.BusinessAddressLine1))
+                            col.Item().AlignCenter().Text(BuildAddress(tenant)).FontSize(8);
+
+                        if (!string.IsNullOrEmpty(tenant?.BusinessPrimaryPhone))
+                            col.Item().AlignCenter().Text($"Tel: {tenant.BusinessPrimaryPhone}").FontSize(8);
+
+                        if (!string.IsNullOrEmpty(tenant?.BusinessEmailAddress))
+                            col.Item().AlignCenter().Text(tenant.BusinessEmailAddress).FontSize(8);
+
+                        col.Item().PaddingVertical(6).LineHorizontal(1f);
+
+                        col.Item().AlignCenter().Text("HÓA ĐƠN THANH TOÁN").FontSize(14).Bold();
+
+                        col.Item().PaddingTop(5).Row(row =>
+                        {
+                            row.RelativeItem().Column(c =>
+                            {
+                                c.Item().Text($"Số HĐ: {order.Reference}").Bold();
+                                if (order.Customer?.ApplicationUser != null)
+                                    c.Item().Text($"Khách hàng: {order.Customer.ApplicationUser.FullName}");
+                                if (!string.IsNullOrEmpty(order.Customer?.ApplicationUser?.PhoneNumber))
+                                    c.Item().Text($"SĐT: {order.Customer.ApplicationUser.PhoneNumber}");
+                                if (!string.IsNullOrEmpty(order.Customer?.MembershipLevel))
+                                    c.Item().Text($"Hạng thành viên: {order.Customer.MembershipLevel}");
+                            });
+                            row.RelativeItem().Column(c =>
+                            {
+                                c.Item().AlignRight().Text($"Ngày: {payment.PaymentDate:dd/MM/yyyy}");
+                                c.Item().AlignRight().Text($"Giờ: {payment.PaymentDate:HH:mm}");
+                                c.Item().AlignRight().Text($"Mã GD: {payment.TransactionId ?? payment.Id.ToString()[..8].ToUpper()}").FontSize(8);
+                            });
+                        });
+
+                        col.Item().PaddingVertical(6).LineHorizontal(0.5f);
+
+                        col.Item().Background("#f0f0f0").Padding(3).Row(row =>
+                        {
+                            row.RelativeItem(5).Text("Món").Bold();
+                            row.RelativeItem(1).AlignCenter().Text("SL").Bold();
+                            row.RelativeItem(2).AlignRight().Text("Đơn giá").Bold();
+                            row.RelativeItem(2).AlignRight().Text("Thành tiền").Bold();
+                        });
+
+                        col.Item().PaddingBottom(3).LineHorizontal(0.5f);
+
+                        foreach (var item in activeItems)
+                        {
+                            var unitPrice = item.Dish?.Price ?? 0;
+                            col.Item().PaddingVertical(2).Row(row =>
+                            {
+                                row.RelativeItem(5).Text(item.Dish?.Name ?? "Item");
+                                row.RelativeItem(1).AlignCenter().Text(item.Quantity.ToString());
+                                row.RelativeItem(2).AlignRight().Text(FormatCurrency(unitPrice));
+                                row.RelativeItem(2).AlignRight().Text(FormatCurrency(unitPrice * item.Quantity));
+                            });
+                        }
+
+                        col.Item().PaddingVertical(6).LineHorizontal(0.5f);
+
+                        col.Item().Row(row =>
+                        {
+                            row.RelativeItem().Text("Tạm tính");
+                            row.RelativeItem().AlignRight().Text(FormatCurrency(order.SubTotal));
+                        });
+
+                        if (promotionDiscount > 0)
+                        {
+                            foreach (var ph in order.PromotionHistories.Where(ph => ph.DiscountAmount > 0))
+                            {
+                                col.Item().Row(row =>
+                                {
+                                    row.RelativeItem().Text($"Khuyến mãi ({ph.Promotion?.Code ?? "KM"})").FontColor("#c0392b");
+                                    row.RelativeItem().AlignRight().Text($"- {FormatCurrency(ph.DiscountAmount)}").FontColor("#c0392b");
+                                });
+                            }
+                        }
+
+                        if (membershipDiscount > 0)
+                        {
+                            col.Item().Row(row =>
+                            {
+                                row.RelativeItem().Text($"Ưu đãi thành viên ({order.Customer?.MembershipLevel})").FontColor("#c0392b");
+                                row.RelativeItem().AlignRight().Text($"- {FormatCurrency(membershipDiscount)}").FontColor("#c0392b");
+                            });
+                        }
+
+                        if (order.TaxAmount > 0)
+                            col.Item().Row(row =>
+                            {
+                                row.RelativeItem().Text("Thuế VAT");
+                                row.RelativeItem().AlignRight().Text(FormatCurrency(order.TaxAmount));
+                            });
+
+                        if (order.ServiceCharge > 0)
+                            col.Item().Row(row =>
+                            {
+                                row.RelativeItem().Text("Phí dịch vụ");
+                                row.RelativeItem().AlignRight().Text(FormatCurrency(order.ServiceCharge));
+                            });
+
+                        col.Item().PaddingVertical(4).LineHorizontal(1f);
+
+                        col.Item().Row(row =>
+                        {
+                            row.RelativeItem().Text("TỔNG CỘNG").Bold().FontSize(12);
+                            row.RelativeItem().AlignRight().Text(FormatCurrency(order.TotalAmount)).Bold().FontSize(12);
+                        });
+
+                        if (depositPaid > 0)
+                        {
+                            col.Item().PaddingTop(4).Row(row =>
+                            {
+                                row.RelativeItem().Text("Đã đặt cọc").FontColor("#27ae60");
+                                row.RelativeItem().AlignRight().Text($"- {FormatCurrency(depositPaid)}").FontColor("#27ae60");
+                            });
+                            col.Item().PaddingVertical(3).LineHorizontal(0.5f);
+                            col.Item().Row(row =>
+                            {
+                                row.RelativeItem().Text("SỐ TIỀN THANH TOÁN").Bold().FontSize(12);
+                                row.RelativeItem().AlignRight().Text(FormatCurrency(order.TotalAmount - depositPaid)).Bold().FontSize(12);
+                            });
+                        }
+
+                        col.Item().PaddingVertical(6).LineHorizontal(0.5f);
+
+                        col.Item().Text("Thông tin thanh toán").Bold();
+                        col.Item().PaddingTop(2).Row(row =>
+                        {
+                            row.RelativeItem().Text("Phương thức");
+                            row.RelativeItem().AlignRight().Text(
+                                string.Equals(payment.PaymentMethodId, PaymentConstants.Method.Cash, StringComparison.OrdinalIgnoreCase)
+                                    ? "Tiền mặt" : "Chuyển khoản");
+                        });
+                        col.Item().Row(row =>
+                        {
+                            row.RelativeItem().Text("Trạng thái");
+                            row.RelativeItem().AlignRight().Text(
+                                payment.Status == PaymentStatus.Success ? "Đã thanh toán" : payment.Status.ToString())
+                                .FontColor(payment.Status == PaymentStatus.Success ? "#27ae60" : "#e74c3c");
+                        });
+
+                        if (string.Equals(payment.PaymentMethodId, PaymentConstants.Method.Cash, StringComparison.OrdinalIgnoreCase) && payment.CashReceive > 0)
+                        {
+                            col.Item().Row(row =>
+                            {
+                                row.RelativeItem().Text("Tiền khách đưa");
+                                row.RelativeItem().AlignRight().Text(FormatCurrency(payment.CashReceive));
+                            });
+                            col.Item().Row(row =>
+                            {
+                                row.RelativeItem().Text("Tiền thối lại");
+                                row.RelativeItem().AlignRight().Text(FormatCurrency(payment.Cashback));
+                            });
+                        }
+
+                        if (!string.IsNullOrEmpty(payment.TransactionId))
+                            col.Item().PaddingTop(2).Row(row =>
+                            {
+                                row.RelativeItem().Text("Mã giao dịch");
+                                row.RelativeItem().AlignRight().Text(payment.TransactionId).FontSize(8);
+                            });
+
+                        col.Item().PaddingVertical(8).LineHorizontal(0.5f);
+
+                        col.Item().AlignCenter().Text("Cảm ơn quý khách! Hẹn gặp lại.").Italic().FontSize(9);
+
+                        if (!string.IsNullOrEmpty(tenant?.BusinessOpeningHours))
+                            col.Item().AlignCenter().Text($"Giờ mở cửa: {tenant.BusinessOpeningHours}").FontSize(8);
+                    });
+                });
+            });
+
+            return document.GeneratePdf();
+        }
+
+        private async Task<byte[]> GenerateDepositReceiptAsync(Payment payment, ActiveTenant tenant)
+        {
+            var reservation = await Repo.GetOneAsync<Reservation>(
+                filter: r => r.Id == payment.ReservationId,
+                includeProperties: "Customer.ApplicationUser,ReservationStatus")
+                ?? throw new KeyNotFoundException("Reservation not found");
+
+            var document = Document.Create(container =>
+            {
+                container.Page(page =>
+                {
+                    page.Size(PageSizes.A5);
+                    page.Margin(28);
+                    page.DefaultTextStyle(x => x.FontSize(9).FontFamily("Arial"));
+
+                    page.Content().Column(col =>
+                    {
+                        col.Item().AlignCenter().Text(tenant?.BusinessName ?? tenant?.Name ?? "Restaurant")
+                            .FontSize(18).Bold();
+
+                        if (!string.IsNullOrEmpty(tenant?.BusinessAddressLine1))
+                            col.Item().AlignCenter().Text(BuildAddress(tenant)).FontSize(8);
+
+                        if (!string.IsNullOrEmpty(tenant?.BusinessPrimaryPhone))
+                            col.Item().AlignCenter().Text($"Tel: {tenant.BusinessPrimaryPhone}").FontSize(8);
+
+                        col.Item().PaddingVertical(6).LineHorizontal(1f);
+
+                        col.Item().AlignCenter().Text("BIÊN LAI ĐẶT CỌC").FontSize(14).Bold();
+
+                        col.Item().PaddingTop(5).Row(row =>
+                        {
+                            row.RelativeItem().Column(c =>
+                            {
+                                if (reservation.ConfirmationCode != null)
+                                    c.Item().Text($"Mã xác nhận: {reservation.ConfirmationCode}").Bold();
+                                c.Item().Text($"Khách hàng: {reservation.Customer?.ApplicationUser?.FullName ?? "N/A"}");
+                                if (!string.IsNullOrEmpty(reservation.Customer?.ApplicationUser?.PhoneNumber))
+                                    c.Item().Text($"SĐT: {reservation.Customer.ApplicationUser.PhoneNumber}");
+                                c.Item().Text($"Số khách: {reservation.NumberOfGuests}");
+                            });
+                            row.RelativeItem().Column(c =>
+                            {
+                                c.Item().AlignRight().Text($"Ngày: {payment.PaymentDate:dd/MM/yyyy HH:mm}");
+                                c.Item().AlignRight().Text($"Giờ đặt bàn: {reservation.Time:dd/MM/yyyy HH:mm}");
+                            });
+                        });
+
+                        if (!string.IsNullOrEmpty(reservation.SpecialRequests))
+                            col.Item().PaddingTop(4).Text($"Yêu cầu đặc biệt: {reservation.SpecialRequests}").Italic().FontSize(8);
+
+                        col.Item().PaddingVertical(6).LineHorizontal(0.5f);
+
+                        col.Item().Row(row =>
+                        {
+                            row.RelativeItem().Text("Yêu cầu đặt cọc").Bold();
+                            row.RelativeItem().AlignRight().Text(FormatCurrency(reservation.DepositAmount)).Bold();
+                        });
+
+                        col.Item().PaddingVertical(4).LineHorizontal(1f);
+
+                        col.Item().Row(row =>
+                        {
+                            row.RelativeItem().Text("SỐ TIỀN ĐÃ CỌC").Bold().FontSize(12);
+                            row.RelativeItem().AlignRight().Text(FormatCurrency(payment.Amount)).Bold().FontSize(12).FontColor("#27ae60");
+                        });
+
+                        col.Item().PaddingVertical(6).LineHorizontal(0.5f);
+
+                        col.Item().Text("Thông tin thanh toán").Bold();
+                        col.Item().PaddingTop(2).Row(row =>
+                        {
+                            row.RelativeItem().Text("Phương thức");
+                            row.RelativeItem().AlignRight().Text(
+                                string.Equals(payment.PaymentMethodId, PaymentConstants.Method.Cash, StringComparison.OrdinalIgnoreCase)
+                                    ? "Tiền mặt" : "Chuyển khoản");
+                        });
+                        col.Item().Row(row =>
+                        {
+                            row.RelativeItem().Text("Trạng thái");
+                            row.RelativeItem().AlignRight().Text("Đã xác nhận").FontColor("#27ae60");
+                        });
+
+                        if (!string.IsNullOrEmpty(payment.TransactionId))
+                            col.Item().Row(row =>
+                            {
+                                row.RelativeItem().Text("Mã giao dịch");
+                                row.RelativeItem().AlignRight().Text(payment.TransactionId).FontSize(8);
+                            });
+
+                        col.Item().PaddingTop(6).Text("* Tiền cọc sẽ được trừ vào hóa đơn cuối khi thanh toán.").FontSize(8).Italic();
+
+                        col.Item().PaddingVertical(8).LineHorizontal(0.5f);
+
+                        col.Item().AlignCenter().Text("Cảm ơn quý khách! Hẹn gặp lại.").Italic().FontSize(9);
+                    });
+                });
+            });
+
+            return document.GeneratePdf();
+        }
+
+        private static string BuildAddress(ActiveTenant tenant)
+        {
+            var parts = new[] { tenant.BusinessAddressLine1, tenant.BusinessAddressLine2, tenant.BusinessAddressLine3 }
+                .Where(s => !string.IsNullOrEmpty(s));
+            return string.Join(", ", parts);
+        }
+
+        private static string FormatCurrency(decimal amount) =>
+            string.Format("{0:N0} VND", amount);
+
+        #endregion
     }
 }

@@ -12,6 +12,7 @@ namespace RestX.BLL.Interfaces
         Task<string> UploadAndCreateTenant(TenantItem model);
         Task CreateTenant(TenantItem model);
         Task DeleteTenant(string id);
+        Task ChangeTenantStatus(Guid id, bool status);
         Task<IEnumerable<DataTranferObjects.Tenants.TenantRequest>> GetAllTenantRequests();
         Task<DataTranferObjects.Tenants.TenantRequest?> GetTenantRequestById(Guid tenantRequestsId);
         Task<Guid> AddTenantRequest(DataTranferObjects.Tenants.TenantRequest tenantRequest);

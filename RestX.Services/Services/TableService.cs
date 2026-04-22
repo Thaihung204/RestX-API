@@ -263,7 +263,7 @@ namespace RestX.BLL.Services
                 sessions = (await Repo.GetAsync<TableSession>(
                     filter: ts => ts.StartedAt <= targetTime
                                && (ts.EndedAt == null || ts.EndedAt >= targetTime),
-                    includeProperties: "Table,Order,Reservation"
+                    includeProperties: "Table,Order,Reservation,Reservation.Customer,Reservation.Customer.ApplicationUser"
                 )).ToList();
             }
             else
@@ -273,7 +273,7 @@ namespace RestX.BLL.Services
                 sessions = (await Repo.GetAsync<TableSession>(
                     filter: ts => ts.IsActive
                                && ts.StartedAt <= targetTime,
-                    includeProperties: "Table,Order,Reservation"
+                    includeProperties: "Table,Order,Reservation,Reservation.Customer,Reservation.Customer.ApplicationUser"
                 )).ToList();
             }
 

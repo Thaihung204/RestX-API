@@ -97,7 +97,7 @@ namespace RestX.Admin.Controllers
             }
         }
 
-        [HttpPut("{id:guid}/changeStatus")]
+        [HttpPut("{id:guid}/Status")]
         public async Task<IActionResult> ChangeTenantStatus([Required] Guid id, [FromBody] bool status)
         {
             try

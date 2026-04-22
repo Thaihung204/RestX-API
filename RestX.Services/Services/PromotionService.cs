@@ -36,14 +36,6 @@ namespace RestX.BLL.Services
 
         public async Task<List<DataTranferObjects.Promotion.Promotion>> GetActivePromotions()
         {
-            string cacheKey = $"{CurrentTenant.Hostname}:Promotions:Active";
-
-            List<DataTranferObjects.Promotion.Promotion>? cached = await RedisService.GetAsync<List<DataTranferObjects.Promotion.Promotion>>(cacheKey);
-            if (cached != null)
-            {
-                return cached;
-            }
-
             DateTime now = DateTime.UtcNow.AddHours(7);
 
             List<Models.Promotions.Promotion> promotions = (await Repo.GetAsync<Models.Promotions.Promotion>(
@@ -53,7 +45,6 @@ namespace RestX.BLL.Services
 
             List<DataTranferObjects.Promotion.Promotion> result = promotions.Select(MapToPromotionItem).ToList();
 
-            await RedisService.SetAsync(cacheKey, result, TimeSpan.FromMinutes(10));
             return result;
         }
 
@@ -101,25 +92,32 @@ namespace RestX.BLL.Services
 
         public async Task<Guid> UpsertPromotion(DataTranferObjects.Promotion.Promotion item)
         {
+            await ValidatePromotionData(item);
+
             Models.Promotions.Promotion promotion;
+            string normalizedCode = item.Code.Trim().ToUpperInvariant();
+            string normalizedName = item.Name.Trim();
+            string normalizedDiscountType = item.DiscountType.Trim().ToUpperInvariant();
 
             if (!item.Id.HasValue || item.Id == Guid.Empty)
             {
-                bool codeExists = await Repo.GetExistsAsync<Models.Promotions.Promotion>(x => x.Code == item.Code.Trim().ToUpperInvariant());
+                bool codeExists = await Repo.GetExistsAsync<Models.Promotions.Promotion>(x => x.Code == normalizedCode);
                 if (codeExists)
                 {
                     throw new AppException("Promotion code already exists");
                 }
 
                 promotion = mapper.Map<Models.Promotions.Promotion>(item);
-                promotion.Code = item.Code.Trim().ToUpperInvariant();
+                promotion.Code = normalizedCode;
+                promotion.Name = normalizedName;
+                promotion.DiscountType = normalizedDiscountType;
 
                 promotion.PromotionApplicableItems = item.ApplicableItems
                     .Select(x => new Models.Promotions.PromotionApplicableItem
                     {
-                        DishId = x.DishId ?? null,
-                        CategoryId = x.CategoryId ?? null,
-                        ComboId = x.ComboId ?? null
+                        DishId = x.DishId,
+                        CategoryId = x.CategoryId,
+                        ComboId = x.ComboId
                     })
                     .ToList();
 
@@ -138,17 +136,17 @@ namespace RestX.BLL.Services
                 }
 
                 bool codeExists = await Repo.GetExistsAsync<Models.Promotions.Promotion>(
-                    x => x.Code == item.Code.Trim().ToUpperInvariant() && x.Id != promotion.Id
+                    x => x.Code == normalizedCode && x.Id != promotion.Id
                 );
                 if (codeExists)
                 {
                     throw new AppException("Promotion code already exists");
                 }
 
-                promotion.Code = item.Code.Trim().ToUpperInvariant();
-                promotion.Name = item.Name.Trim();
+                promotion.Code = normalizedCode;
+                promotion.Name = normalizedName;
                 promotion.DiscountValue = item.DiscountValue;
-                promotion.DiscountType = item.DiscountType.Trim().ToUpperInvariant();
+                promotion.DiscountType = normalizedDiscountType;
                 promotion.MaxDiscountAmount = item.MaxDiscountAmount;
                 promotion.MinOrderAmount = item.MinOrderAmount;
                 promotion.UsageLimit = item.UsageLimit;
@@ -183,6 +181,91 @@ namespace RestX.BLL.Services
             return promotion.Id;
         }
 
+        private async Task ValidatePromotionData(DataTranferObjects.Promotion.Promotion item)
+        {
+            if (item == null)
+            {
+                throw new AppException("Promotion data is required");
+            }
+
+            if (string.IsNullOrWhiteSpace(item.Code) || item.Code.Trim().Length > 20)
+            {
+                throw new AppException("Promotion code is required and must be <= 20 characters");
+            }
+
+            if (string.IsNullOrWhiteSpace(item.Name) || item.Name.Trim().Length > 255)
+            {
+                throw new AppException("Promotion name is required and must be <= 255 characters");
+            }
+
+            if (item.ValidTo < item.ValidFrom)
+            {
+                throw new AppException("ValidTo must be greater than or equal to ValidFrom");
+            }
+
+            if (item.DiscountValue < 0 || item.MaxDiscountAmount < 0 || item.MinOrderAmount < 0)
+            {
+                throw new AppException("Discount values cannot be negative");
+            }
+
+            if (item.UsageLimit < 0 || item.UsagePerCustomer < 0)
+            {
+                throw new AppException("UsageLimit and UsagePerCustomer cannot be negative");
+            }
+
+            if (item.UsageLimit > 0 && item.UsagePerCustomer > item.UsageLimit)
+            {
+                throw new AppException("UsagePerCustomer cannot be greater than UsageLimit");
+            }
+
+            string discountType = (item.DiscountType ?? string.Empty).Trim().ToUpperInvariant();
+            if (discountType != "PERCENTAGE" && discountType != "FIXED")
+            {
+                throw new AppException("DiscountType must be PERCENTAGE or FIXED");
+            }
+
+            if (discountType == "PERCENTAGE" && (item.DiscountValue <= 0 || item.DiscountValue > 100))
+            {
+                throw new AppException("Percentage discount must be in range (0, 100]");
+            }
+
+            if (discountType == "FIXED" && item.DiscountValue <= 0)
+            {
+                throw new AppException("Fixed discount must be greater than 0");
+            }
+
+            List<DataTranferObjects.Promotion.PromotionApplicableItem> applicableItems = item.ApplicableItems ?? new List<DataTranferObjects.Promotion.PromotionApplicableItem>();
+            foreach (DataTranferObjects.Promotion.PromotionApplicableItem ai in applicableItems)
+            {
+                int targetCount = 0;
+                if (ai.DishId.HasValue) targetCount++;
+                if (ai.CategoryId.HasValue) targetCount++;
+                if (ai.ComboId.HasValue) targetCount++;
+
+                if (targetCount != 1)
+                {
+                    throw new AppException("Each applicable item must target exactly one of DishId, CategoryId, ComboId");
+                }
+
+                if (ai.DishId.HasValue)
+                {
+                    bool dishExists = await Repo.GetExistsAsync<RestX.Models.Menu.Dish>(d => d.Id == ai.DishId.Value);
+                    if (!dishExists) throw new AppException($"Dish '{ai.DishId}' not found");
+                }
+
+                if (ai.CategoryId.HasValue)
+                {
+                    bool categoryExists = await Repo.GetExistsAsync<RestX.Models.Menu.Category>(c => c.Id == ai.CategoryId.Value);
+                    if (!categoryExists) throw new AppException($"Category '{ai.CategoryId}' not found");
+                }
+
+                if (ai.ComboId.HasValue)
+                {
+                    bool comboExists = await Repo.GetExistsAsync<RestX.Models.Menu.MealCombo>(c => c.Id == ai.ComboId.Value);
+                    if (!comboExists) throw new AppException($"Combo '{ai.ComboId}' not found");
+                }
+            }
+        }
         public async Task<bool> DeletePromotion(Guid id)
         {
             Models.Promotions.Promotion promotion = await Repo.GetByIdAsync<Models.Promotions.Promotion>(id);

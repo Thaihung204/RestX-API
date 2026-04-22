@@ -12,6 +12,7 @@ using RestX.Models.Orders;
 using RestX.Models.Reservations;
 using RestX.Models.Tables;
 using RestX.Models.Tenants;
+using System.Text.RegularExpressions;
 
 namespace RestX.BLL.Services
 {
@@ -19,7 +20,7 @@ namespace RestX.BLL.Services
     {
         private readonly IMapper mapper;
         private readonly ICloudinaryService cloudinaryService;
-        private const int ReservationBufferMinutes = 120;
+        private int ReservationBufferMinutes => CurrentTenant?.Configuration?.SessionBufferMinutes ?? 120;
 
         public TableService(
             IMapper mapper,
@@ -35,10 +36,14 @@ namespace RestX.BLL.Services
 
         public async Task<IEnumerable<TableItem>> GetAllTables()
         {
-            var tables = (await Repo.GetAllAsync<Table>(
-                        orderBy: q => q.OrderBy(t => t.Code),
+            List<Table> tables = (await Repo.GetAllAsync<Table>(
                         includeProperties: "Table3DModel,Floor"
                     )).ToList();
+
+            tables = tables
+                .OrderBy(t => t.Code, NaturalTableCodeComparer.Instance)
+                .ToList();
+
             return mapper.Map<List<TableItem>>(tables);
         }
 
@@ -70,6 +75,15 @@ namespace RestX.BLL.Services
                 table = await Repo.GetByIdAsync<Table>(id.Value);
                 if (table == null)
                     throw new InvalidOperationException("Table not found");
+
+                if (request.SeatingCapacity < 1)
+                    throw new AppException("Seating capacity must be at least 1");
+
+                if (request.SeatingCapacity < table.SeatingCapacity)
+                    await ThrowIfSeatingCapacityConflicts(id.Value, request.SeatingCapacity);
+
+                if (!request.IsActive && table.IsActive)
+                    await ThrowIfTableHasActiveConstraints(id.Value);
 
                 table.FloorId = request.FloorId;
                 table.Code = request.Code;
@@ -147,6 +161,7 @@ namespace RestX.BLL.Services
             var table = await Repo.GetByIdAsync<Table>(id);
             if (table == null)
                 return;
+            await ThrowIfTableHasActiveConstraints(id);
             Repo.Delete<Table>(id);
             await Repo.SaveAsync();
             await RedisService.RemoveAsync($"Floor:{CurrentTenant?.Hostname}");
@@ -155,6 +170,14 @@ namespace RestX.BLL.Services
         public async Task<TableItem> ChangeTableStatus(Guid tableId, TableStatus status)
         {
             var table = await Repo.GetByIdAsync<Table>(tableId);
+
+            if (status == TableStatus.Available)
+            {
+                var hasActiveSession = await Repo.GetExistsAsync<TableSession>(
+                    filter: ts => ts.TableId == tableId && ts.IsActive);
+                if (hasActiveSession)
+                    throw new AppException("Cannot set table to Available while it has an active session");
+            }
 
             table.TableStatusId = status;
 
@@ -209,6 +232,246 @@ namespace RestX.BLL.Services
 
             return session;
         }
+
+        public async Task CloseTableSession(Guid tableId)
+        {
+            DateTime now = DateTime.UtcNow.AddHours(7);
+
+            List<TableSession> activeSessions = (await Repo.GetAsync<TableSession>(
+                filter: ts => ts.TableId == tableId && ts.IsActive
+            )).ToList();
+
+            foreach (TableSession session in activeSessions)
+            {
+                session.IsActive = false;
+                session.EndedAt = now;
+                Repo.Update(session);
+            }
+
+            await Repo.SaveAsync();
+        }
+
+        public async Task<IEnumerable<TableSessionInfo>> GetAllTableSession(DateTime? at = null)
+        {
+            List<TableSession> sessions;
+            DateTime targetTime;
+
+            if (at.HasValue)
+            {
+                targetTime = at.Value;
+
+                sessions = (await Repo.GetAsync<TableSession>(
+                    filter: ts => ts.StartedAt <= targetTime
+                               && (ts.EndedAt == null || ts.EndedAt >= targetTime),
+                    includeProperties: "Table,Order,Reservation,Reservation.Customer,Reservation.Customer.ApplicationUser"
+                )).ToList();
+            }
+            else
+            {
+                targetTime = DateTime.UtcNow.AddHours(7);
+
+                sessions = (await Repo.GetAsync<TableSession>(
+                    filter: ts => ts.IsActive
+                               && ts.StartedAt <= targetTime,
+                    includeProperties: "Table,Order,Reservation,Reservation.Customer,Reservation.Customer.ApplicationUser"
+                )).ToList();
+            }
+
+            sessions = sessions
+                .OrderBy(ts => ts.Table?.Code, NaturalTableCodeComparer.Instance)
+                .ToList();
+
+            return mapper.Map<List<TableSessionInfo>>(sessions);
+        }
+
+        public async Task<MergeTableResponse> MergeTable(MergeTableRequest request, string userId)
+        {
+            List<Guid> tableIds = (request.TableIds ?? new List<Guid>())
+                .Where(x => x != Guid.Empty)
+                .Distinct()
+                .ToList();
+
+            if (!tableIds.Any())
+                throw new AppException("TableIds is required");
+
+            // Validate tables exist & active
+            var tables = (await Repo.GetAsync<Table>(t => tableIds.Contains(t.Id) && t.IsActive)).ToList();
+            if (tables.Count != tableIds.Count)
+                throw new AppException("One or more tables not found or inactive");
+
+            DateTime now = DateTime.UtcNow.AddHours(7);
+
+            // Load active sessions for these tables (include Table and Order)
+            List<TableSession> sessions = (await Repo.GetAsync<TableSession>(
+                filter: ts => tableIds.Contains(ts.TableId)
+                           && ts.IsActive
+                           && ts.StartedAt <= now
+                           && (ts.EndedAt == null || ts.EndedAt > now),
+                includeProperties: "Table,Order")).ToList();
+
+            foreach (Guid tableId in tableIds)
+            {
+                if (!sessions.Any(s => s.TableId == tableId))
+                {
+                    TableSession newSession = await CreateTableSession(tableId, userId, request.CustomerId, request.ReservationId);
+                    newSession = await Repo.GetOneAsync<TableSession>(filter: ts => ts.Id == newSession.Id, includeProperties: "Table,Order");
+
+                    if (request.ReservationId.HasValue && newSession.StartedAt > now)
+                    {
+                        newSession.StartedAt = now;
+                        newSession.EndedAt = now.AddMinutes(ReservationBufferMinutes);
+                        Repo.Update(newSession);
+                    }
+
+                    sessions.Add(newSession);
+                }
+            }
+
+            List<Guid> orderIds = sessions
+                .Where(s => s.OrderId.HasValue)
+                .Select(s => s.OrderId!.Value)
+                .Distinct()
+                .ToList();
+
+            var response = new MergeTableResponse
+            {
+                ExistingOrderIds = orderIds,
+                Sessions = mapper.Map<List<RestX.BLL.DataTranferObjects.Table.TableSessionInfo>>(sessions)
+            };
+
+            if (!orderIds.Any())
+            {
+                response.OrderId = null;
+                response.RequiresManualResolution = false;
+                response.Message = "No existing order. Sessions created/validated.";
+                await Repo.SaveAsync();
+                return response;
+            }
+
+            // Case: exactly one order -> assign it to all sessions
+            if (orderIds.Count == 1)
+            {
+                Guid targetOrderId = orderIds[0];
+                foreach (var session in sessions.Where(s => s.OrderId != targetOrderId))
+                {
+                    session.OrderId = targetOrderId;
+                    Repo.Update(session);
+                }
+
+                await Repo.SaveAsync();
+
+                response.OrderId = targetOrderId;
+                response.RequiresManualResolution = false;
+                response.Message = "Merged successfully to existing order.";
+                response.Sessions = mapper.Map<List<RestX.BLL.DataTranferObjects.Table.TableSessionInfo>>(sessions);
+                return response;
+            }
+
+            // Case: multiple orders -> require manual resolution
+            response.OrderId = null;
+            response.RequiresManualResolution = true;
+            response.Message = "Multiple existing orders found. Manual resolution required.";
+            response.Sessions = mapper.Map<List<RestX.BLL.DataTranferObjects.Table.TableSessionInfo>>(sessions);
+            return response;
+        }
+
+        private sealed class NaturalTableCodeComparer : IComparer<string?>
+        {
+            public static NaturalTableCodeComparer Instance { get; } = new NaturalTableCodeComparer();
+
+            public int Compare(string? x, string? y)
+            {
+                if (ReferenceEquals(x, y))
+                {
+                    return 0;
+                }
+
+                if (x == null)
+                {
+                    return -1;
+                }
+
+                if (y == null)
+                {
+                    return 1;
+                }
+
+                MatchCollection xParts = Regex.Matches(x, @"\d+|\D+");
+                MatchCollection yParts = Regex.Matches(y, @"\d+|\D+");
+
+                int max = Math.Min(xParts.Count, yParts.Count);
+
+                for (int i = 0; i < max; i++)
+                {
+                    string xPart = xParts[i].Value;
+                    string yPart = yParts[i].Value;
+
+                    bool xIsNumber = int.TryParse(xPart, out int xNumber);
+                    bool yIsNumber = int.TryParse(yPart, out int yNumber);
+
+                    int result;
+                    if (xIsNumber && yIsNumber)
+                    {
+                        result = xNumber.CompareTo(yNumber);
+                        if (result != 0)
+                        {
+                            return result;
+                        }
+
+                        result = xPart.Length.CompareTo(yPart.Length);
+                        if (result != 0)
+                        {
+                            return result;
+                        }
+                    }
+                    else
+                    {
+                        result = string.Compare(xPart, yPart, StringComparison.OrdinalIgnoreCase);
+                        if (result != 0)
+                        {
+                            return result;
+                        }
+                    }
+                }
+
+                return xParts.Count.CompareTo(yParts.Count);
+            }
+        }
+
+        #region Constraint Helpers
+
+        private async Task ThrowIfTableHasActiveConstraints(Guid tableId)
+        {
+            var hasActiveSession = await Repo.GetExistsAsync<TableSession>(
+                filter: ts => ts.TableId == tableId && ts.IsActive);
+            if (hasActiveSession)
+                throw new AppException("Cannot perform this action while the table has an active session");
+
+            var now = DateTime.UtcNow.AddHours(7);
+            var hasFutureReservation = await Repo.GetExistsAsync<TableSession>(
+                filter: ts => ts.TableId == tableId
+                           && ts.ReservationId != null
+                           && ts.Reservation.Time > now
+                           && (ts.Reservation.ReservationStatus.Code == "PENDING"
+                               || ts.Reservation.ReservationStatus.Code == "CONFIRMED"));
+            if (hasFutureReservation)
+                throw new AppException("Cannot perform this action while the table has upcoming reservations");
+        }
+
+        private async Task ThrowIfSeatingCapacityConflicts(Guid tableId, int newCapacity)
+        {
+            var now = DateTime.UtcNow.AddHours(7);
+            var hasConflict = await Repo.GetExistsAsync<TableSession>(
+                filter: ts => ts.TableId == tableId
+                           && ts.ReservationId != null
+                           && ts.Reservation.Time > now
+                           && ts.Reservation.ReservationStatus.Code == "CONFIRMED"
+                           && ts.Reservation.NumberOfGuests > newCapacity);
+            if (hasConflict)
+                throw new AppException("Cannot reduce seating capacity below the guest count of a future confirmed reservation");
+        }
+
+        #endregion
 
         #region QR Code Generation
         private string GenerateTableQRCode(Guid tableId, string tenantHostname)

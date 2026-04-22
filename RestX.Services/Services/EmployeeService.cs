@@ -5,6 +5,7 @@ using RestX.BLL.Helpers;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Auth;
 using RestX.BLL.Interfaces.Employees;
+using RestX.Models.Enum;
 using RestX.Models.HR;
 using RestX.Models.Identity;
 using RestX.Models.Tenants;
@@ -154,6 +155,16 @@ namespace RestX.BLL.Services
                 includeProperties: "ApplicationUser");
 
             if (employee == null) return false;
+
+            var activeOrderCount = await Repo.GetCountAsync<RestX.Models.Orders.Order>(
+                o => o.HandledBy == id && o.OrderStatusId == (int)OrderStatus.Open);
+            if (activeOrderCount > 0)
+                throw new InvalidOperationException("Cannot deactivate employee with open orders");
+
+            var pendingPaymentCount = await Repo.GetCountAsync<RestX.Models.Orders.Payment>(
+                p => p.ProcessedBy == id && p.Status == PaymentStatus.Pending);
+            if (pendingPaymentCount > 0)
+                throw new InvalidOperationException("Cannot deactivate employee with pending payments");
 
             employee.IsActive = false;
             employee.TerminationDate = DateTime.UtcNow.AddHours(7);

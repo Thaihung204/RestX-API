@@ -62,7 +62,8 @@ namespace RestX.BLL.DataTranferObjects.Common
       DateTime? paymentDeadline = null,
       string? paymentLink = null,
       string? hostname = null,
-      Guid? reservationId = null)
+      Guid? reservationId = null,
+      bool depositPaid = false)
         {
             var encodedName = System.Net.WebUtility.HtmlEncode(name);
             var encodedTables = System.Net.WebUtility.HtmlEncode(tableList);
@@ -98,10 +99,34 @@ namespace RestX.BLL.DataTranferObjects.Common
                     </table>"
                 : "";
 
-            var depositSection = (depositAmount.HasValue && depositAmount > 0
-                                && paymentDeadline.HasValue
-                                && !string.IsNullOrWhiteSpace(paymentLink))
-                ? $@"
+            string depositSection = "";
+
+            if (depositPaid && depositAmount.HasValue && depositAmount > 0)
+            {
+                depositSection = $@"
+                    <table width='100%' cellpadding='16' cellspacing='0' border='0'
+                           style='background:#f0fdf4;border:1px solid #bbf7d0;
+                                  border-radius:10px;margin-top:8px'>
+                      <tr>
+                        <td>
+                          <div style='font-size:15px;font-weight:700;color:#15803d;margin-bottom:6px'>
+                            &#9989; Deposit Received
+                          </div>
+                          <div style='font-size:14px;color:#374151'>
+                            We have received your deposit of <strong>{depositAmount:N0} VND</strong>.
+                            Your reservation is now confirmed.
+                          </div>
+                        </td>
+                      </tr>
+                    </table>";
+            }
+            // Trường hợp chưa thanh toán — email gửi lúc tạo reservation
+            else if (depositAmount.HasValue && depositAmount > 0
+                     && paymentDeadline.HasValue
+                     && !string.IsNullOrWhiteSpace(hostname)
+                     && reservationId.HasValue)
+            {
+                depositSection = $@"
                     <table width='100%' cellpadding='16' cellspacing='0' border='0'
                            style='background:#fff5f5;border:1px solid #fecaca;
                                   border-radius:10px;margin-top:8px'>
@@ -125,7 +150,7 @@ namespace RestX.BLL.DataTranferObjects.Common
                           <table width='100%' cellpadding='0' cellspacing='0' border='0'>
                             <tr>
                               <td style='text-align:center'>
-                                <a href='{paymentLink}'
+                                <a href='https://{hostname}/your-reservation/{reservationId}'
                                    style='display:inline-block;background:#dc2626;color:#ffffff;
                                           text-decoration:none;padding:12px 28px;
                                           border-radius:8px;font-size:15px;font-weight:600'>
@@ -136,8 +161,8 @@ namespace RestX.BLL.DataTranferObjects.Common
                           </table>
                         </td>
                       </tr>
-                    </table>"
-                : "";
+                    </table>";
+            }
 
             return $@"
                     <html>

@@ -397,6 +397,7 @@ namespace RestX.DAL.Context
                 entity.Property(e => e.Name).HasMaxLength(255).IsRequired();
                 entity.Property(e => e.Description).HasMaxLength(1000);
                 entity.Property(e => e.ImageUrl).HasMaxLength(500);
+                entity.Property(e => e.DisplayOrder).HasMaxLength(255);
 
                 entity.HasOne<Category>(e => e.ParentCategory)
                     .WithMany(c => c.SubCategories)

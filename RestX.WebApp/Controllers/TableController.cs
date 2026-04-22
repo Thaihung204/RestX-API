@@ -9,6 +9,7 @@ using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Tables;
 using RestX.Models.Enum;
 using RestX.Models.Identity;
+using RestX.Models.Reservations;
 using RestX.Models.Tenants;
 using RestX.WebApp.Controllers.BaseControllers;
 using RestX.WebApp.Helpers;
@@ -159,5 +160,127 @@ namespace RestX.WebApp.Controllers
             }
         }
 
+        [HttpGet("sessions")]
+        [Authorize(Roles = "System Admin,Admin,Staff")]
+        public async Task<ActionResult<IEnumerable<TableSessionInfo>>> GetAllTableSession([FromQuery] DateTime? at = null)
+        {
+            try
+            {
+                return Ok(await tableService.GetAllTableSession(at));
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                this.ExceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
+        [HttpPost("{tableId:guid}/sessions")]
+        [Authorize(Roles = "System Admin,Admin,Staff,Customer")]
+        public async Task<ActionResult<TableSession>> CreateTableSession(
+            [Required] Guid tableId,
+            [FromQuery] Guid? customerId = null,
+            [FromQuery] Guid? reservationId = null)
+        {
+            try
+            {
+                ApplicationUser? currentUser = await GetCurrentUserAsync();
+                string userId = string.Empty;
+                if (currentUser?.Id != null)
+                {
+                    userId = currentUser.MemberId.ToString();
+                }
+
+                TableSession result = await tableService.CreateTableSession(tableId, userId, customerId, reservationId);
+
+                await hub.BroadcastToTenant(CurrentTenant.Id, SignalrServer.TableSessionCreated, new
+                {
+                    sessionId = result.Id,
+                    tableId = result.TableId,
+                    orderId = result.OrderId,
+                    reservationId = result.ReservationId,
+                    startedAt = result.StartedAt,
+                    endedAt = result.EndedAt,
+                    isActive = result.IsActive
+                });
+
+                return Ok(result);
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                this.ExceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
+        [HttpPut("{tableId:guid}/sessions/close")]
+        [Authorize(Roles = "System Admin,Admin,Staff")]
+        public async Task<ActionResult<object>> CloseTableSession([Required] Guid tableId)
+        {
+            try
+            {
+                await tableService.CloseTableSession(tableId);
+
+                await hub.BroadcastToTenant(CurrentTenant.Id, SignalrServer.TableSessionClosed, new
+                {
+                    tableId,
+                    closedAt = DateTime.UtcNow.AddHours(7)
+                });
+
+                return Ok();
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                this.ExceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
+        [HttpPost("merge")]
+        [Authorize(Roles = "System Admin,Admin,Staff")]
+        public async Task<ActionResult<MergeTableResponse>> MergeTable([FromBody] MergeTableRequest request)
+        {
+            try
+            {
+                ApplicationUser? currentUser = await GetCurrentUserAsync();
+                string userId = currentUser?.MemberId.ToString() ?? string.Empty;
+
+                MergeTableResponse result = await tableService.MergeTable(request, userId);
+
+                if (result.RequiresManualResolution)
+                    return Conflict(result);
+
+                await hub.BroadcastToTenant(CurrentTenant.Id, SignalrServer.TableSessionCreated, new
+                {
+                    tableIds = request.TableIds,
+                    orderId = result.OrderId,
+                    message = result.Message,
+                    sessions = result.Sessions 
+                });
+
+                return Ok(result);
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                this.ExceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
     }
 }

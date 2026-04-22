@@ -52,6 +52,7 @@ namespace RestX.BLL.DataTranferObjects.Tenants
         public string BusinessOpeningHours { get; set; }
 
         public string AboutUs { get; set; }
+        public TenantConfiguration Configuration { get; set; }
         public virtual ICollection<TenantSetting> TenantSettings { get; set; } = new List<TenantSetting>();
     }
 }

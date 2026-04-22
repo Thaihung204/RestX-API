@@ -25,6 +25,7 @@ namespace RestX.Models.Common
         public bool IsDefault { get; set; } = false;
 
         public int DisplayOrder { get; set; } = 1;
+        public bool IsSystem { get; set; } = true;
         public virtual StatusType StatusType { get; set; } = null!;
     }
 }

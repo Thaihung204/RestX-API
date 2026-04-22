@@ -8,6 +8,7 @@ using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Auth;
 using RestX.BLL.Interfaces.Customers;
 using RestX.Models.Customers;
+using RestX.Models.Enum;
 using RestX.Models.Identity;
 using RestX.Models.Loyalty;
 using RestX.Models.Tenants;
@@ -35,6 +36,13 @@ namespace RestX.BLL.Services
                 SELECT #SELECT#
                 FROM Customers c
                 LEFT JOIN AspNetUsers u ON c.ApplicationUserId = u.Id
+                LEFT JOIN (
+                    SELECT CustomerId,
+                           COUNT(*) AS TotalOrders,
+                           ISNULL(SUM(CASE WHEN OrderStatusId = 1 THEN TotalAmount ELSE 0 END), 0) AS TotalSpent
+                    FROM Orders
+                    GROUP BY CustomerId
+                ) o ON o.CustomerId = c.Id
                 WHERE 1 = 1");
             queryBuilder
                 .AddBoolCondition("c.IsActive = @IsActive", "IsActive", filter.IsActive)
@@ -48,7 +56,8 @@ namespace RestX.BLL.Services
             var (countQuery, countParams) = queryBuilder.BuildCountQuery("COUNT(DISTINCT c.Id)");
             int totalCount = await Repo.ExecuteSqlCommandAsync<int>(countQuery, countParams);
             var selectColumns = @"DISTINCT c.Id, u.FullName, u.Email, u.PhoneNumber,
-                                  c.MembershipLevel, c.LoyaltyPoints, c.IsActive, c.CreatedDate, u.AvatarUrl";
+                                  c.MembershipLevel, c.LoyaltyPoints, c.IsActive, c.CreatedDate, u.AvatarUrl,
+                                  ISNULL(o.TotalOrders, 0) AS TotalOrders, ISNULL(o.TotalSpent, 0) AS TotalSpent";
             var (dataQuery, dataParams) = queryBuilder.BuildDataQuery(
                 selectColumns,
                 GetSortClause(filter.SortBy, filter.SortDescending),
@@ -140,6 +149,10 @@ namespace RestX.BLL.Services
                 await userAccountService.UploadAvatarAsync(user.Id, dto.Avatar);
 
             UpdateCustomerFields(customer, dto);
+
+            if (dto.LoyaltyPoints.HasValue)
+                await RecalculateMembershipLevelAsync(customer);
+
             Repo.Update(customer);
             await Repo.SaveAsync();
 
@@ -153,6 +166,20 @@ namespace RestX.BLL.Services
                 c => c.Id == id,
                 includeProperties: "ApplicationUser");
             if (customer == null) return false;
+
+            var activeOrderCount = await Repo.GetCountAsync<RestX.Models.Orders.Order>(
+                o => o.CustomerId == id && o.OrderStatusId == (int)OrderStatus.Open);
+            if (activeOrderCount > 0)
+                throw new InvalidOperationException("Cannot deactivate customer with open orders");
+
+            var activeReservationCount = await Repo.ExecuteSqlCommandAsync<int>(@"
+                SELECT COUNT(*) FROM Reservations r
+                INNER JOIN StatusValues sv ON r.ReservationStatusId = sv.Id
+                WHERE r.CustomerId = @CustomerId AND sv.Code NOT IN ('CANCELLED')",
+                new SqlParameter("CustomerId", id));
+            if (activeReservationCount > 0)
+                throw new InvalidOperationException("Cannot deactivate customer with active reservations");
+
             customer.IsActive = false;
             Repo.Update(customer);
             if (customer.ApplicationUser != null)
@@ -258,7 +285,7 @@ namespace RestX.BLL.Services
                 SELECT
                     CustomerId,
                     COUNT(*) AS TotalOrders,
-                    ISNULL(SUM(CASE WHEN OrderStatusId = 4 THEN TotalAmount ELSE 0 END), 0) AS TotalSpent,
+                    ISNULL(SUM(CASE WHEN OrderStatusId = 1 THEN TotalAmount ELSE 0 END), 0) AS TotalSpent,
                     MAX(CompletedAt) AS LastVisit
                 FROM Orders
                 WHERE CustomerId IN ({idList})
@@ -324,6 +351,16 @@ namespace RestX.BLL.Services
             };
             await Repo.CreateAsync(customer);
             return customer;
+        }
+
+        private async Task RecalculateMembershipLevelAsync(Customer customer)
+        {
+            var bands = await Repo.GetAsync<LoyaltyPointBand>(b => b.IsActive);
+            var matchedBand = bands.FirstOrDefault(b =>
+                b.Min <= customer.LoyaltyPoints &&
+                (b.Max == null || b.Max >= customer.LoyaltyPoints));
+            if (matchedBand != null)
+                customer.MembershipLevel = matchedBand.Name;
         }
 
         private async Task<LoyaltyPointBand?> GetLowestBandAsync()

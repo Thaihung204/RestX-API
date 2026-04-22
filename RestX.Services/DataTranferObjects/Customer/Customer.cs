@@ -71,5 +71,7 @@ namespace RestX.BLL.DataTranferObjects.Customer
         public bool IsActive { get; set; }
         public DateTime CreatedDate { get; set; }
         public string? AvatarUrl { get; set; }
+        public int TotalOrders { get; set; }
+        public decimal TotalSpent { get; set; }
     }
 }

@@ -37,8 +37,4 @@
     <ProjectReference Include="..\RestX.Services\RestX.BLL.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="wwwroot\" />
-  </ItemGroup>
-
 </Project>

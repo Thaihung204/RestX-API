@@ -230,8 +230,50 @@ namespace RestX.BLL.Services
             return dishItem;
         }
 
+        public async Task<List<DishItem>> GetDishByCategory(Guid categoryId)
+        {
+            List<Dish> dishes = (await Repo.GetAsync<Dish>(
+                filter: d => d.CategoryId == categoryId && d.IsActive,
+                orderBy: q => q.OrderBy(d => d.Name),
+                includeProperties: "DishImages"
+            )).ToList();
+
+            List<DishItem> result = dishes.Select(d => new DishItem
+            {
+                Id = d.Id,
+                CategoryId = d.CategoryId,
+                Name = d.Name,
+                Description = d.Description,
+                Price = d.Price,
+                Unit = d.Unit,
+                Quantity = d.Quantity,
+                IsVegetarian = d.IsVegetarian,
+                IsSpicy = d.IsSpicy,
+                IsBestSeller = d.IsBestSeller,
+                IsActive = d.IsActive,
+                AutoDisableByStock = d.AutoDisableByStock,
+                Images = d.DishImages
+                    .Where(i => i.IsActive)
+                    .OrderBy(i => i.DisplayOrder)
+                    .ThenBy(i => i.Id)
+                    .Select(i => new DishImageItem
+                    {
+                        Id = i.Id,
+                        ImageUrl = i.ImageUrl,
+                        ImageType = i.ImageType,
+                        DisplayOrder = i.DisplayOrder,
+                        IsActive = i.IsActive
+                    })
+                    .ToList()
+            }).ToList();
+
+            return result;
+        }
+
         public async Task<Guid> UpsertDish(DishItem dishItem)
         {
+            await ValidateDishData(dishItem);
+
             Dish dish;
 
             if (dishItem.Id == null)
@@ -298,6 +340,74 @@ namespace RestX.BLL.Services
             return dish.Id;
         }
 
+        private async Task ValidateDishData(DishItem dishItem)
+        {
+            if (dishItem == null)
+            {
+                throw new AppException("Dish data is required.");
+            }
+
+            if (dishItem.CategoryId == Guid.Empty)
+            {
+                throw new AppException("Category is required.");
+            }
+
+            bool categoryExists = await Repo.GetExistsAsync<Category>(c => c.Id == dishItem.CategoryId);
+            if (!categoryExists)
+            {
+                throw new AppException("Category not found.");
+            }
+
+            dishItem.Name = (dishItem.Name ?? string.Empty).Trim();
+            dishItem.Description = (dishItem.Description ?? string.Empty).Trim();
+            dishItem.Unit = (dishItem.Unit ?? string.Empty).Trim();
+
+            if (string.IsNullOrWhiteSpace(dishItem.Name))
+            {
+                throw new AppException("Dish name is required.");
+            }
+
+            if (dishItem.Name.Length > 255)
+            {
+                throw new AppException("Dish name cannot exceed 255 characters.");
+            }
+
+            if (dishItem.Description.Length > 2000)
+            {
+                throw new AppException("Dish description cannot exceed 2000 characters.");
+            }
+
+            if (string.IsNullOrWhiteSpace(dishItem.Unit))
+            {
+                throw new AppException("Dish unit is required.");
+            }
+
+            if (dishItem.Unit.Length > 20)
+            {
+                throw new AppException("Dish unit cannot exceed 20 characters.");
+            }
+
+            if (dishItem.Price < 0)
+            {
+                throw new AppException("Dish price must be greater than or equal to 0.");
+            }
+
+            if (dishItem.Quantity < 0)
+            {
+                throw new AppException("Dish quantity must be greater than or equal to 0.");
+            }
+
+            string normalizedName = dishItem.Name.ToLower();
+            bool duplicateName = await Repo.GetExistsAsync<Dish>(d =>
+                d.CategoryId == dishItem.CategoryId
+                && d.Name.ToLower() == normalizedName
+                && (!dishItem.Id.HasValue || d.Id != dishItem.Id.Value));
+
+            if (duplicateName)
+            {
+                throw new AppException("Dish name already exists in this category.");
+            }
+        }
         private async Task<DishImage> HandleImageUpload(DishImageItem dishImageItem, Guid dishId, Guid newImageId)
         {
             using var stream = dishImageItem.File.OpenReadStream();
@@ -566,6 +676,7 @@ namespace RestX.BLL.Services
                     ComboDetails = (comboSummary.Details ?? new List<ComboDetailItem>())
                         .Select(d => new ComboDetail
                         {
+                            ComboId = Guid.Empty, 
                             DishId = d.DishId,
                             Quantity = d.Quantity > 0 ? d.Quantity : 1
                         })
@@ -621,20 +732,34 @@ namespace RestX.BLL.Services
                     {
                         Repo.Delete(oldDetail);
                     }
+
+                    combo.ComboDetails.Clear();
                 }
 
-                combo.ComboDetails = (comboSummary.Details ?? new List<ComboDetailItem>())
+                List<ComboDetail> newComboDetails = (comboSummary.Details ?? new List<ComboDetailItem>())
                     .Select(d => new ComboDetail
                     {
+                        ComboId = combo.Id,
                         DishId = d.DishId,
                         Quantity = d.Quantity > 0 ? d.Quantity : 1
                     })
                     .ToList();
 
-                Repo.Update(combo);
+                foreach (ComboDetail comboDetail in newComboDetails)
+                {
+                    combo.ComboDetails.Add(comboDetail);
+                    await Repo.CreateAsync(comboDetail);
+                }
             }
 
-            await Repo.SaveAsync();
+            try
+            {
+                await Repo.SaveAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                throw new AppException("Combo was modified or deleted by another user. Please reload and try again.");
+            }
 
             await RedisService.RemoveAsync($"{CurrentTenant.Hostname}:Combos");
             await RedisService.RemoveAsync($"{CurrentTenant.Hostname}:Menu");

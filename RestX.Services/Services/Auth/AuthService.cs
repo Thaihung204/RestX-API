@@ -63,6 +63,12 @@ namespace RestX.BLL.Services.Auth
                     ? AuthResponse.FailureResponse("Account is locked. Please try again later.")
                     : AuthResponse.FailureResponse("Invalid email or password");
             }
+            if (user.MemberId.HasValue)
+            {
+                var employee = await Repo.GetFirstAsync<Employee>(e => e.Id == user.MemberId.Value);
+                if (employee != null && !employee.IsActive)
+                    return AuthResponse.FailureResponse("Account is inactive. Please contact your administrator.");
+            }
             return await GenerateAuthResponseAsync(user, "Login successful", staffModeOnly: true);
         }
 
@@ -137,6 +143,17 @@ namespace RestX.BLL.Services.Auth
             var user = FindUserByRefreshToken(refreshToken);
             if (user == null || user.RefreshTokenExpiryTime <= DateTime.UtcNow.AddHours(7))
                 return AuthResponse.FailureResponse("Invalid or expired refresh token");
+
+            if (user.MemberId.HasValue)
+            {
+                var employee = await Repo.GetFirstAsync<Employee>(e => e.Id == user.MemberId.Value);
+                if (employee != null && !employee.IsActive)
+                    return AuthResponse.FailureResponse("Account is inactive. Please contact your administrator.");
+            }
+            var customer = await Repo.GetFirstAsync<Customer>(c => c.ApplicationUserId == user.Id);
+            if (customer != null && !customer.IsActive)
+                return AuthResponse.FailureResponse("Account is inactive. Please contact your administrator.");
+
             return await GenerateAuthResponseAsync(user, "Token refreshed successfully");
         }
 

@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Http;
+using RestX.Models.Tenants;
 
 public class TenantItem
 {
@@ -42,4 +43,5 @@ public class TenantItem
     public string? BusinessCompanyNumber { get; set; }
     public string? BusinessOpeningHours { get; set; }
     public string? AboutUs { get; set; }
+    public TenantConfiguration Configuration { get; set; }
 }

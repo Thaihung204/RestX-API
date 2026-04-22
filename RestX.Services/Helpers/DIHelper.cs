@@ -7,14 +7,15 @@ namespace RestX.BLL.Helpers
     using RestX.BLL.Interfaces.Auth;
     using RestX.BLL.Interfaces.Customers;
     using RestX.BLL.Interfaces.Employees;
+    using RestX.BLL.Interfaces.Feedbacks;
     using RestX.BLL.Interfaces.Inventory;
     using RestX.BLL.Interfaces.Loyalty;
+    using RestX.BLL.Interfaces.Reservations;
+    using RestX.BLL.Interfaces.Status;
     using RestX.BLL.Interfaces.Tables;
     using RestX.BLL.Services;
     using RestX.BLL.Services.Auth;
     using RestX.DAL.Context;
-    using RestX.BLL.Interfaces.Reservations;
-    using RestX.BLL.Interfaces.Status;
 
     public static class DIHelper
     {
@@ -46,7 +47,6 @@ namespace RestX.BLL.Helpers
             services.AddScoped<IOrderService, OrderService>();
             services.AddScoped<IPaymentSettingService, PaymentSettingService>();
             services.AddScoped<IPaymentService, PaymentService>();
-            services.AddScoped<IReceiptService, ReceiptService>();
             services.AddScoped<IReservationService, ReservationService>();
             services.AddScoped<IDepositConfigService, DepositConfigService>();
             services.AddScoped<IFormListHelper, FormListHelper>();
@@ -55,6 +55,7 @@ namespace RestX.BLL.Helpers
             services.AddScoped<IDashboardService, DashboardService>();
             services.AddScoped<IReportService, ReportService>();
             services.AddScoped<INotificationService, NotificationService>();
+            services.AddScoped<IFeedbackService, FeedbackService>();
         }
     }
 }

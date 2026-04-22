@@ -1,5 +1,6 @@
 using AutoMapper;
 using RestX.BLL.DataTranferObjects.Floor;
+using RestX.BLL.Exceptionhandling;
 using RestX.BLL.Extensions;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Tables;
@@ -7,6 +8,7 @@ using RestX.Models.Enum;
 using RestX.Models.Reservations;
 using RestX.Models.Tenants;
 using FloorEntity = RestX.Models.Tables.Floor;
+using TableEntity = RestX.Models.Tables.Table;
 
 namespace RestX.BLL.Services
 {
@@ -203,6 +205,12 @@ namespace RestX.BLL.Services
         {
             var floor = await Repo.GetByIdAsync<FloorEntity>(id);
             if (floor == null) return false;
+
+            var hasActiveTables = await Repo.GetExistsAsync<TableEntity>(
+                filter: t => t.FloorId == id && t.IsActive);
+            if (hasActiveTables)
+                throw new AppException("Cannot delete floor while it has active tables");
+
             if (!string.IsNullOrEmpty(floor.ImageUrl))
             {
                 await cloudinaryService.DeleteAsync($"{CurrentTenant.Name.Replace(" ", "")}/floors/{floor.Id}");

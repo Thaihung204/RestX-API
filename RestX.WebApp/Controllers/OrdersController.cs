@@ -4,9 +4,11 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using RestX.BLL.DataTranferObjects.Feedback;
 using RestX.BLL.DataTranferObjects.Orders;
 using RestX.BLL.Exceptionhandling;
 using RestX.BLL.Interfaces;
+using RestX.BLL.Interfaces.Feedbacks;
 using RestX.Models.Identity;
 using RestX.Models.Tenants;
 using RestX.WebApp.Controllers.BaseControllers;
@@ -22,10 +24,12 @@ namespace RestX.WebApp.Controllers
     {
         private readonly IOrderService orderService;
         private readonly IHubContext<SignalrServer> hubContext;
+        private readonly IFeedbackService feedbackService;
 
         public OrdersController(
             IOrderService orderService,
             IHubContext<SignalrServer> hubContext,
+            IFeedbackService feedbackService,
             IMapper mapper,
             UserManager<ApplicationUser> userManager,
             IExceptionHandler exceptionHandler,
@@ -34,6 +38,7 @@ namespace RestX.WebApp.Controllers
         {
             this.orderService = orderService;
             this.hubContext = hubContext;
+            this.feedbackService = feedbackService;
         }
 
         [HttpGet("export/csv")]
@@ -96,6 +101,46 @@ namespace RestX.WebApp.Controllers
             {
                 ExceptionHandler.RaiseException(ex);
                 return BadRequest("An internal error occurred");
+            }
+        }
+
+        [HttpPost("reservation/{id:guid}")]
+        //[Authorize(Roles = "Admin,System Admin,Staff,Customer")]
+        [AllowAnonymous]
+        public async Task<IActionResult> PreOrderByReservation(Guid id, [FromBody] Order order)
+        {
+            try
+            {
+                ApplicationUser? user = await GetCurrentUserAsync();
+                string userId = user?.Id.ToString() ?? string.Empty;
+
+                Order result = await orderService.PreOrderByReservation(id, order, userId);
+
+                await hubContext.BroadcastToTenant(CurrentTenant.Id, SignalrServer.OrderCreated, new { id = result.Id, result });
+
+                return Ok(new
+                {
+                    success = true,
+                    message = "Pre-order created successfully",
+                    data = result
+                });
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { success = false, message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { success = false, message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest(new { success = false, message = "An internal error occurred" });
             }
         }
 
@@ -273,10 +318,6 @@ namespace RestX.WebApp.Controllers
             try
             {
                 var order = await orderService.GetOrderByTableId(tableId);
-
-                if (order == null)
-                    return NotFound(new { success = false, message = "No active order found for this table" });
-
                 return Ok(order);
             }
             catch (Exception ex)
@@ -338,6 +379,32 @@ namespace RestX.WebApp.Controllers
             catch (Exception ex)
             {
                 ExceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
+        [HttpPost("{orderId:guid}/feedbacks")]
+        [AllowAnonymous]
+        public async Task<ActionResult<FeedbackItem>> CreateFeedback([Required] Guid orderId, [FromForm] FeedbackCreate request)
+        {
+            try
+            {
+                var currentUser = await GetCurrentUserAsync();
+                var userId = currentUser?.Id;
+
+                if (!userId.HasValue)
+                    return Unauthorized();
+
+                FeedbackItem result = await feedbackService.CreateFeedback(orderId, userId.Value, request);
+                return Ok(result);
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                this.ExceptionHandler.RaiseException(ex);
                 return BadRequest("An internal error occurred");
             }
         }

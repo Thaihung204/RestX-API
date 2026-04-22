@@ -11,6 +11,6 @@ namespace RestX.BLL.Interfaces
         Task<Guid> UpdateNotification(Guid id, RestaurantNotification model, string userId);
         Task<bool> DeleteNotification(Guid id);
         Task<bool> SetPublishStatus(Guid id, bool isPublished, string userId);
-        Task<RestaurantNotification> CreatePaymentRequestByTableId(Guid tableId, string userId);
+        Task<List<RestaurantNotification>> CreateRequestByTableId(Guid tableId, string title, string userId);
     }
 }

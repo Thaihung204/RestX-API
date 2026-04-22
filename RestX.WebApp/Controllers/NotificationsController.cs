@@ -37,22 +37,36 @@ namespace RestX.WebApp.Controllers
 
         [HttpPost("request/table/{tableId:guid}")]
         [Authorize(Roles = "System Admin,Admin,Staff,Customer")]
-        public async Task<ActionResult<RestaurantNotification>> SendPaymentRequestByTableId([Required] Guid tableId)
+        public async Task<ActionResult<List<RestaurantNotification>>> SendRequestByTableId(
+            [Required] Guid tableId,
+            [FromQuery] string title)
         {
             try
             {
+                if (string.IsNullOrWhiteSpace(title))
+                {
+                    return BadRequest(new { success = false, message = "Title is required" });
+                }
+
                 ApplicationUser currentUser = await GetCurrentUserAsync();
                 string userId = currentUser?.Id.ToString() ?? string.Empty;
 
-                RestaurantNotification created = await notificationService.CreatePaymentRequestByTableId(tableId, userId);
+                List<RestaurantNotification> createdNotifications =
+                    await notificationService.CreateRequestByTableId(tableId, title, userId);
 
-                await hubContext.BroadcastToTenantUser(
-                    CurrentTenant.Id,
-                    created.RecipientId ?? string.Empty,
-                    SignalrServer.NotificationPersonalCreated,
-                    new { id = created.Id, notification = created });
+                foreach (RestaurantNotification created in createdNotifications)
+                {
+                    if (!string.IsNullOrWhiteSpace(created.RecipientId))
+                    {
+                        await hubContext.BroadcastToTenantUser(
+                            CurrentTenant.Id,
+                            created.RecipientId,
+                            SignalrServer.NotificationPersonalCreated,
+                            new { id = created.Id, notification = created });
+                    }
+                }
 
-                return Ok(created);
+                return Ok(createdNotifications);
             }
             catch (AppException ex)
             {
@@ -64,6 +78,7 @@ namespace RestX.WebApp.Controllers
                 return BadRequest("An internal error occurred");
             }
         }
+
         [HttpGet]
         [Authorize(Roles = "System Admin,Admin")]
         public async Task<ActionResult<List<RestaurantNotification>>> GetAllNotifications()
@@ -93,7 +108,7 @@ namespace RestX.WebApp.Controllers
                 if (string.IsNullOrWhiteSpace(recipentId))
                 {
                     ApplicationUser currentUser = await GetCurrentUserAsync();
-                    recipentId = currentUser?.Id.ToString();
+                    recipentId = currentUser?.MemberId.ToString();
                 }
 
                 return Ok(await notificationService.GetNotificationByRecipentId(recipentId));

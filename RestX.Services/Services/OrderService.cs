@@ -836,7 +836,9 @@ namespace RestX.BLL.Services
                 includeProperties: "Dish,Order");
 
             if (orderDetail == null)
+            {
                 return false;
+            }
 
             List<RestX.BLL.DataTranferObjects.Status.StatusValues> orderDetailStatuses =
                 (await statusValueService.GetStatuses("order-detail")).ToList();
@@ -865,7 +867,6 @@ namespace RestX.BLL.Services
 
                 await ingredientService.DeductFromRecipes(dishQtyToDeduct);
             }
-
             else if (preparingStatus != null
                 && cancelledStatus != null
                 && oldStatusId == preparingStatus.Id
@@ -911,17 +912,20 @@ namespace RestX.BLL.Services
                 }
 
                 orderDetail.Order.CalculateTotalAmount();
-                Repo.Update(orderDetail.Order, userId);
             }
 
             orderDetail.ItemStatusId = statusId;
-
             Repo.Update(orderDetail, userId);
+
+            if (orderDetail.Order != null)
+            {
+                Repo.Update(orderDetail.Order, userId);
+            }
+
             await Repo.SaveAsync();
 
             return true;
         }
-
         public async Task<IEnumerable<DataTranferObjects.Orders.OrderDetail>> GetAllOrderDetails()
         {
             var orderDetailStatuses = await statusValueService.GetStatuses("order-detail");

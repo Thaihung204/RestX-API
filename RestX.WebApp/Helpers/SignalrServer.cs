@@ -11,6 +11,7 @@ namespace RestX.WebApp.Helpers
         public const string NotificationCreated = "notifications.created";
         public const string NotificationUpdated = "notifications.updated";
         public const string NotificationDeleted = "notifications.deleted";
+        public const string NotificationPersonalCreated = "notifications.personal.created";
 
         public const string TableStatusChanged = "tables.status_changed";
         public const string TableLayoutUpdated = "tables.layout_updated";
@@ -26,5 +27,11 @@ namespace RestX.WebApp.Helpers
 
         public async Task LeaveTenantGroup(string tenantId)
             => await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"tenant_{tenantId.ToLower()}");
+
+        public async Task JoinTenantUserGroup(string tenantId, string userId)
+            => await Groups.AddToGroupAsync(Context.ConnectionId, $"tenant_{tenantId.ToLower()}:user_{userId}");
+
+        public async Task LeaveTenantUserGroup(string tenantId, string userId)
+            => await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"tenant_{tenantId.ToLower()}:user_{userId}");
     }
 }

@@ -487,8 +487,7 @@ namespace RestX.BLL.Services
 
                 decimal additionalSubTotal = 0;
 
-                var statuses = await statusValueService.GetStatuses("order-detail");
-                int itemDefaultStatusId = statuses.First(x => x.IsDefault).Id;
+                int itemPreparingStatusId = await GetPreparingOrderDetailStatusId();
 
                 Dictionary<Guid, int> dishQuantitiesToDeduct = new Dictionary<Guid, int>();
 
@@ -508,7 +507,7 @@ namespace RestX.BLL.Services
                             DishId = d.DishId,
                             Quantity = d.Quantity,
                             Note = d.Note,
-                            ItemStatusId = itemDefaultStatusId
+                            ItemStatusId = itemPreparingStatusId
                         });
 
                         if (dishQuantitiesToDeduct.ContainsKey(d.DishId))
@@ -551,8 +550,7 @@ namespace RestX.BLL.Services
 
                 decimal additionalSubTotal = 0;
 
-                var statuses = await statusValueService.GetStatuses("order-detail");
-                int itemDefaultStatusId = statuses.First(x => x.IsDefault).Id;
+                int itemPreparingStatusId = await GetPreparingOrderDetailStatusId();
 
                 Dictionary<Guid, int> dishQuantitiesToDeduct = new Dictionary<Guid, int>();
 
@@ -571,7 +569,7 @@ namespace RestX.BLL.Services
                             DishId = d.DishId,
                             Quantity = d.Quantity,
                             Note = d.Note,
-                            ItemStatusId = itemDefaultStatusId
+                            ItemStatusId = itemPreparingStatusId
                         };
 
                         additionalSubTotal += d.Quantity * dish.Price;
@@ -626,8 +624,7 @@ namespace RestX.BLL.Services
             List<Dish> requestDishes = (await Repo.GetAsync<Dish>(filter: d => requestDishIds.Contains(d.Id))).ToList();
             Dictionary<Guid, Dish> requestDishesById = requestDishes.ToDictionary(d => d.Id, d => d);
 
-            IEnumerable<RestX.BLL.DataTranferObjects.Status.StatusValues> statuses = await statusValueService.GetStatuses("order-detail");
-            int itemDefaultStatusId = statuses.First(x => x.IsDefault).Id;
+            int itemPreparingStatusId = await GetPreparingOrderDetailStatusId();
 
             decimal discountAmount = order.DiscountAmount ?? 0m;
             decimal taxAmount = order.TaxAmount ?? 0m;
@@ -646,7 +643,7 @@ namespace RestX.BLL.Services
             if (orderEntity.OrderDetails?.Any() == true)
             {
                 List<Models.Orders.OrderDetail> oldPreparingDetails = orderEntity.OrderDetails
-                    .Where(x => x.ItemStatusId == itemDefaultStatusId)
+                    .Where(x => x.ItemStatusId == itemPreparingStatusId)
                     .ToList();
 
                 if (oldPreparingDetails.Any())
@@ -705,7 +702,7 @@ namespace RestX.BLL.Services
                         DishId = d.DishId,
                         Quantity = d.Quantity,
                         Note = d.Note,
-                        ItemStatusId = itemDefaultStatusId
+                        ItemStatusId = itemPreparingStatusId
                     };
 
                     orderEntity.OrderDetails.Add(newDetail);
@@ -998,7 +995,21 @@ namespace RestX.BLL.Services
 
             return reference;
         }
+        private async Task<int> GetPreparingOrderDetailStatusId()
+        {
+            IEnumerable<RestX.BLL.DataTranferObjects.Status.StatusValues> statuses =
+                await statusValueService.GetStatuses("order-detail");
 
+            RestX.BLL.DataTranferObjects.Status.StatusValues? preparingStatus = statuses.FirstOrDefault(
+                x => string.Equals(x.Code, "PREPARING", StringComparison.OrdinalIgnoreCase));
+
+            if (preparingStatus == null)
+            {
+                throw new AppException("Status 'PREPARING' for 'order-detail' was not found.");
+            }
+
+            return preparingStatus.Id;
+        }
         private List<Models.Orders.OrderDetail> GroupOrderDetailsByDish(IEnumerable<Models.Orders.OrderDetail> orderDetails)
         {
             if (orderDetails == null || !orderDetails.Any())

@@ -11,15 +11,68 @@ namespace RestX.BLL.Services
     public class NotificationService : BaseService, INotificationService
     {
         private readonly IMapper mapper;
+        private readonly IOrderService orderService;
 
         public NotificationService(
-            IMapper mapper,
-            IRepository repo,
-            IRedisService redisService,
-            IEnumerable<ActiveTenant> tenant = null
-        ) : base(repo, redisService, tenant)
+                IMapper mapper,
+                IOrderService orderService,
+                IRepository repo,
+                IRedisService redisService,
+                IEnumerable<ActiveTenant> tenant = null
+            ) : base(repo, redisService, tenant)
         {
             this.mapper = mapper;
+            this.orderService = orderService;
+        }
+
+        public async Task<RestaurantNotification> CreatePaymentRequestByTableId(Guid tableId, string userId)
+        {
+            if (tableId == Guid.Empty)
+            {
+                throw new AppException("TableId is required");
+            }
+
+            DataTranferObjects.Orders.Order? order = await orderService.GetOrderByTableId(tableId);
+            if (order == null || !order.Id.HasValue)
+            {
+                throw new AppException("No active order found for this table");
+            }
+
+            if (string.IsNullOrWhiteSpace(order.ModifiedBy))
+            {
+                throw new AppException("This order has no assigned staff (ModifiedBy)");
+            }
+
+            string? tableCode = order.tableSessions?
+                .FirstOrDefault(x => x.TableId == tableId)?.TableCode;
+
+            if (string.IsNullOrWhiteSpace(tableCode))
+            {
+                tableCode = order.tableSessions?
+                    .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x.TableCode))?.TableCode;
+            }
+
+            string tableDisplay = string.IsNullOrWhiteSpace(tableCode)
+                ? tableId.ToString()
+                : tableCode;
+
+            string orderDisplay = string.IsNullOrWhiteSpace(order.Reference)
+                ? order.Id.Value.ToString()
+                : order.Reference;
+
+            RestaurantNotification notification = new RestaurantNotification
+            {
+                RecipientId = order.ModifiedBy,
+                NotificationType = NotificationType.PAYMENT.ToString(),
+                IsBroadcast = false,
+                Title = "Payment request",
+                Message = $"Table {tableDisplay} requested payment for order {orderDisplay} (OrderId: {order.Id}). Total: {order.TotalAmount:N0} VND.",
+                Priority = NotificationPriority.HIGH.ToString(),
+                IsPublished = true,
+                ExpiryDate = DateTime.UtcNow.AddHours(9)
+            };
+
+            return await CreateNotification(notification, userId);
         }
 
         public async Task<List<RestaurantNotification>> GetAllNotifications()

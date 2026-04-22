@@ -35,6 +35,35 @@ namespace RestX.WebApp.Controllers
             this.hubContext = hubContext;
         }
 
+        [HttpPost("request/table/{tableId:guid}")]
+        [Authorize(Roles = "System Admin,Admin,Staff,Customer")]
+        public async Task<ActionResult<RestaurantNotification>> SendPaymentRequestByTableId([Required] Guid tableId)
+        {
+            try
+            {
+                ApplicationUser currentUser = await GetCurrentUserAsync();
+                string userId = currentUser?.Id.ToString() ?? string.Empty;
+
+                RestaurantNotification created = await notificationService.CreatePaymentRequestByTableId(tableId, userId);
+
+                await hubContext.BroadcastToTenantUser(
+                    CurrentTenant.Id,
+                    created.RecipientId ?? string.Empty,
+                    SignalrServer.NotificationPersonalCreated,
+                    new { id = created.Id, notification = created });
+
+                return Ok(created);
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
         [HttpGet]
         [Authorize(Roles = "System Admin,Admin")]
         public async Task<ActionResult<List<RestaurantNotification>>> GetAllNotifications()

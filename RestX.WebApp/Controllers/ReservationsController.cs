@@ -53,11 +53,23 @@ namespace RestX.WebApp.Controllers
         [AllowAnonymous]
         public IActionResult CheckTime([FromBody] CheckTimeRequest request)
         {
-            if (!ModelState.IsValid)
-                return BadRequest(new { success = false, message = "Validation failed", errors = ModelState });
+            try
+            {
+                if (!ModelState.IsValid)
+                    return BadRequest(new { success = false, message = "Validation failed", errors = ModelState });
 
-            var result = reservationService.CheckTimeAvailability(request.ReservationDateTime);
-            return Ok(new { success = true, data = result });
+                var result = reservationService.CheckTimeAvailability(request.ReservationDateTime);
+                return Ok(new { success = true, data = result });
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest(new { success = false, message = "An internal error occurred" });
+            }
         }
 
         [HttpPost("check-tables")]
@@ -71,6 +83,10 @@ namespace RestX.WebApp.Controllers
 
                 var result = await reservationService.CheckAvailabilityReservation(request);
                 return Ok(new { success = true, data = result });
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
             }
             catch (KeyNotFoundException ex)
             {

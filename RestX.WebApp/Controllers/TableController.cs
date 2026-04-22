@@ -266,7 +266,8 @@ namespace RestX.WebApp.Controllers
                 {
                     tableIds = request.TableIds,
                     orderId = result.OrderId,
-                    message = result.Message
+                    message = result.Message,
+                    sessions = result.Sessions 
                 });
 
                 return Ok(result);

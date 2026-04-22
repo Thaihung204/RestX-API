@@ -1,6 +1,5 @@
 using PayOS.Models.Webhooks;
 using RestX.BLL.DataTranferObjects.Payments;
-using System.Threading.Tasks;
 
 namespace RestX.BLL.Interfaces
 {

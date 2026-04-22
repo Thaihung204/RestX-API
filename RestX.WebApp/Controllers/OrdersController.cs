@@ -104,6 +104,46 @@ namespace RestX.WebApp.Controllers
             }
         }
 
+        [HttpPost("reservation/{id:guid}")]
+        //[Authorize(Roles = "Admin,System Admin,Staff,Customer")]
+        [AllowAnonymous]
+        public async Task<IActionResult> PreOrderByReservation(Guid id, [FromBody] Order order)
+        {
+            try
+            {
+                ApplicationUser? user = await GetCurrentUserAsync();
+                string userId = user?.Id.ToString() ?? string.Empty;
+
+                Order result = await orderService.PreOrderByReservation(id, order, userId);
+
+                await hubContext.BroadcastToTenant(CurrentTenant.Id, SignalrServer.OrderCreated, new { id = result.Id, result });
+
+                return Ok(new
+                {
+                    success = true,
+                    message = "Pre-order created successfully",
+                    data = result
+                });
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { success = false, message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { success = false, message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest(new { success = false, message = "An internal error occurred" });
+            }
+        }
+
         [HttpPost]
         [Authorize(Roles = "System Admin,Admin,Staff,Customer")]
         public async Task<ActionResult<Guid>> CreateOrder([FromBody] Order order)

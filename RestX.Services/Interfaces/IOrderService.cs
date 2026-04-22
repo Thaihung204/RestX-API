@@ -14,6 +14,7 @@ namespace RestX.BLL.Interfaces
         Task<bool> UpdateOrderDetailStatus(Guid orderDetailId, int statusId, string userId);
         Task<IEnumerable<OrderDetail>> GetAllOrderDetails();
         Task<Order?> GetOrderByTableId(Guid tableId);
+        Task<Order> PreOrderByReservation(Guid reservationId, Order order, string userId);
 
         Task<byte[]> ExportAsync(OrderSearch filter);
         Task<ApplyDiscountResponse> ApplyDiscount(Guid orderId, ApplyDiscountRequest request);

@@ -309,7 +309,6 @@ namespace RestX.BLL.Services
                            && (ts.EndedAt == null || ts.EndedAt > now),
                 includeProperties: "Table,Order")).ToList();
 
-            // Create session for tables without active session
             foreach (Guid tableId in tableIds)
             {
                 if (!sessions.Any(s => s.TableId == tableId))

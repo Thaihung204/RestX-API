@@ -78,6 +78,27 @@ namespace RestX.BLL.Services
             var countParams = new List<SqlParameter>();
             var queryParams = new List<SqlParameter>();
 
+            var now = DateTime.UtcNow.AddHours(7);
+
+            query.Append(@"
+                AND (
+                    o.OrderStatusId <> @OpenStatus
+                    OR EXISTS (
+                        SELECT 1
+                        FROM dbo.TableSessions ts
+                        WHERE ts.OrderId = o.Id
+                          AND ts.IsActive = 1
+                          AND ts.StartedAt <= @Now
+                    )
+                )
+            ");
+
+            countParams.Add(new SqlParameter("OpenStatus", SqlDbType.Int) { Value = (int)OrderStatus.Open });
+            queryParams.Add(new SqlParameter("OpenStatus", SqlDbType.Int) { Value = (int)OrderStatus.Open });
+
+            countParams.Add(new SqlParameter("Now", SqlDbType.DateTime2) { Value = now });
+            queryParams.Add(new SqlParameter("Now", SqlDbType.DateTime2) { Value = now });
+
             if (model.Status.HasValue)
             {
                 query.Append(" AND o.OrderStatusId = @Status ");
@@ -907,11 +928,17 @@ namespace RestX.BLL.Services
 
             var startOfDay = DateTime.UtcNow.AddHours(7).Date;
 
+            var now = DateTime.UtcNow.AddHours(7);
+
             var orderDetails = (await Repo.GetAsync<Models.Orders.OrderDetail>(
                 filter: od => od.ItemStatusId == preparingStatus.Id
                               && od.CreatedDate >= startOfDay
                               && od.Order != null
-                              && od.Order.OrderStatusId == (int)OrderStatus.Open,
+                              && od.Order.OrderStatusId == (int)OrderStatus.Open
+                              && od.Order.TableSessions.Any(ts =>
+                                      ts.IsActive &&
+                                      ts.StartedAt <= now
+                              ),
                 orderBy: query => query.OrderBy(od => od.CreatedDate),
                 includeProperties: "ItemStatus,Dish,Order,Order.TableSessions,Order.TableSessions.Table"
             )).ToList();

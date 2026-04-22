@@ -228,6 +228,8 @@ namespace RestX.BLL.Services
             }
             await AwardLoyaltyPointsAsync(order);
 
+            await notifier.PaymentCompletedAsync(CurrentTenant.Id, payment.Id, orderId);
+
             await orderService.UpdateStatus(orderId, (int)OrderStatus.Completed, createdBy ?? string.Empty);
             await notifier.OrderUpdatedAsync(CurrentTenant.Id, orderId);
 
@@ -399,7 +401,7 @@ namespace RestX.BLL.Services
             await Repo.SaveAsync();
         }
 
-        public async Task<bool> HandleWebhook(Webhook webhookBody)
+        public async Task HandleWebhook(Webhook webhookBody)
         {
             var (gatewayClient, _) = await GetTenantGateway();
             var data = await gatewayClient.Webhooks.VerifyAsync(webhookBody);
@@ -413,8 +415,9 @@ namespace RestX.BLL.Services
                     cancelledPayment.Status = PaymentStatus.Fail;
                     Repo.Update(cancelledPayment);
                     await Repo.SaveAsync();
+                    await notifier.PaymentCancelledAsync(CurrentTenant.Id, cancelledPayment.Id);
                 }
-                return false;
+                return;
             }
 
             var payment = await Repo.GetOneAsync<Payment>(
@@ -422,12 +425,14 @@ namespace RestX.BLL.Services
                 ?? throw new KeyNotFoundException($"Payment not found for orderCode {data.OrderCode}");
 
             if (payment.Status == PaymentStatus.Success)
-                return true;
+                return;
 
             payment.Status = PaymentStatus.Success;
             payment.TransactionId = data.Reference;
             payment.PaymentDate = DateTime.UtcNow.AddHours(7);
             Repo.Update(payment);
+
+            await notifier.PaymentCompletedAsync(CurrentTenant.Id, payment.Id, payment.OrderId);
 
             if (payment.Purpose == PaymentPurpose.Deposit && payment.ReservationId.HasValue)
             {
@@ -473,7 +478,6 @@ namespace RestX.BLL.Services
             }
 
             await Repo.SaveAsync();
-            return true;
         }
 
         private async Task<Order> RecalculateOrderAmountForCheckout(Guid orderId, string? modifiedBy = null)

@@ -110,7 +110,6 @@ namespace RestX.WebApp.Controllers
             {
                 var user = await GetCurrentUserAsync();
                 var result = await paymentService.PayByCash(orderId, request, user?.Id.ToString());
-                await hub.BroadcastToTenant(CurrentTenant.Id, SignalrServer.PaymentCompleted, new { orderId, result });
                 return Ok(result);
             }
             catch (AppException ex)
@@ -221,12 +220,7 @@ namespace RestX.WebApp.Controllers
         {
             try
             {
-                var paymentSucceeded = await paymentService.HandleWebhook(webhookBody);
-                if (CurrentTenant != null)
-                {
-                    var eventName = paymentSucceeded ? SignalrServer.PaymentCompleted : SignalrServer.PaymentCancelled;
-                    await hub.BroadcastToTenant(CurrentTenant.Id, eventName, new { code = webhookBody.Code });
-                }
+                await paymentService.HandleWebhook(webhookBody);
                 return Ok(new { success = true });
             }
             catch (AppException ex)

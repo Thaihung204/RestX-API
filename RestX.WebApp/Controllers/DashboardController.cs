@@ -40,7 +40,6 @@ namespace RestX.WebApp.Controllers
             try
             {
                 var result = await _dashboardService.GetOverviewAsync(request, top, sortBy);
-                await _hub.BroadcastToTenant(CurrentTenant.Id, SignalrServer.DashboardOverviewUpdated, result);
                 return Ok(result);
             }
             catch (AppException ex)
@@ -136,9 +135,6 @@ namespace RestX.WebApp.Controllers
             try
             {
                 var result = await _dashboardService.GetTableStatusAsync();
-
-                await _hub.BroadcastToTenant(CurrentTenant.Id, SignalrServer.DashboardTableStatusUpdated, result);
-
                 return Ok(result);
             }
             catch (AppException ex)

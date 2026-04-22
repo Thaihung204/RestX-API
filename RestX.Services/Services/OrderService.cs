@@ -200,6 +200,7 @@ namespace RestX.BLL.Services
                     od.OrderId,
                     od.DishId,
                     od.Quantity,
+                    od.UnitPrice,
                     od.Note,
                     od.ItemStatusId
                 FROM dbo.OrderDetails od
@@ -513,6 +514,7 @@ namespace RestX.BLL.Services
                         {
                             DishId = d.DishId,
                             Quantity = d.Quantity,
+                            UnitPrice = dish.Price,
                             Note = d.Note,
                             ItemStatusId = itemPreparingStatusId
                         });
@@ -575,6 +577,7 @@ namespace RestX.BLL.Services
                             OrderId = orderEntity.Id,
                             DishId = d.DishId,
                             Quantity = d.Quantity,
+                            UnitPrice = dish.Price,
                             Note = d.Note,
                             ItemStatusId = itemPreparingStatusId
                         };
@@ -708,6 +711,7 @@ namespace RestX.BLL.Services
                         OrderId = orderEntity.Id,
                         DishId = d.DishId,
                         Quantity = d.Quantity,
+                        UnitPrice = dish.Price,
                         Note = d.Note,
                         ItemStatusId = itemPreparingStatusId
                     };
@@ -902,8 +906,7 @@ namespace RestX.BLL.Services
                 && statusId == cancelledStatus.Id
                 && orderDetail.Order != null)
             {
-                decimal dishPrice = orderDetail.Dish?.Price ?? 0m;
-                decimal cancelledAmount = orderDetail.Quantity * dishPrice;
+                decimal cancelledAmount = orderDetail.Quantity * orderDetail.UnitPrice;
 
                 orderDetail.Order.SubTotal -= cancelledAmount;
                 if (orderDetail.Order.SubTotal < 0)

@@ -316,11 +316,18 @@ namespace RestX.BLL.Services
                 {
                     TableSession newSession = await CreateTableSession(tableId, userId, request.CustomerId, request.ReservationId);
                     newSession = await Repo.GetOneAsync<TableSession>(filter: ts => ts.Id == newSession.Id, includeProperties: "Table,Order");
+
+                    if (request.ReservationId.HasValue && newSession.StartedAt > now)
+                    {
+                        newSession.StartedAt = now;
+                        newSession.EndedAt = now.AddMinutes(ReservationBufferMinutes);
+                        Repo.Update(newSession);
+                    }
+
                     sessions.Add(newSession);
                 }
             }
 
-            // Collect distinct order ids present in sessions
             List<Guid> orderIds = sessions
                 .Where(s => s.OrderId.HasValue)
                 .Select(s => s.OrderId!.Value)
@@ -333,7 +340,6 @@ namespace RestX.BLL.Services
                 Sessions = mapper.Map<List<RestX.BLL.DataTranferObjects.Table.TableSessionInfo>>(sessions)
             };
 
-            // Case: no orders -> sessions created/validated
             if (!orderIds.Any())
             {
                 response.OrderId = null;

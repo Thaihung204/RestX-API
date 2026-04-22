@@ -20,12 +20,10 @@ namespace RestX.WebApp.Controllers
     public class PaymentsController : BaseController
     {
         private readonly IPaymentService paymentService;
-        private readonly IReceiptService receiptService;
         private readonly IHubContext<SignalrServer> hub;
 
         public PaymentsController(
             IPaymentService paymentService,
-            IReceiptService receiptService,
             IHubContext<SignalrServer> hub,
             IMapper mapper,
             UserManager<ApplicationUser> userManager,
@@ -34,7 +32,6 @@ namespace RestX.WebApp.Controllers
         ) : base(mapper, userManager, exceptionHandler, tenant)
         {
             this.paymentService = paymentService;
-            this.receiptService = receiptService;
             this.hub = hub;
         }
 
@@ -44,11 +41,12 @@ namespace RestX.WebApp.Controllers
             [FromQuery] DateTime? from,
             [FromQuery] DateTime? to,
             [FromQuery] string? method,
-            [FromQuery] string? status)
+            [FromQuery] string? status,
+            [FromQuery] string? purpose)
         {
             try
             {
-                var result = await paymentService.GetAllPayments(from, to, method, status);
+                var result = await paymentService.GetAllPayments(from, to, method, status, purpose);
                 return Ok(result);
             }
             catch (AppException ex)
@@ -199,7 +197,7 @@ namespace RestX.WebApp.Controllers
         {
             try
             {
-                var pdf = await receiptService.GenerateReceiptAsync(id);
+                var pdf = await paymentService.GenerateReceiptAsync(id);
                 return File(pdf, "application/pdf", $"receipt-{id}.pdf");
             }
             catch (AppException ex)

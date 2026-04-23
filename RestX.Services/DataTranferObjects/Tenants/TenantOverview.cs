@@ -1,6 +1,7 @@
 ﻿using RestX.Models.Tenants;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -36,6 +37,12 @@ namespace RestX.BLL.DataTranferObjects.Tenants
         public string Hostname { get; set; }
 
         public DateTime ExpiredAt { get; set; }
+
+        [Range(0, 100)]
+        public decimal TaxRate { get; set; } = 0m;
+
+        [Range(0, 100)]
+        public decimal ServiceChargeRate { get; set; } = 0m;
         // Business Details
         public string BusinessName { get; set; }
         public string BusinessAddressLine1 { get; set; }

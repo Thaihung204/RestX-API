@@ -40,6 +40,8 @@ public partial class RestxAdminContext : IdentityDbContext<Admin>
         {
             entity.HasIndex(x => x.Hostname)
                   .IsUnique();
+            entity.Property(e => e.TaxRate).HasColumnType("decimal(5,2)");
+            entity.Property(e => e.ServiceChargeRate).HasColumnType("decimal(5,2)");
         });
 
         modelBuilder.Entity<TenantSetting>();

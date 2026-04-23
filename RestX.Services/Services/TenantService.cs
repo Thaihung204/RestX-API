@@ -214,6 +214,8 @@ namespace RestX.BLL.Services
                 tenant.ExpiredAt = model.ExpiredAt == default
                     ? DateTime.UtcNow.AddHours(7).AddYears(1)
                     : model.ExpiredAt;
+                tenant.TaxRate = model.TaxRate;
+                tenant.ServiceChargeRate = model.ServiceChargeRate;
 
                 tenant.BusinessName = model.BusinessName;
                 tenant.BusinessAddressLine1 = model.BusinessAddressLine1;
@@ -332,6 +334,9 @@ namespace RestX.BLL.Services
                 ExpiredAt = model.ExpiredAt == default
                     ? DateTime.UtcNow.AddHours(7).AddYears(1)
                     : model.ExpiredAt,
+
+                TaxRate = model.TaxRate,
+                ServiceChargeRate = model.ServiceChargeRate,
 
                 // Business
                 BusinessName = model.BusinessName,

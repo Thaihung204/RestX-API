@@ -10,6 +10,10 @@
         public string Hostname { get; set; }
         public bool IsActive { get; set; }
         public string Prefix { get; set; }
+
+        public decimal TaxRate { get; set; }
+        public decimal ServiceChargeRate { get; set; }
+
         public string PrimaryColor { get; set; }
         public string LightBaseColor { get; set; }
         public string LightSurfaceColor { get; set; }

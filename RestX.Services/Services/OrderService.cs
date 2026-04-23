@@ -809,7 +809,7 @@ namespace RestX.BLL.Services
 
         public async Task<DataTranferObjects.Orders.Order> CheckSessionBeforeOrder(DataTranferObjects.Orders.Order order, string userId)
         {
-            var activeSession = await Repo.GetOneAsync<TableSession>(
+            var activeSession = await Repo.GetFirstAsync<TableSession>(
                 filter: ts => ts.TableId == order.TableId && ts.IsActive
                            && ts.StartedAt <= DateTime.UtcNow.AddHours(7)
             );

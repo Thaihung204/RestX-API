@@ -8,23 +8,20 @@ namespace RestX.BLL.DataTranferObjects.Orders
         public int Page { get; set; } = 1;
         public int ItemsPerPage { get; set; } = 20;
 
-        // Filters
-        public OrderStatus? Status { get; set; }
-
-        /// <summary>
-        /// Filter from date (inclusive). If only date is provided, treated as 00:00:00.
-        /// </summary>
+        // Date range
         public DateTime? From { get; set; }
-
-        /// <summary>
-        /// Filter to date (inclusive by day). Implemented as &lt; (To.Date + 1 day).
-        /// </summary>
         public DateTime? To { get; set; }
 
+        // Filters by field name directly from query string
+        public OrderStatus? Status { get; set; }
+        public string? CustomerName { get; set; }
+        public string? Reference { get; set; }
+        public int? ItemCount { get; set; }
+        public decimal? Total { get; set; }
+        public PaymentStatus? PaymentStatus { get; set; }
+        public DateTime? Time { get; set; }
+
         // Sort
-        /// <summary>
-        /// created_desc (default) | created_asc
-        /// </summary>
         public string? SortBy { get; set; } = "created_desc";
     }
 }

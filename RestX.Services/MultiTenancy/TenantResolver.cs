@@ -88,6 +88,7 @@ namespace RestX.BLL.MultiTenancy
             }
 
             var activeTenant = _dbContext.Tenants
+                .Include(t => t.BusinessHours)
                 .FirstOrDefault(b =>
                     b.Hostname == hostname ||
                     (!string.IsNullOrEmpty(hostnameWithPath) && b.Hostname == hostnameWithPath)
@@ -123,6 +124,7 @@ namespace RestX.BLL.MultiTenancy
                     BusinessEmailAddress = activeTenant.BusinessEmailAddress,
                     BusinessCompanyNumber = activeTenant.BusinessCompanyNumber,
                     BusinessOpeningHours = activeTenant.BusinessOpeningHours,
+                    BusinessHours = activeTenant.BusinessHours.ToList(),
                     BusinessAddressLine1 = activeTenant.BusinessAddressLine1,
                     BusinessAddressLine2 = activeTenant.BusinessAddressLine2,
                     BusinessAddressLine3 = activeTenant.BusinessAddressLine3,

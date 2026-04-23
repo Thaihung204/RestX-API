@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using RestX.AdminDAL.Context;
 
@@ -11,9 +12,11 @@ using RestX.AdminDAL.Context;
 namespace RestX.AdminDAL.Migrations
 {
     [DbContext(typeof(RestxAdminContext))]
-    partial class RestxAdminContextModelSnapshot : ModelSnapshot
+    [Migration("20260423042652_AddTenantBusinessHours")]
+    partial class AddTenantBusinessHours
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -380,14 +383,8 @@ namespace RestX.AdminDAL.Migrations
                     b.Property<string>("PropertiesJson")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<decimal>("ServiceChargeRate")
-                        .HasColumnType("decimal(5,2)");
-
                     b.Property<bool>("Status")
                         .HasColumnType("bit");
-
-                    b.Property<decimal>("TaxRate")
-                        .HasColumnType("decimal(5,2)");
 
                     b.HasKey("Id");
 

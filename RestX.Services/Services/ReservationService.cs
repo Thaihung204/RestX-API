@@ -89,8 +89,7 @@ namespace RestX.BLL.Services
             var availability = await CheckAvailabilityReservation(new CheckAvailabilityParams
             {
                 TableIds = request.TableIds,
-                ReservationDateTime = request.ReservationDateTime,
-                BufferMinutes = ReservationBufferMinutes
+                ReservationDateTime = request.ReservationDateTime
             });
             if (!availability.Available)
                 throw new InvalidOperationException("One or more tables are already reserved at this time");
@@ -502,10 +501,30 @@ namespace RestX.BLL.Services
             await Repo.SaveAsync();
         }
 
+        public CheckTimeResponse CheckTimeAvailability(DateTime reservationDateTime)
+        {
+            try
+            {
+                ValidateFutureDate(reservationDateTime);
+                ValidateOperatingHours(reservationDateTime);
+                return new CheckTimeResponse { Valid = true };
+            }
+            catch (ArgumentException ex)
+            {
+                return new CheckTimeResponse { Valid = false, Message = ex.Message };
+            }
+        }
+
         public async Task<CheckAvailabilityResponse> CheckAvailabilityReservation(CheckAvailabilityParams request)
         {
-            var bufferStart = request.ReservationDateTime.AddMinutes(-request.BufferMinutes);
-            var bufferEnd = request.ReservationDateTime.AddMinutes(request.BufferMinutes);
+            ValidateDistinctTableIds(request.TableIds);
+            var tables = await ValidateReservationTables(request.TableIds);
+            await ValidateTableNotOccupied(tables, request.ReservationDateTime);
+            if (request.NumberOfGuests.HasValue)
+                ValidateCapacity(request.NumberOfGuests.Value, tables);
+
+            var bufferStart = request.ReservationDateTime.AddMinutes(-ReservationBufferMinutes);
+            var bufferEnd = request.ReservationDateTime.AddMinutes(ReservationBufferMinutes);
             var conflicts = (await Repo.GetAsync<TableSession>(
                 filter: ts =>
                     request.TableIds.Contains(ts.TableId) &&
@@ -622,72 +641,36 @@ namespace RestX.BLL.Services
             }
         }
 
-        private static readonly Dictionary<string, int> DayOrder = new(StringComparer.OrdinalIgnoreCase)
+        private static readonly Dictionary<DayOfWeek, byte> DotNetDayToIndex = new()
         {
-            ["Mon"] = 0,
-            ["Tue"] = 1,
-            ["Wed"] = 2,
-            ["Thu"] = 3,
-            ["Fri"] = 4,
-            ["Sat"] = 5,
-            ["Sun"] = 6
+            [DayOfWeek.Monday] = 0,
+            [DayOfWeek.Tuesday]= 1,
+            [DayOfWeek.Wednesday] = 2,
+            [DayOfWeek.Thursday] = 3,
+            [DayOfWeek.Friday] = 4,
+            [DayOfWeek.Saturday] = 5,
+            [DayOfWeek.Sunday] = 6,
         };
 
         private void ValidateOperatingHours(DateTime reservationDateTime)
         {
-            var openingHours = CurrentTenant?.BusinessOpeningHours;
-            if (string.IsNullOrWhiteSpace(openingHours)) return;
+            var hours = CurrentTenant?.BusinessHours;
+            if (hours == null || !hours.Any()) return;
 
             var localDateTime = reservationDateTime.Kind == DateTimeKind.Utc
                 ? reservationDateTime.Add(VietnamOffset)
                 : reservationDateTime;
 
-            var segments = openingHours.Split(',');
-            var hasValidSegment = false;
-            var dayMatched = false;
+            var dayIndex = DotNetDayToIndex[localDateTime.DayOfWeek];
+            var record = hours.FirstOrDefault(h => h.DayOfWeek == dayIndex);
 
-            foreach (var segment in segments)
-            {
-                var parts = segment.Trim().Split(new[] { ": " }, 2, StringSplitOptions.None);
-                if (parts.Length != 2) continue;
+            if (record == null || record.IsClosed)
+                throw new ArgumentException($"Restaurant is closed on {localDateTime.DayOfWeek}");
 
-                var timeParts = parts[1].Trim().Split('-');
-                if (timeParts.Length != 2) continue;
-                if (!TimeSpan.TryParse(timeParts[0].Trim(), out var openTime)) continue;
-                if (!TimeSpan.TryParse(timeParts[1].Trim(), out var closeTime)) continue;
-
-                hasValidSegment = true;
-
-                if (!IsDayInRange(localDateTime.DayOfWeek, parts[0].Trim())) continue;
-
-                dayMatched = true;
-                var reservationTime = localDateTime.TimeOfDay;
-                if (reservationTime < openTime || reservationTime >= closeTime)
-                    throw new ArgumentException(
-                        $"Reservation time must be between {openTime:hh\\:mm} and {closeTime:hh\\:mm}");
-                return;
-            }
-
-            if (hasValidSegment && !dayMatched)
+            var reservationTime = localDateTime.TimeOfDay;
+            if (reservationTime < record.OpenTime || reservationTime >= record.CloseTime)
                 throw new ArgumentException(
-                    $"Restaurant is closed on {localDateTime.DayOfWeek}");
-        }
-
-        private static bool IsDayInRange(DayOfWeek day, string dayRange)
-        {
-            if (!DayOrder.TryGetValue(day.ToString()[..3], out var dayOrder)) return false;
-
-            var rangeParts = dayRange.Split('-');
-            if (rangeParts.Length == 1)
-                return DayOrder.TryGetValue(rangeParts[0].Trim(), out var single) && single == dayOrder;
-
-            if (rangeParts.Length == 2)
-            {
-                if (!DayOrder.TryGetValue(rangeParts[0].Trim(), out var start)) return false;
-                if (!DayOrder.TryGetValue(rangeParts[1].Trim(), out var end)) return false;
-                return dayOrder >= start && dayOrder <= end;
-            }
-            return false;
+                    $"Reservation time must be between {record.OpenTime:hh\\:mm} and {record.CloseTime:hh\\:mm}");
         }
 
         private static void ValidateFutureDate(DateTime dateTime)
@@ -791,15 +774,21 @@ namespace RestX.BLL.Services
 
         public async Task<DepositStatusResponse> GetDepositStatus(Guid reservationId)
         {
-            var reservation = await Repo.GetOneAsync<Reservation>(
+            Reservation reservation = await Repo.GetOneAsync<Reservation>(
                 filter: r => r.Id == reservationId,
-                includeProperties: "ReservationStatus")
+                includeProperties: "ReservationStatus,TableSessions")
                 ?? throw new KeyNotFoundException("Reservation not found");
 
-            var depositPayments = await Repo.GetAsync<Payment>(
+            IEnumerable<Payment> depositPayments = await Repo.GetAsync<Payment>(
                 p => p.ReservationId == reservationId && p.Purpose == PaymentPurpose.Deposit,
                 orderBy: q => q.OrderByDescending(p => p.PaymentDate));
-            var depositPayment = depositPayments.FirstOrDefault();
+            Payment? depositPayment = depositPayments.FirstOrDefault();
+
+            Guid? orderId = reservation.TableSessions
+                .Where(ts => ts.OrderId.HasValue)
+                .OrderByDescending(ts => ts.StartedAt)
+                .Select(ts => ts.OrderId)
+                .FirstOrDefault();
 
             return new DepositStatusResponse
             {
@@ -809,10 +798,10 @@ namespace RestX.BLL.Services
                 IsPaid = depositPayment?.Status == PaymentStatus.Success,
                 CheckoutUrl = depositPayment?.Status == PaymentStatus.Pending ? depositPayment.CheckoutUrl : null,
                 PaymentStatus = depositPayment?.Status,
-                ReservationStatus = reservation.ReservationStatus?.Code
+                ReservationStatus = reservation.ReservationStatus?.Code,
+                OrderId = orderId
             };
         }
-
         public async Task<string> CreateDepositPaymentLink(Guid reservationId)
         {
             var reservation = await Repo.GetByIdAsync<Reservation>(reservationId)

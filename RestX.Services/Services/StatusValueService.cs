@@ -100,6 +100,53 @@ namespace RestX.BLL.Services
             if (entity.IsSystem)
                 throw new InvalidOperationException("Cannot delete a system status value");
             Repo.Delete<StatusValue>(id);
+            if (entity.IsDefault)
+            {
+                var fallback = (await Repo.GetAsync<StatusValue>(
+                    filter: sv => sv.StatusTypeId == statusType.Id && sv.Id != id,
+                    orderBy: q => q.OrderBy(sv => sv.DisplayOrder),
+                    take: 1
+                )).FirstOrDefault();
+                if (fallback != null)
+                {
+                    fallback.IsDefault = true;
+                    Repo.Update(fallback);
+                }
+            }
+            await Repo.SaveAsync();
+            await RedisService.RemoveAsync(GetCacheKey(typeCode));
+        }
+
+        public async Task UpdateDisplayOrder(string typeCode, List<StatusValues> items)
+        {
+            if (items == null || items.Count == 0)
+                throw new InvalidOperationException("Danh sách không hợp lệ.");
+
+            if (items.Any(i => i.Id <= 0 || i.DisplayOrder <= 0))
+                throw new InvalidOperationException("Mỗi item phải có Id và DisplayOrder hợp lệ.");
+
+            if (items.Select(i => i.Id).Distinct().Count() != items.Count)
+                throw new InvalidOperationException("Danh sách bị trùng Id.");
+
+            if (items.Select(i => i.DisplayOrder).Distinct().Count() != items.Count)
+                throw new InvalidOperationException("Danh sách bị trùng DisplayOrder.");
+
+            var statusType = await GetStatusType(typeCode);
+            var ids = items.Select(i => i.Id).ToList();
+            var entities = (await Repo.GetAsync<StatusValue>(
+                filter: sv => ids.Contains(sv.Id) && sv.StatusTypeId == statusType.Id
+            )).ToList();
+
+            if (entities.Count != ids.Count)
+                throw new InvalidOperationException("Một hoặc nhiều status value không tồn tại hoặc không thuộc type này.");
+
+            foreach (var item in items)
+            {
+                var entity = entities.First(e => e.Id == item.Id);
+                entity.DisplayOrder = item.DisplayOrder;
+                Repo.Update(entity);
+            }
+
             await Repo.SaveAsync();
             await RedisService.RemoveAsync(GetCacheKey(typeCode));
         }

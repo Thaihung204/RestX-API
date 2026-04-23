@@ -2,6 +2,7 @@
 using Hangfire;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -213,6 +214,8 @@ namespace RestX.BLL.Services
                 tenant.ExpiredAt = model.ExpiredAt == default
                     ? DateTime.UtcNow.AddHours(7).AddYears(1)
                     : model.ExpiredAt;
+                tenant.TaxRate = model.TaxRate;
+                tenant.ServiceChargeRate = model.ServiceChargeRate;
 
                 tenant.BusinessName = model.BusinessName;
                 tenant.BusinessAddressLine1 = model.BusinessAddressLine1;
@@ -331,6 +334,9 @@ namespace RestX.BLL.Services
                 ExpiredAt = model.ExpiredAt == default
                     ? DateTime.UtcNow.AddHours(7).AddYears(1)
                     : model.ExpiredAt,
+
+                TaxRate = model.TaxRate,
+                ServiceChargeRate = model.ServiceChargeRate,
 
                 // Business
                 BusinessName = model.BusinessName,
@@ -726,6 +732,43 @@ namespace RestX.BLL.Services
 
             Repo.Delete<RestX.Models.Tenants.TenantRequest>(tenantRequestsId);
             await Repo.SaveAsync();
+        }
+
+        public async Task<IEnumerable<DataTranferObjects.Tenants.BusinessHourDto>> GetBusinessHours(Guid tenantId)
+        {
+            var hours = await adminContext.TenantBusinessHours
+                .Where(bh => bh.TenantId == tenantId)
+                .OrderBy(bh => bh.DayOfWeek)
+                .ToListAsync();
+
+            return hours.Select(bh => new DataTranferObjects.Tenants.BusinessHourDto
+            {
+                DayOfWeek = bh.DayOfWeek,
+                OpenTime = bh.OpenTime,
+                CloseTime = bh.CloseTime,
+                IsClosed = bh.IsClosed
+            });
+        }
+
+        public async Task UpdateBusinessHours(Guid tenantId, IEnumerable<DataTranferObjects.Tenants.BusinessHourDto> hours)
+        {
+            var tenant = await adminContext.Tenants.FindAsync(tenantId);
+            if (tenant == null)
+                throw new InvalidOperationException("Tenant not found");
+
+            var existing = adminContext.TenantBusinessHours.Where(bh => bh.TenantId == tenantId);
+            adminContext.TenantBusinessHours.RemoveRange(existing);
+
+            var entities = hours.Select(h => new RestX.Models.Tenants.TenantBusinessHour
+            {
+                TenantId = tenantId,
+                DayOfWeek = h.DayOfWeek,
+                OpenTime = h.OpenTime,
+                CloseTime = h.CloseTime,
+                IsClosed = h.IsClosed
+            });
+            await adminContext.TenantBusinessHours.AddRangeAsync(entities);
+            await adminContext.SaveChangesAsync();
         }
     }
 }

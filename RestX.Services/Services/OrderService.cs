@@ -62,23 +62,23 @@ namespace RestX.BLL.Services
             if (model.ItemsPerPage <= 0) model.ItemsPerPage = 20;
             if (model.ItemsPerPage > 200) model.ItemsPerPage = 200;
 
-            var result = new OrderSearchResult
+            OrderSearchResult result = new OrderSearchResult
             {
                 Page = model.Page,
                 ItemsPerPage = model.ItemsPerPage
             };
 
-            var query = new StringBuilder();
+            StringBuilder query = new StringBuilder();
             query.Append(@"
                 SELECT #SELECT#
                 FROM dbo.Orders o
                 WHERE 1 = 1
             ");
 
-            var countParams = new List<SqlParameter>();
-            var queryParams = new List<SqlParameter>();
+            List<SqlParameter> countParams = new List<SqlParameter>();
+            List<SqlParameter> queryParams = new List<SqlParameter>();
 
-            var now = DateTime.UtcNow.AddHours(7);
+            DateTime now = DateTime.UtcNow.AddHours(7);
 
             query.Append(@"
                 AND (
@@ -101,16 +101,111 @@ namespace RestX.BLL.Services
 
             if (model.Status.HasValue)
             {
+                int statusValue = (int)model.Status.Value;
                 query.Append(" AND o.OrderStatusId = @Status ");
 
-                var statusValue = (int)model.Status.Value;
                 countParams.Add(new SqlParameter("Status", SqlDbType.Int) { Value = statusValue });
                 queryParams.Add(new SqlParameter("Status", SqlDbType.Int) { Value = statusValue });
             }
 
+            if (!string.IsNullOrWhiteSpace(model.Reference))
+            {
+                string reference = model.Reference.Trim();
+                query.Append(" AND o.Reference LIKE @Reference ");
+
+                countParams.Add(new SqlParameter("Reference", SqlDbType.NVarChar) { Value = $"%{reference}%" });
+                queryParams.Add(new SqlParameter("Reference", SqlDbType.NVarChar) { Value = $"%{reference}%" });
+            }
+
+            if (model.Total.HasValue)
+            {
+                query.Append(" AND o.TotalAmount = @Total ");
+
+                countParams.Add(new SqlParameter("Total", SqlDbType.Decimal) { Value = model.Total.Value });
+                queryParams.Add(new SqlParameter("Total", SqlDbType.Decimal) { Value = model.Total.Value });
+            }
+
+            if (model.ItemCount.HasValue)
+            {
+                query.Append(@"
+                    AND (
+                        SELECT ISNULL(SUM(od.Quantity), 0)
+                        FROM dbo.OrderDetails od
+                        WHERE od.OrderId = o.Id
+                    ) = @ItemCount
+                ");
+
+                countParams.Add(new SqlParameter("ItemCount", SqlDbType.Int) { Value = model.ItemCount.Value });
+                queryParams.Add(new SqlParameter("ItemCount", SqlDbType.Int) { Value = model.ItemCount.Value });
+            }
+
+            if (model.PaymentStatus.HasValue)
+            {
+                int paymentStatusValue = (int)model.PaymentStatus.Value;
+
+                query.Append(@"
+                    AND EXISTS (
+                        SELECT 1
+                        FROM dbo.Payments p
+                        WHERE p.OrderId = o.Id
+                          AND p.Status = @PaymentStatus
+                    )
+                ");
+
+                countParams.Add(new SqlParameter("PaymentStatus", SqlDbType.Int) { Value = paymentStatusValue });
+                queryParams.Add(new SqlParameter("PaymentStatus", SqlDbType.Int) { Value = paymentStatusValue });
+            }
+
+            if (!string.IsNullOrWhiteSpace(model.CustomerName))
+            {
+                string customerName = model.CustomerName.Trim();
+
+                List<Models.Customers.Customer> matchedCustomers = (await Repo.GetAsync<Models.Customers.Customer>(
+                    filter: c => c.ApplicationUser != null && c.ApplicationUser.FullName.Contains(customerName),
+                    includeProperties: "ApplicationUser")).ToList();
+
+                List<Guid> matchedCustomerIds = matchedCustomers.Select(c => c.Id).Distinct().ToList();
+
+                if (!matchedCustomerIds.Any())
+                {
+                    query.Append(" AND 1 = 0 ");
+                }
+                else
+                {
+                    List<string> customerParamNames = new List<string>();
+                    for (int i = 0; i < matchedCustomerIds.Count; i++)
+                    {
+                        string paramName = $"CustomerId{i}";
+                        customerParamNames.Add("@" + paramName);
+
+                        countParams.Add(new SqlParameter(paramName, SqlDbType.UniqueIdentifier) { Value = matchedCustomerIds[i] });
+                        queryParams.Add(new SqlParameter(paramName, SqlDbType.UniqueIdentifier) { Value = matchedCustomerIds[i] });
+                    }
+
+                    query.Append($" AND o.CustomerId IN ({string.Join(", ", customerParamNames)}) ");
+                }
+            }
+
+            if (model.Time.HasValue)
+            {
+                DateTime timeFromUtc = model.Time.Value.Kind == DateTimeKind.Unspecified
+                    ? DateTime.SpecifyKind(model.Time.Value, DateTimeKind.Utc)
+                    : model.Time.Value.ToUniversalTime();
+
+                DateTime timeToUtcExclusive = timeFromUtc.Date.AddDays(1);
+
+                query.Append(" AND o.CreatedDate >= @TimeFrom AND o.CreatedDate < @TimeToExclusive ");
+
+                countParams.Add(new SqlParameter("TimeFrom", SqlDbType.DateTime2) { Value = timeFromUtc.Date });
+                countParams.Add(new SqlParameter("TimeToExclusive", SqlDbType.DateTime2) { Value = timeToUtcExclusive });
+
+                queryParams.Add(new SqlParameter("TimeFrom", SqlDbType.DateTime2) { Value = timeFromUtc.Date });
+                queryParams.Add(new SqlParameter("TimeToExclusive", SqlDbType.DateTime2) { Value = timeToUtcExclusive });
+            }
+
             if (model.From.HasValue)
             {
-                var fromUtc = model.From.Value.Kind == DateTimeKind.Unspecified
+                DateTime fromUtc = model.From.Value.Kind == DateTimeKind.Unspecified
                     ? DateTime.SpecifyKind(model.From.Value, DateTimeKind.Utc)
                     : model.From.Value.ToUniversalTime();
 
@@ -122,7 +217,7 @@ namespace RestX.BLL.Services
 
             if (model.To.HasValue)
             {
-                var toUtcExclusive = (model.To.Value.Kind == DateTimeKind.Unspecified
+                DateTime toUtcExclusive = (model.To.Value.Kind == DateTimeKind.Unspecified
                         ? DateTime.SpecifyKind(model.To.Value, DateTimeKind.Utc)
                         : model.To.Value.ToUniversalTime())
                     .Date
@@ -134,7 +229,7 @@ namespace RestX.BLL.Services
                 queryParams.Add(new SqlParameter("ToExclusive", SqlDbType.DateTime2) { Value = toUtcExclusive });
             }
 
-            var countQuery = query.ToString().Replace("#SELECT#", "COUNT(1)");
+            string countQuery = query.ToString().Replace("#SELECT#", "COUNT(1)");
             result.TotalCount = await Repo.ExecuteSqlCommandAsync<int>(
                 countQuery,
                 countParams.Any() ? countParams.Cast<object>().ToArray() : null
@@ -144,9 +239,9 @@ namespace RestX.BLL.Services
                 ? 0
                 : (int)Math.Ceiling((decimal)result.TotalCount / result.ItemsPerPage);
 
-            var skip = result.Page <= 1 ? 0 : (result.Page - 1) * result.ItemsPerPage;
+            int skip = result.Page <= 1 ? 0 : (result.Page - 1) * result.ItemsPerPage;
 
-            var selectItems = @"
+            string selectItems = @"
                 o.Id,
                 o.Reference,
                 o.CustomerId,
@@ -166,7 +261,7 @@ namespace RestX.BLL.Services
                 o.ModifiedBy
             ";
 
-            var mainQuery = query.ToString().Replace("#SELECT#", selectItems);
+            string mainQuery = query.ToString().Replace("#SELECT#", selectItems);
 
             mainQuery += (model.SortBy?.ToLowerInvariant()) switch
             {
@@ -176,7 +271,7 @@ namespace RestX.BLL.Services
 
             mainQuery += $" OFFSET {skip} ROWS FETCH NEXT {result.ItemsPerPage} ROWS ONLY";
 
-            var orders = await Repo.ExecuteSqlSelectAsync<Models.Orders.Order>(
+            List<Models.Orders.Order> orders = await Repo.ExecuteSqlSelectAsync<Models.Orders.Order>(
                 mainQuery,
                 queryParams.Any() ? queryParams.Cast<object>().ToArray() : null
             );
@@ -187,19 +282,20 @@ namespace RestX.BLL.Services
                 return result;
             }
 
-            var orderIds = orders.Select(o => o.Id).ToList();
-            var idParams = orderIds
+            List<Guid> orderIds = orders.Select(o => o.Id).ToList();
+            List<SqlParameter> idParams = orderIds
                 .Select((id, i) => new SqlParameter($"OrderId{i}", SqlDbType.UniqueIdentifier) { Value = id })
                 .ToList();
 
-            var inClause = string.Join(", ", idParams.Select(p => "@" + p.ParameterName));
+            string inClause = string.Join(", ", idParams.Select(p => "@" + p.ParameterName));
 
-            var orderDetailsQuery = $@"
+            string orderDetailsQuery = $@"
                 SELECT
                     od.Id,
                     od.OrderId,
                     od.DishId,
                     od.Quantity,
+                    od.UnitPrice,
                     od.Note,
                     od.ItemStatusId
                 FROM dbo.OrderDetails od
@@ -207,7 +303,7 @@ namespace RestX.BLL.Services
                 ORDER BY od.OrderId, od.Id
             ";
 
-            var itemStatusesQuery = $@"
+            string itemStatusesQuery = $@"
                 SELECT
                     sv.Id,
                     sv.Name
@@ -219,66 +315,59 @@ namespace RestX.BLL.Services
                 )
             ";
 
-            var orderDetails = await Repo.ExecuteSqlSelectAsync<Models.Orders.OrderDetail>(
+            List<Models.Orders.OrderDetail> orderDetails = await Repo.ExecuteSqlSelectAsync<Models.Orders.OrderDetail>(
                 orderDetailsQuery,
                 CloneParams(idParams)
             );
 
-            var itemStatuses = await Repo.ExecuteSqlSelectAsync<StatusValue>(
+            List<StatusValue> itemStatuses = await Repo.ExecuteSqlSelectAsync<StatusValue>(
                 itemStatusesQuery,
                 CloneParams(idParams)
             );
 
-            var dishIds = orderDetails.Select(d => d.DishId).Distinct().ToList();
-            var dishes = new List<Models.Menu.Dish>();
+            List<Guid> dishIds = orderDetails.Select(d => d.DishId).Distinct().ToList();
+            List<Models.Menu.Dish> dishes = new List<Models.Menu.Dish>();
             if (dishIds.Any())
             {
                 dishes = (await Repo.GetAsync<Models.Menu.Dish>(d => dishIds.Contains(d.Id))).ToList();
             }
-            var dishesById = dishes.ToDictionary(d => d.Id, d => d);
 
-            //var detailsByOrderId = orderDetails
-            //    .GroupBy(d => d.OrderId)
-            //    .ToDictionary(
-            //        g => g.Key,
-            //        g => GroupOrderDetailsByDish(g) 
-            //    );
+            Dictionary<Guid, Models.Menu.Dish> dishesById = dishes.ToDictionary(d => d.Id, d => d);
 
-            var detailsByOrderId = orderDetails
+            Dictionary<Guid, List<Models.Orders.OrderDetail>> detailsByOrderId = orderDetails
                 .GroupBy(d => d.OrderId)
-                .ToDictionary(
-                    g => g.Key,
-                    g => g.ToList()
-                );
+                .ToDictionary(g => g.Key, g => g.ToList());
 
-            var statusById = itemStatuses
+            Dictionary<int, StatusValue> statusById = itemStatuses
                 .GroupBy(s => s.Id)
                 .ToDictionary(g => g.Key, g => g.First());
 
-            var paidPayments = await Repo.GetAsync<Payment>(
+            IEnumerable<Payment> paidPayments = await Repo.GetAsync<Payment>(
                 p => p.OrderId.HasValue && orderIds.Contains(p.OrderId.Value) && p.Status == PaymentStatus.Success);
-            var paidOrderIds = paidPayments.Select(p => p.OrderId!.Value).ToHashSet();
+            HashSet<Guid> paidOrderIds = paidPayments.Select(p => p.OrderId!.Value).ToHashSet();
 
-            var tableSessions = await Repo.GetAsync<Models.Reservations.TableSession>(
+            IEnumerable<Models.Reservations.TableSession> tableSessions = await Repo.GetAsync<Models.Reservations.TableSession>(
                 filter: ts => ts.OrderId.HasValue && orderIds.Contains(ts.OrderId.Value),
                 includeProperties: "Table"
             );
 
-            var sessionsByOrderId = tableSessions
+            Dictionary<Guid, List<Models.Reservations.TableSession>> sessionsByOrderId = tableSessions
                 .Where(ts => ts.OrderId.HasValue)
                 .GroupBy(ts => ts.OrderId!.Value)
                 .ToDictionary(g => g.Key, g => g.ToList());
 
-            foreach (var o in orders)
+            foreach (Models.Orders.Order o in orders)
             {
-                if (detailsByOrderId.TryGetValue(o.Id, out var ods))
+                if (detailsByOrderId.TryGetValue(o.Id, out List<Models.Orders.OrderDetail>? ods))
                 {
-                    foreach (var d in ods)
+                    foreach (Models.Orders.OrderDetail d in ods)
                     {
-                        if (statusById.TryGetValue(d.ItemStatusId, out var s))
+                        if (statusById.TryGetValue(d.ItemStatusId, out StatusValue? s))
+                        {
                             d.ItemStatus = s;
+                        }
 
-                        if (dishesById.TryGetValue(d.DishId, out var dish))
+                        if (dishesById.TryGetValue(d.DishId, out Models.Menu.Dish? dish))
                         {
                             d.Dish = dish;
                         }
@@ -287,7 +376,7 @@ namespace RestX.BLL.Services
                     o.OrderDetails = ods;
                 }
 
-                if (sessionsByOrderId.TryGetValue(o.Id, out var sessions))
+                if (sessionsByOrderId.TryGetValue(o.Id, out List<Models.Reservations.TableSession>? sessions))
                 {
                     o.TableSessions = sessions;
                 }
@@ -297,19 +386,19 @@ namespace RestX.BLL.Services
 
             result.Orders = mapper.Map<List<DataTranferObjects.Orders.Order>>(orders);
 
-            var customerIds = orders.Where(o => o.CustomerId != null).Select(o => o.CustomerId).Distinct().ToList();
+            List<Guid?> customerIds = orders.Where(o => o.CustomerId != null).Select(o => o.CustomerId).Distinct().ToList();
             if (customerIds.Any())
             {
-                var customers = await Repo.GetAsync<Models.Customers.Customer>(
+                IEnumerable<Models.Customers.Customer> customers = await Repo.GetAsync<Models.Customers.Customer>(
                     filter: c => customerIds.Contains(c.Id),
                     includeProperties: "ApplicationUser"
                 );
 
-                var customersDict = customers.ToDictionary(c => c.Id, c => c);
+                Dictionary<Guid, Models.Customers.Customer> customersDict = customers.ToDictionary(c => c.Id, c => c);
 
-                foreach (var dtoOrder in result.Orders)
+                foreach (DataTranferObjects.Orders.Order dtoOrder in result.Orders)
                 {
-                    if (customersDict.TryGetValue(dtoOrder.CustomerId, out var customer))
+                    if (customersDict.TryGetValue(dtoOrder.CustomerId, out Models.Customers.Customer? customer))
                     {
                         dtoOrder.CustomerName = customer.ApplicationUser?.FullName;
                         dtoOrder.CustomerEmail = customer.ApplicationUser?.Email;
@@ -319,6 +408,7 @@ namespace RestX.BLL.Services
 
             return result;
         }
+
         private static object[] CloneParams(IEnumerable<SqlParameter> parameters)
             => parameters
                 .Select(p => new SqlParameter(p.ParameterName, p.SqlDbType)
@@ -513,6 +603,7 @@ namespace RestX.BLL.Services
                         {
                             DishId = d.DishId,
                             Quantity = d.Quantity,
+                            UnitPrice = dish.Price,
                             Note = d.Note,
                             ItemStatusId = itemPreparingStatusId
                         });
@@ -575,6 +666,7 @@ namespace RestX.BLL.Services
                             OrderId = orderEntity.Id,
                             DishId = d.DishId,
                             Quantity = d.Quantity,
+                            UnitPrice = dish.Price,
                             Note = d.Note,
                             ItemStatusId = itemPreparingStatusId
                         };
@@ -708,6 +800,7 @@ namespace RestX.BLL.Services
                         OrderId = orderEntity.Id,
                         DishId = d.DishId,
                         Quantity = d.Quantity,
+                        UnitPrice = dish.Price,
                         Note = d.Note,
                         ItemStatusId = itemPreparingStatusId
                     };
@@ -836,7 +929,9 @@ namespace RestX.BLL.Services
                 includeProperties: "Dish,Order");
 
             if (orderDetail == null)
+            {
                 return false;
+            }
 
             List<RestX.BLL.DataTranferObjects.Status.StatusValues> orderDetailStatuses =
                 (await statusValueService.GetStatuses("order-detail")).ToList();
@@ -865,7 +960,6 @@ namespace RestX.BLL.Services
 
                 await ingredientService.DeductFromRecipes(dishQtyToDeduct);
             }
-
             else if (preparingStatus != null
                 && cancelledStatus != null
                 && oldStatusId == preparingStatus.Id
@@ -901,8 +995,7 @@ namespace RestX.BLL.Services
                 && statusId == cancelledStatus.Id
                 && orderDetail.Order != null)
             {
-                decimal dishPrice = orderDetail.Dish?.Price ?? 0m;
-                decimal cancelledAmount = orderDetail.Quantity * dishPrice;
+                decimal cancelledAmount = orderDetail.Quantity * orderDetail.UnitPrice;
 
                 orderDetail.Order.SubTotal -= cancelledAmount;
                 if (orderDetail.Order.SubTotal < 0)
@@ -911,17 +1004,20 @@ namespace RestX.BLL.Services
                 }
 
                 orderDetail.Order.CalculateTotalAmount();
-                Repo.Update(orderDetail.Order, userId);
             }
 
             orderDetail.ItemStatusId = statusId;
-
             Repo.Update(orderDetail, userId);
+
+            if (orderDetail.Order != null)
+            {
+                Repo.Update(orderDetail.Order, userId);
+            }
+
             await Repo.SaveAsync();
 
             return true;
         }
-
         public async Task<IEnumerable<DataTranferObjects.Orders.OrderDetail>> GetAllOrderDetails()
         {
             var orderDetailStatuses = await statusValueService.GetStatuses("order-detail");

@@ -1,5 +1,6 @@
 ﻿using RestX.Models.Admin;
 using RestX.Models.BaseModel;
+using System.ComponentModel.DataAnnotations;
 
 namespace RestX.Models.Tenants;
 
@@ -32,6 +33,13 @@ public class Tenant : Entity<Guid>
     public string Hostname { get; set; }
 
     public DateTime ExpiredAt { get; set; }
+
+    [Range(0, 100)]
+    public decimal TaxRate { get; set; } = 0m;
+
+    [Range(0, 100)]
+    public decimal ServiceChargeRate { get; set; } = 0m;
+
     // Business Details
     public string BusinessName { get; set; }
     public string BusinessAddressLine1 { get; set; }
@@ -49,4 +57,5 @@ public class Tenant : Entity<Guid>
     public string AboutUs { get; set; }
 
     public virtual ICollection<TenantSetting> TenantSettings { get; set; } = new List<TenantSetting>();
+    public virtual ICollection<TenantBusinessHour> BusinessHours { get; set; } = new List<TenantBusinessHour>();
 }

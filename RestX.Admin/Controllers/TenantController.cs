@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using RestX.Admin.Controllers.BaseControllers;
 using RestX.BLL.DataTranferObjects.Common;
+using RestX.BLL.DataTranferObjects.Tenants;
 using RestX.BLL.Exceptionhandling;
 using RestX.BLL.Interfaces;
 using RestX.Models.Tenants;
@@ -20,6 +21,7 @@ namespace RestX.Admin.Controllers
         {
             this.tenantService = tenantService;
             this.paymentSettingService = paymentSettingService;
+            this.exceptionHandler = exceptionHandler;
         }
 
         [HttpGet]
@@ -97,7 +99,7 @@ namespace RestX.Admin.Controllers
             }
         }
 
-        [HttpPut("{id:guid}/changeStatus")]
+        [HttpPut("{id:guid}/Status")]
         public async Task<IActionResult> ChangeTenantStatus([Required] Guid id, [FromBody] bool status)
         {
             try
@@ -242,6 +244,36 @@ namespace RestX.Admin.Controllers
             try
             {
                 await paymentSettingService.UpsertPaymentSetting(id, settings);
+                return Ok(new { success = true });
+            }
+            catch (Exception ex)
+            {
+                this.exceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
+        [HttpGet("{id:guid}/business-hours")]
+        public async Task<ActionResult<IEnumerable<BusinessHourDto>>> GetBusinessHours([Required] Guid id)
+        {
+            try
+            {
+                var result = await tenantService.GetBusinessHours(id);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                this.exceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
+        [HttpPut("{id:guid}/business-hours")]
+        public async Task<IActionResult> UpdateBusinessHours([Required] Guid id, [FromBody] IEnumerable<BusinessHourDto> hours)
+        {
+            try
+            {
+                await tenantService.UpdateBusinessHours(id, hours);
                 return Ok(new { success = true });
             }
             catch (Exception ex)

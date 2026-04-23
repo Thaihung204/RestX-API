@@ -13,5 +13,6 @@ namespace RestX.BLL.Interfaces.Status
         Task<StatusValues?> GetStatusValueById(int id);
         Task<StatusValues> UpsertStatusValue(string typeCode, int? id, StatusValues request);
         Task DeleteStatusValue(string typeCode, int id);
+        Task UpdateDisplayOrder(string typeCode, List<StatusValues> items);
     }
 }

@@ -12,5 +12,6 @@ namespace RestX.BLL.DataTranferObjects.Reservation
         public PaymentStatus? PaymentStatus { get; set; }
         public string? PaymentStatusName => PaymentStatus?.ToString();
         public string? ReservationStatus { get; set; }
+        public Guid? OrderId { get; set; }
     }
 }

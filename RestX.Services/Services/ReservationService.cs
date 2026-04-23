@@ -774,15 +774,21 @@ namespace RestX.BLL.Services
 
         public async Task<DepositStatusResponse> GetDepositStatus(Guid reservationId)
         {
-            var reservation = await Repo.GetOneAsync<Reservation>(
+            Reservation reservation = await Repo.GetOneAsync<Reservation>(
                 filter: r => r.Id == reservationId,
-                includeProperties: "ReservationStatus")
+                includeProperties: "ReservationStatus,TableSessions")
                 ?? throw new KeyNotFoundException("Reservation not found");
 
-            var depositPayments = await Repo.GetAsync<Payment>(
+            IEnumerable<Payment> depositPayments = await Repo.GetAsync<Payment>(
                 p => p.ReservationId == reservationId && p.Purpose == PaymentPurpose.Deposit,
                 orderBy: q => q.OrderByDescending(p => p.PaymentDate));
-            var depositPayment = depositPayments.FirstOrDefault();
+            Payment? depositPayment = depositPayments.FirstOrDefault();
+
+            Guid? orderId = reservation.TableSessions
+                .Where(ts => ts.OrderId.HasValue)
+                .OrderByDescending(ts => ts.StartedAt)
+                .Select(ts => ts.OrderId)
+                .FirstOrDefault();
 
             return new DepositStatusResponse
             {
@@ -792,10 +798,10 @@ namespace RestX.BLL.Services
                 IsPaid = depositPayment?.Status == PaymentStatus.Success,
                 CheckoutUrl = depositPayment?.Status == PaymentStatus.Pending ? depositPayment.CheckoutUrl : null,
                 PaymentStatus = depositPayment?.Status,
-                ReservationStatus = reservation.ReservationStatus?.Code
+                ReservationStatus = reservation.ReservationStatus?.Code,
+                OrderId = orderId
             };
         }
-
         public async Task<string> CreateDepositPaymentLink(Guid reservationId)
         {
             var reservation = await Repo.GetByIdAsync<Reservation>(reservationId)

@@ -62,6 +62,25 @@ namespace RestX.WebApp.Controllers
         }
         }
 
+        [HttpGet("current-order")]
+        [Authorize(Roles = "System Admin,Admin,Staff,Customer")]
+        public async Task<ActionResult<OrderSearchResult>> GetCurrentOrders([FromQuery] OrderSearch model)
+        {
+            try
+            {
+                return Ok(await orderService.GetCurrentOrders(model));
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
         [HttpGet]
         [Authorize(Roles = "System Admin,Admin,Staff,Customer")]
         public async Task<ActionResult<OrderSearchResult>> GetAllOrders([FromQuery] OrderSearch model)

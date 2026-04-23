@@ -4,6 +4,7 @@ namespace RestX.BLL.Interfaces
 {
     public interface IOrderService
     {
+        Task<OrderSearchResult> GetCurrentOrders(OrderSearch model);
         Task<OrderSearchResult> GetAllOrders(OrderSearch model);
         Task<Order?> GetOrderById(Guid id);
         Task<Order> CheckSessionBeforeOrder(Order order, string userId);

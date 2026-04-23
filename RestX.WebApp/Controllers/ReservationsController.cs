@@ -49,6 +49,64 @@ namespace RestX.WebApp.Controllers
             this.hub = hub;
         }
 
+        [HttpPost("check-time")]
+        [AllowAnonymous]
+        public IActionResult CheckTime([FromBody] CheckTimeRequest request)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                    return BadRequest(new { success = false, message = "Validation failed", errors = ModelState });
+
+                var result = reservationService.CheckTimeAvailability(request.ReservationDateTime);
+                return Ok(new { success = true, data = result });
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest(new { success = false, message = "An internal error occurred" });
+            }
+        }
+
+        [HttpPost("check-tables")]
+        [AllowAnonymous]
+        public async Task<IActionResult> CheckTables([FromBody] CheckAvailabilityParams request)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                    return BadRequest(new { success = false, message = "Validation failed", errors = ModelState });
+
+                var result = await reservationService.CheckAvailabilityReservation(request);
+                return Ok(new { success = true, data = result });
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { success = false, message = ex.Message });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { success = false, message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest(new { success = false, message = "An internal error occurred" });
+            }
+        }
+
         [HttpPost("{id:guid}/pre-order")]
         [Authorize(Roles = "Admin,System Admin,Staff,Customer")]
         public async Task<IActionResult> PreOrder(Guid id, [FromBody] Order order)

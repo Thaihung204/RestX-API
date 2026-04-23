@@ -58,7 +58,8 @@ namespace RestX.BLL.DataTranferObjects.Reservation
         public List<Guid> TableIds { get; set; } = new();
         [Required]
         public DateTime ReservationDateTime { get; set; }
-        public int BufferMinutes { get; set; } = 120;
+        [Range(1, 100)]
+        public int? NumberOfGuests { get; set; }
     }
     public class ReservationTableInfo
     {
@@ -139,6 +140,18 @@ namespace RestX.BLL.DataTranferObjects.Reservation
     {
         [Required]
         public int StatusId { get; set; }
+    }
+
+    public class CheckTimeRequest
+    {
+        [Required]
+        public DateTime ReservationDateTime { get; set; }
+    }
+
+    public class CheckTimeResponse
+    {
+        public bool Valid { get; set; }
+        public string? Message { get; set; }
     }
 
     public class CheckInResponse

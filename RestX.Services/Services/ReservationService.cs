@@ -89,8 +89,7 @@ namespace RestX.BLL.Services
             var availability = await CheckAvailabilityReservation(new CheckAvailabilityParams
             {
                 TableIds = request.TableIds,
-                ReservationDateTime = request.ReservationDateTime,
-                BufferMinutes = ReservationBufferMinutes
+                ReservationDateTime = request.ReservationDateTime
             });
             if (!availability.Available)
                 throw new InvalidOperationException("One or more tables are already reserved at this time");
@@ -502,10 +501,30 @@ namespace RestX.BLL.Services
             await Repo.SaveAsync();
         }
 
+        public CheckTimeResponse CheckTimeAvailability(DateTime reservationDateTime)
+        {
+            try
+            {
+                ValidateFutureDate(reservationDateTime);
+                ValidateOperatingHours(reservationDateTime);
+                return new CheckTimeResponse { Valid = true };
+            }
+            catch (ArgumentException ex)
+            {
+                return new CheckTimeResponse { Valid = false, Message = ex.Message };
+            }
+        }
+
         public async Task<CheckAvailabilityResponse> CheckAvailabilityReservation(CheckAvailabilityParams request)
         {
-            var bufferStart = request.ReservationDateTime.AddMinutes(-request.BufferMinutes);
-            var bufferEnd = request.ReservationDateTime.AddMinutes(request.BufferMinutes);
+            ValidateDistinctTableIds(request.TableIds);
+            var tables = await ValidateReservationTables(request.TableIds);
+            await ValidateTableNotOccupied(tables, request.ReservationDateTime);
+            if (request.NumberOfGuests.HasValue)
+                ValidateCapacity(request.NumberOfGuests.Value, tables);
+
+            var bufferStart = request.ReservationDateTime.AddMinutes(-ReservationBufferMinutes);
+            var bufferEnd = request.ReservationDateTime.AddMinutes(ReservationBufferMinutes);
             var conflicts = (await Repo.GetAsync<TableSession>(
                 filter: ts =>
                     request.TableIds.Contains(ts.TableId) &&

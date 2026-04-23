@@ -1207,7 +1207,22 @@ namespace RestX.BLL.Services
 
             if (order == null) throw new AppException("No order");
 
+            int previousStatusId = order.OrderStatusId;
             order.OrderStatusId = statusId;
+
+            if (previousStatusId == (int)OrderStatus.Open && statusId == (int)OrderStatus.Completed)
+            {
+                List<Models.Reservations.TableSession> activeSessions = (await Repo.GetAsync<Models.Reservations.TableSession>(
+                    filter: ts => ts.OrderId == orderId && ts.IsActive
+                )).ToList();
+
+                foreach (Models.Reservations.TableSession session in activeSessions)
+                {
+                    session.IsActive = false;
+                    session.EndedAt = DateTime.UtcNow.AddHours(7);
+                    Repo.Update(session, userId);
+                }
+            }
 
             if (statusId == (int)OrderStatus.Cancelled)
             {

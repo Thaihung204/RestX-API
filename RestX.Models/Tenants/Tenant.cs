@@ -57,4 +57,5 @@ public class Tenant : Entity<Guid>
     public string AboutUs { get; set; }
 
     public virtual ICollection<TenantSetting> TenantSettings { get; set; } = new List<TenantSetting>();
+    public virtual ICollection<TenantBusinessHour> BusinessHours { get; set; } = new List<TenantBusinessHour>();
 }

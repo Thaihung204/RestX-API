@@ -6,6 +6,8 @@ namespace RestX.BLL.Interfaces
 {
     public interface ITenantService
     {
+        Task<IEnumerable<BusinessHourDto>> GetBusinessHours(Guid tenantId);
+        Task UpdateBusinessHours(Guid tenantId, IEnumerable<BusinessHourDto> hours);
         Task<IEnumerable<Tenant>> GetAllTenants();
         Task<TenantOverview> GetTenantByIdOrHostname(string id);
         Task<Tenant> UpdateTenant(TenantItem model);

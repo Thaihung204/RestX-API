@@ -101,6 +101,7 @@ namespace RestX.BLL.DataTranferObjects.Reservation
         public ReservationStatusInfo Status { get; set; } = new();
         public decimal DepositAmount { get; set; }
         public DateTime? PaymentDeadline { get; set; }
+        public DateTime? CheckedInAt { get; set; }
         public DateTime CreatedAt { get; set; }
     }
 

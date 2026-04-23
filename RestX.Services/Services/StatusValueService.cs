@@ -100,6 +100,19 @@ namespace RestX.BLL.Services
             if (entity.IsSystem)
                 throw new InvalidOperationException("Cannot delete a system status value");
             Repo.Delete<StatusValue>(id);
+            if (entity.IsDefault)
+            {
+                var fallback = (await Repo.GetAsync<StatusValue>(
+                    filter: sv => sv.StatusTypeId == statusType.Id && sv.Id != id,
+                    orderBy: q => q.OrderBy(sv => sv.DisplayOrder),
+                    take: 1
+                )).FirstOrDefault();
+                if (fallback != null)
+                {
+                    fallback.IsDefault = true;
+                    Repo.Update(fallback);
+                }
+            }
             await Repo.SaveAsync();
             await RedisService.RemoveAsync(GetCacheKey(typeCode));
         }

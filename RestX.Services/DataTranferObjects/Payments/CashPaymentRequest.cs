@@ -5,7 +5,7 @@ namespace RestX.BLL.DataTranferObjects.Payments
     public class CashPaymentRequest
     {
         [Required]
-        [Range(0.01, 999999999.99)]
+        [Range(0, 999999999.99)]
         public decimal CashReceive { get; set; }
     }
 }

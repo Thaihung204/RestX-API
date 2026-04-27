@@ -42,7 +42,6 @@ namespace RestX.BLL.Services.Reports
                     ComposeSuggestedDishes(col);
                     ComposeCombos(col);
                     ComposeCustomers(col);
-                    ComposeActionPlan(col);
                 });
                 page.Footer().Element(ComposeFooter);
             });
@@ -261,50 +260,6 @@ namespace RestX.BLL.Services.Reports
                                 .FontSize(ReportStyles.FontSmall).Bold().FontColor(ReportStyles.AccentGreen);
                         });
                 });
-        }
-
-        private void ComposeActionPlan(ColumnDescriptor col)
-        {
-            if (!_data.ActionPlan.Any()) return;
-
-            SectionTitle(col, "KẾ HOẠCH HÀNH ĐỘNG");
-
-            col.Item().PaddingTop(8).Table(table =>
-            {
-                table.ColumnsDefinition(cols =>
-                {
-                    cols.ConstantColumn(32);
-                    cols.RelativeColumn();
-                    cols.RelativeColumn(2);
-                    cols.ConstantColumn(50);
-                });
-
-                TableHeader(table, "ƯU TIÊN", "MỤC TIÊU", "HÀNH ĐỘNG CỤ THỂ", "IMPACT");
-
-                foreach (var item in _data.ActionPlan)
-                {
-                    var bg = item.Priority % 2 == 0 ? ReportStyles.SurfaceLight : ReportStyles.SurfaceWhite;
-                    var priorityColor = item.Priority == 1 ? ReportStyles.AccentRed
-                        : item.Priority == 2 ? ReportStyles.AccentGold
-                        : ReportStyles.PrimaryMid;
-                    var impactColor = item.Impact == "high" ? ReportStyles.AccentRed : ReportStyles.AccentGold;
-
-                    table.Cell().Background(bg).Padding(6).AlignCenter()
-                        .Text($"#{item.Priority}").Bold().FontColor(priorityColor).FontSize(ReportStyles.FontBody);
-                    table.Cell().Background(bg).Padding(6)
-                        .Text(item.Title).Bold().FontSize(ReportStyles.FontBody);
-                    table.Cell().Background(bg).Padding(6).Column(inner =>
-                    {
-                        inner.Item().Text(item.Action).FontSize(ReportStyles.FontSmall);
-                        if (!string.IsNullOrEmpty(item.Evidence))
-                            inner.Item().PaddingTop(3).Text(item.Evidence)
-                                .FontSize(ReportStyles.FontSmall).Italic().FontColor(ReportStyles.TextMuted);
-                    });
-                    table.Cell().Background(bg).Padding(6).AlignCenter()
-                        .Text(item.Impact?.ToUpper() ?? "—")
-                        .FontSize(7).Bold().FontColor(impactColor);
-                }
-            });
         }
 
         private void ComposeFooter(IContainer c)

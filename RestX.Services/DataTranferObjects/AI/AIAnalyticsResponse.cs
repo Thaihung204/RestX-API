@@ -7,7 +7,6 @@ namespace RestX.BLL.DataTranferObjects.AI
         public List<AnalyticsInsight> Insights { get; set; } = new();
         public MenuAnalysis Menu { get; set; } = new();
         public CustomerAnalysis Customers { get; set; } = new();
-        public List<ActionItem> ActionPlan { get; set; } = new();
     }
 
     // Hợp nhất: opportunity / risk / marketing — mọi insight đều có evidence (số liệu dẫn chứng)
@@ -53,12 +52,5 @@ namespace RestX.BLL.DataTranferObjects.AI
         public string Action { get; set; } = string.Empty;
     }
 
-    public class ActionItem
-    {
-        public int Priority { get; set; }
-        public string Title { get; set; } = string.Empty;
-        public string Evidence { get; set; } = string.Empty;
-        public string Action { get; set; } = string.Empty;
-        public string Impact { get; set; } = string.Empty;    // high | medium
-    }
+
 }

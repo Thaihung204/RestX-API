@@ -109,57 +109,13 @@ namespace RestX.BLL.Services
             var (history, menu, orderHistory) = await LoadContext(sessionId, customerId);
             var systemPrompt = BuildChatSystemPrompt(menu, request.TableId, orderHistory);
 
-            var rawResponse = await CallGemini(systemPrompt, history, request.Message, maxTokens: 2048);
+            var rawResponse = await CallGemini(systemPrompt, history, request.Message, maxTokens: 3000);
             var session = await SaveHistory(sessionId, request.Message, rawResponse, customerId, request.TableId);
 
             var tableId = request.TableId ?? session.TableId;
             var (aiResponse, _) = ParseAIResponse(rawResponse, sessionId, menu, tableId);
 
             return aiResponse;
-        }
-
-        public async Task ChatStream(AIChatRequest request, HttpResponse httpResponse)
-        {
-            var sessionId = request.SessionId ?? Guid.NewGuid().ToString();
-            var customerId = await GetCustomerId(request.UserId);
-
-            var (history, menu, orderHistory) = await LoadContext(sessionId, customerId);
-            var systemPrompt = BuildChatSystemPrompt(menu, request.TableId, orderHistory);
-
-            httpResponse.ContentType = "text/event-stream";
-            httpResponse.Headers["Cache-Control"] = "no-cache";
-            httpResponse.Headers["X-Accel-Buffering"] = "no";
-
-            var fullContent = new StringBuilder();
-
-            await foreach (var delta in StreamGemini(systemPrompt, history, request.Message))
-            {
-                fullContent.Append(delta);
-                var sseData = JsonSerializer.Serialize(new { content = delta });
-                await httpResponse.WriteAsync($"event: delta\ndata: {sseData}\n\n");
-                await httpResponse.Body.FlushAsync();
-            }
-
-            var rawResponse = fullContent.ToString();
-
-            try
-            {
-                var session = await SaveHistory(sessionId, request.Message, rawResponse, customerId, request.TableId);
-
-                var tableId = request.TableId ?? session.TableId;
-                var (aiResponse, _) = ParseAIResponse(rawResponse, sessionId, menu, tableId);
-
-                var completeData = JsonSerializer.Serialize(aiResponse);
-                await httpResponse.WriteAsync($"event: complete\ndata: {completeData}\n\n");
-                await httpResponse.Body.FlushAsync();
-            }
-            catch (Exception ex)
-            {
-                var fullError = ex.InnerException?.Message ?? ex.Message;
-                var errorData = JsonSerializer.Serialize(new { error = fullError });
-                await httpResponse.WriteAsync($"event: error\ndata: {errorData}\n\n");
-                await httpResponse.Body.FlushAsync();
-            }
         }
 
         #endregion
@@ -196,26 +152,8 @@ namespace RestX.BLL.Services
             }
 
             var systemPrompt = BuildContentPrompt(descType, entityContext);
-            var rawResponse = await CallGemini(systemPrompt, new List<ChatMessage>(), "Tạo mô tả theo yêu cầu.");
+            var rawResponse = await CallGemini(systemPrompt, new List<ChatMessage>(), "Tạo mô tả theo yêu cầu.", maxTokens: 1024);
             return ParseContentResponse(rawResponse, descType);
-        }
-
-        public async Task<CampaignPackResponse> GenerateCampaignPack(CampaignPackRequest request)
-        {
-            var tenantName = CurrentTenant?.Name ?? "nhà hàng";
-            var occasion = GetSpecialOccasion();
-
-            var menuSnapshotTask = BuildMenuSnapshot();
-            var topDishesTask = GetTopDishesContext();
-            await Task.WhenAll(menuSnapshotTask, topDishesTask);
-
-            var systemPrompt = BuildCampaignPackPrompt(
-                request.Theme, request.Tone, "vi", tenantName,
-                await menuSnapshotTask, request.PromotionDetail,
-                request.CustomContext, occasion, await topDishesTask);
-
-            var rawResponse = await CallGemini(systemPrompt, new List<ChatMessage>(), "Tạo campaign pack theo yêu cầu.", maxTokens: 2048);
-            return ParseCampaignPackResponse(rawResponse, request.Theme, occasion);
         }
 
         #endregion
@@ -307,20 +245,8 @@ namespace RestX.BLL.Services
                                     });
                                 }
 
-                            if (root.TryGetProperty("upsellSuggestions", out var upsellEl) && upsellEl.ValueKind == JsonValueKind.Array)
-                                foreach (var s in upsellEl.EnumerateArray())
-                                {
-                                    if (!s.TryGetProperty("dishId", out var did) || !Guid.TryParse(did.GetString(), out var dishId)) continue;
-                                    parsed.UpsellSuggestions.Add(new AISuggestion
-                                    {
-                                        DishId = dishId,
-                                        DishName = s.TryGetProperty("dishName", out var dn) ? dn.GetString() ?? "" : "",
-                                        Price = s.TryGetProperty("price", out var pr) ? pr.GetDecimal() : 0,
-                                        Reason = s.TryGetProperty("reason", out var rs) ? rs.GetString() ?? "" : "",
-                                        Category = s.TryGetProperty("category", out var cat) ? cat.GetString() ?? "" : "",
-                                        Actions = BuildActions(dishId)
-                                    });
-                                }
+                            if (root.TryGetProperty("upsellHint", out var upsellHintEl) && upsellHintEl.ValueKind == JsonValueKind.String)
+                                parsed.UpsellHint = upsellHintEl.GetString();
 
                             if (root.TryGetProperty("orderDraft", out var draftEl) && draftEl.ValueKind == JsonValueKind.Object)
                             {
@@ -416,7 +342,9 @@ namespace RestX.BLL.Services
 
             var bodyJson = JsonSerializer.Serialize(requestBody);
             // Try primary model first (2 attempts), then fall back to stable model
-            var modelsToTry = new[] { _model, "gemini-2.0-flash-001", "gemini-1.5-flash-002" };
+            var modelsToTry = _model == "gemini-2.5-flash"
+                ? new[] { "gemini-2.5-flash", "gemini-2.5-flash-lite" }
+                : new[] { _model, "gemini-2.5-flash-lite" };
             int[] retryDelays = [3000, 8000];
 
             foreach (var model in modelsToTry)
@@ -467,84 +395,6 @@ namespace RestX.BLL.Services
             throw new Exception("Gemini API không khả dụng sau khi thử tất cả models. Vui lòng thử lại sau.");
         }
 
-        private async IAsyncEnumerable<string> StreamGemini(string systemPrompt, List<ChatMessage> history, string userMessage)
-        {
-            var client = _httpClientFactory.CreateClient("Gemini");
-            var contents = BuildContents(history, userMessage);
-
-            var requestBody = new
-            {
-                systemInstruction = new { parts = new[] { new { text = systemPrompt } } },
-                contents,
-                generationConfig = new
-                {
-                    responseMimeType = "application/json",
-                    maxOutputTokens = 2048,
-                    temperature = 0.7
-                }
-            };
-
-            var url = $"v1beta/models/{_model}:streamGenerateContent?key={_apiKey}&alt=sse";
-            var bodyJson = JsonSerializer.Serialize(requestBody);
-
-            int[] retryDelays = [3000, 8000, 15000, 25000, 40000];
-            HttpResponseMessage response = null;
-
-            for (int attempt = 0; attempt <= retryDelays.Length; attempt++)
-            {
-                response?.Dispose();
-                try
-                {
-                    var req = new HttpRequestMessage(HttpMethod.Post, url)
-                    {
-                        Content = new StringContent(bodyJson, Encoding.UTF8, "application/json")
-                    };
-                    response = await client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead);
-                }
-                catch (Exception) when (attempt < retryDelays.Length)
-                {
-                    await Task.Delay(retryDelays[attempt]);
-                    continue;
-                }
-
-                if (response.IsSuccessStatusCode) break;
-
-                var statusCode = (int)response.StatusCode;
-                var isRetryable = statusCode == 503 || statusCode == 429 || statusCode == 529 || statusCode == 500;
-
-                if (!isRetryable || attempt == retryDelays.Length)
-                {
-                    var errorBody = await response.Content.ReadAsStringAsync();
-                    throw new Exception($"Gemini API error {response.StatusCode}: {errorBody}");
-                }
-
-                await Task.Delay(retryDelays[attempt]);
-            }
-
-            using var stream = await response.Content.ReadAsStreamAsync();
-            using var reader = new StreamReader(stream);
-
-            while (!reader.EndOfStream)
-            {
-                var line = await reader.ReadLineAsync();
-                if (string.IsNullOrEmpty(line) || !line.StartsWith("data: ")) continue;
-
-                var data = line["data: ".Length..];
-                if (data == "[DONE]") break;
-
-                using var doc = JsonDocument.Parse(data);
-                var candidates = doc.RootElement.GetProperty("candidates");
-                if (candidates.GetArrayLength() == 0) continue;
-
-                var parts = candidates[0].GetProperty("content").GetProperty("parts");
-                if (parts.GetArrayLength() == 0) continue;
-
-                var text = parts[0].GetProperty("text").GetString();
-                if (!string.IsNullOrEmpty(text))
-                    yield return text;
-            }
-        }
-
         private static List<object> BuildContents(List<ChatMessage> history, string userMessage)
         {
             var contents = new List<object>();
@@ -581,8 +431,6 @@ namespace RestX.BLL.Services
 
                     var tagStr = tags.Count > 0 ? $" ({string.Join(", ", tags)})" : "";
                     menuText.AppendLine($"- ID: {item.Id} | {item.Name} | {item.Price:N0}đ/{item.Unit}{tagStr}");
-                    if (!string.IsNullOrEmpty(item.Description))
-                        menuText.AppendLine($"  Mô tả: {item.Description}");
                 }
             }
 
@@ -602,25 +450,43 @@ PHONG CÁCH: Dùng ""bạn/mình/nha/nhé/á"". Không nói ""Đã nhận đơn"
 === MENU ===
 {menuText}=== HẾT MENU ===
 
-XỬ LÝ:
-- Hỏi chung → hỏi khẩu vị rồi gợi ý 2-3 món (suggestions=đồ ăn, upsellSuggestions=1 đồ uống)
-- Ngân sách → chỉ gợi ý ≤ ngân sách, nói rõ tổng và còn dư
-- Số người → gợi ý đủ món, quantity phù hợp, nói rõ tổng tiền
-- Ăn chay/cay/dị ứng → lọc đúng tag trong menu
-- Dịp đặc biệt → tone phù hợp dịp đó
-- Hỏi món cụ thể → trả lời từ menu
-- Đặt lại đơn cũ → dùng lịch sử, nếu không có → hỏi
+QUY TẮC QUANTITY (bắt buộc):
+- Món ăn chung (lẩu, nướng, đĩa chia sẻ): quantity = 1
+- Đồ uống / món cá nhân (cơm, bún, phở...): quantity = số người cho MỖI món được gợi ý
+- Khi gợi ý đồ uống: CHỈ gợi ý 1 món duy nhất (loại phù hợp nhất) với quantity = số người. KHÔNG gợi ý 2-3 loại nước cùng lúc trừ khi khách yêu cầu muốn thử nhiều loại
+- VÍ DỤ ĐÚNG: 3 người hỏi nước → suggestions: [{"cà phê sữa đá, quantity: 3"}]
+- VÍ DỤ SAI: 3 người hỏi nước → suggestions: [{"cà phê sữa đá, quantity: 3}, {nước chanh, quantity: 3"}]
+
+QUY TẮC TÁCH ĐỒ ĂN / ĐỒ UỐNG (bắt buộc):
+- Khách hỏi đồ ăn: suggestions CHỈ đồ ăn, upsellHint = gợi ý thêm đồ uống phù hợp (vd: ""Thêm ly chanh tươi cho mát nha!"")
+- Khách hỏi đồ uống: suggestions CHỈ đồ uống, upsellHint = gợi ý thêm đồ ăn nhẹ phù hợp (vd: ""Kèm thêm bánh mì hoặc snack cho vui nha!"")
+- upsellHint luôn có giá trị, KHÔNG được null hoặc bỏ trống
+- KHÔNG mix đồ ăn và đồ uống trong suggestions
+
+QUY TẮC NGÂN SÁCH (bắt buộc):
+- Tổng sum(price×quantity) của suggestions ≤ ngân sách
+- Nói rõ tổng và còn dư bao nhiêu trong message
+
+XỬ LÝ KHÁC:
+- Hỏi chung (""có gì ngon?"", ""ăn gì bây giờ?"") → hỏi thêm khẩu vị/số người trước khi gợi ý
+- Ăn chay / vegetarian → CHỈ gợi ý món có tag (chay) trong menu; nếu không có → báo nhẹ nhàng
+- Không ăn cay / sợ cay → loại toàn bộ món có tag (cay); nếu không còn món → báo và gợi ý món gần nhất
+- Dị ứng (tôm, đậu phộng...) → loại món liên quan, nói rõ đã lọc
+- Best seller / món nổi bật → ưu tiên gợi ý món có tag (bán chạy) trước
+- Dịp đặc biệt (sinh nhật, hẹn hò, họp mặt) → tone và món phù hợp không khí dịp đó
+- Hỏi món cụ thể → trả lời từ mô tả/giá trong menu
+- Đặt lại đơn cũ → dùng lịch sử, không có → hỏi
 - Thiếu số lượng → hỏi lại, KHÔNG tạo orderDraft
-- Sửa/hủy draft → tạo orderDraft mới theo ý khách; hủy hoàn toàn → orderDraft: null
-- Hỏi ăn → suggestions=đồ ăn; hỏi uống → suggestions=đồ uống; KHÔNG mix
+- Sửa/hủy draft → tạo orderDraft mới; hủy hoàn toàn → orderDraft: null
 
 ORDERDRAFT: Gợi ý → orderDraft:null. Đặt cụ thể (có SL + động từ đặt) → orderDraft có items, suggestions:[]. Không tạo cả 2. price=giá 1 đơn vị. Mỗi lần đặt thêm: draft MỚI chỉ chứa món vừa yêu cầu. Có draft → tóm tắt+nhắc xác nhận.
+QUAN TRỌNG: message tối đa 100 từ — ngắn gọn, súc tích. KHÔNG liệt kê giá từng món trong message.
 
 JSON OUTPUT (chỉ trả JSON, không thêm text):
 {{
   ""message"": ""Nội dung tự nhiên, có cảm xúc"",
   ""suggestions"": [{{""dishId"": ""uuid"", ""dishName"": ""Tên"", ""price"": 45000, ""quantity"": 1, ""reason"": ""Lý do hấp dẫn"", ""category"": ""Danh mục""}}],
-  ""upsellSuggestions"": [{{""dishId"": ""uuid"", ""dishName"": ""Tên"", ""price"": 15000, ""reason"": ""Gợi ý nhẹ"", ""category"": ""Đồ uống""}}],
+  ""upsellHint"": ""1 câu gợi ý thêm món phù hợp — luôn có, không bao giờ null"",
   ""quickReplies"": [""Câu như khách đang nói 1"", ""Câu 2"", ""Câu 3""],
   ""orderDraft"": {{""tableId"": null, ""items"": [{{""dishId"": ""uuid"", ""dishName"": ""Tên"", ""quantity"": 2, ""price"": 45000}}]}},
   ""orderAction"": ""create""
@@ -773,27 +639,8 @@ JSON OUTPUT (chỉ trả JSON, không thêm text):
                             response.QuickReplies.Add(text);
                     }
 
-                if (root.TryGetProperty("upsellSuggestions", out var upsellSuggestionsEl) && upsellSuggestionsEl.ValueKind == JsonValueKind.Array)
-                    foreach (var s in upsellSuggestionsEl.EnumerateArray())
-                    {
-                        if (!s.TryGetProperty("dishId", out var dishIdEl)) continue;
-                        if (!Guid.TryParse(dishIdEl.GetString(), out var dishId)) continue;
-
-                        var upsell = new AISuggestion
-                        {
-                            DishId = dishId,
-                            DishName = s.TryGetProperty("dishName", out var name) ? name.GetString() ?? "" : "",
-                            Price = s.TryGetProperty("price", out var price) ? price.GetDecimal() : 0,
-                            Reason = s.TryGetProperty("reason", out var reason) ? reason.GetString() ?? "" : "",
-                            Category = s.TryGetProperty("category", out var cat) ? cat.GetString() ?? "" : "",
-                        };
-
-                        if (menuLookup.TryGetValue(dishId, out var menuItem))
-                            upsell.ImageUrl = menuItem.ImageUrl;
-
-                        upsell.Actions = BuildActions(dishId);
-                        response.UpsellSuggestions.Add(upsell);
-                    }
+                if (root.TryGetProperty("upsellHint", out var upsellHintEl2) && upsellHintEl2.ValueKind == JsonValueKind.String)
+                    response.UpsellHint = upsellHintEl2.GetString();
 
                 if (root.TryGetProperty("orderDraft", out var draftEl) && draftEl.ValueKind == JsonValueKind.Object)
                 {
@@ -850,54 +697,6 @@ JSON OUTPUT (chỉ trả JSON, không thêm text):
         #endregion
 
         #region Private: Content Prompt Builders
-
-        private async Task<string> BuildMenuSnapshot()
-        {
-            var menu = await _dishService.GetMenu();
-            var sb = new StringBuilder();
-            foreach (var cat in menu)
-            {
-                sb.AppendLine($"\n[{cat.CategoryName}]");
-                foreach (var item in cat.Items)
-                {
-                    var tags = new List<string>();
-                    if (item.IsVegetarian) tags.Add("chay");
-                    if (item.IsSpicy) tags.Add("cay");
-                    if (item.IsBestSeller) tags.Add("bán chạy");
-                    var tagStr = tags.Count > 0 ? $" ({string.Join(", ", tags)})" : "";
-                    sb.AppendLine($"  • {item.Name} | {item.Price:N0}đ/{item.Unit}{tagStr}");
-                    if (!string.IsNullOrWhiteSpace(item.Description))
-                        sb.AppendLine($"    → {item.Description}");
-                }
-            }
-            return sb.ToString();
-        }
-
-        private async Task<string> GetTopDishesContext()
-        {
-            try
-            {
-                var request = new DashboardRequest
-                {
-                    FilterType = "custom",
-                    FromDate = DateTime.UtcNow.AddDays(-30),
-                    ToDate = DateTime.UtcNow
-                };
-                var topDishes = await _dashboardService.GetTopDishesAsync(request, top: 5, sortBy: "revenue");
-
-                if (!topDishes.Dishes.Any()) return string.Empty;
-
-                var sb = new StringBuilder();
-                sb.AppendLine("TOP 5 MÓN BÁN CHẠY NHẤT 30 NGÀY QUA:");
-                foreach (var d in topDishes.Dishes)
-                    sb.AppendLine($"  • {d.Name} — {d.Quantity} phần, doanh thu {d.Revenue:N0}đ");
-                return sb.ToString();
-            }
-            catch
-            {
-                return string.Empty;
-            }
-        }
 
         private string BuildLocationContext()
         {
@@ -1269,7 +1068,7 @@ QUY TẮC:
 3. So sánh: ""X phần, tăng Y% so kỳ trước"" — không dùng ký hiệu toán học.
 4. suggestedDishes: trích dẫn từ 'CƠ HỘI THEO MÙA' trong data.
 5. Thời gian: ""Tháng này"" | ""Quý này"" | ""Năm nay"".
-6. Số lượng: insights 3-4 | topDishes top3 | suggestedDishes top3 | combos 1-2 | customers 1 object | actionPlan đúng 3 items.
+6. Số lượng: insights 3-4 (mỗi insight có action cụ thể) | topDishes top3 | suggestedDishes top3 | combos 1-2 | customers 1 object.
 
 JSON OUTPUT (chỉ trả về JSON, không thêm text):
 {{
@@ -1306,13 +1105,7 @@ JSON OUTPUT (chỉ trả về JSON, không thêm text):
     ""evidence"": ""X khách mới (±Y% so kỳ trước), Z khách quay lại, TB chi tiêu: Wđ/khách"",
     ""insight"": ""2 câu: điểm đáng chú ý từ data khách — cơ hội hoặc rủi ro"",
     ""action"": ""1 bước cụ thể giữ chân hoặc thu hút""
-  }},
-
-  ""actionPlan"": [
-    {{ ""priority"": 1, ""title"": ""≤ 10 từ"", ""evidence"": ""Số liệu cụ thể"", ""action"": ""Bước cụ thể"", ""impact"": ""high"" }},
-    {{ ""priority"": 2, ""title"": ""..."", ""evidence"": ""..."", ""action"": ""..."", ""impact"": ""high"" }},
-    {{ ""priority"": 3, ""title"": ""..."", ""evidence"": ""..."", ""action"": ""..."", ""impact"": ""medium"" }}
-  ]
+  }}
 }}";
         }
 
@@ -1539,17 +1332,6 @@ JSON OUTPUT (chỉ trả về JSON, không thêm text):
                         Insight  = GetStr(cust, "insight"),
                         Action   = GetStr(cust, "action")
                     };
-
-                if (root.TryGetProperty("actionPlan", out var ap) && ap.ValueKind == JsonValueKind.Array)
-                    result.ActionPlan = ap.EnumerateArray()
-                        .Select(e => new ActionItem
-                        {
-                            Priority = e.TryGetProperty("priority", out var p) && p.ValueKind == JsonValueKind.Number ? p.GetInt32() : 0,
-                            Title    = GetStr(e, "title"),
-                            Evidence = GetStr(e, "evidence"),
-                            Action   = GetStr(e, "action"),
-                            Impact   = GetStr(e, "impact")
-                        }).Where(x => !string.IsNullOrEmpty(x.Title)).OrderBy(x => x.Priority).ToList();
 
                 return result;
             }

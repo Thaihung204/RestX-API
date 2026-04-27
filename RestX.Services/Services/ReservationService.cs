@@ -577,6 +577,18 @@ namespace RestX.BLL.Services
             try
             {
                 var tableList = string.Join(", ", tables.Select(t => t.Code));
+                var addressParts = new[]
+                {
+                    CurrentTenant?.BusinessAddressLine1,
+                    CurrentTenant?.BusinessAddressLine2,
+                    CurrentTenant?.BusinessAddressLine3,
+                    CurrentTenant?.BusinessAddressLine4,
+                    CurrentTenant?.BusinessCounty,
+                    CurrentTenant?.BusinessPostCode,
+                    CurrentTenant?.BusinessCountry,
+                }.Where(p => !string.IsNullOrWhiteSpace(p));
+                var restaurantAddress = string.Join(", ", addressParts);
+
                 var body = EmailTemplates.ReservationConfirmation(
                     name,
                     detail.ConfirmationCode,
@@ -589,7 +601,10 @@ namespace RestX.BLL.Services
                     paymentLink,
                     CurrentTenant?.Hostname,
                     detail.Id,
-                    depositPaid);
+                    depositPaid,
+                    restaurantName: CurrentTenant?.BusinessName ?? CurrentTenant?.Name,
+                    restaurantAddress: string.IsNullOrWhiteSpace(restaurantAddress) ? null : restaurantAddress,
+                    restaurantPhone: CurrentTenant?.BusinessPrimaryPhone);
 
                 var subject = depositPaid
                     ? "Deposit Confirmed – " + detail.ConfirmationCode

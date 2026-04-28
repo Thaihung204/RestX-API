@@ -19,6 +19,7 @@ namespace RestX.BLL.Interfaces.Reservations
         Task CancelReservation(Guid id,string? userId);
         Task DeleteReservation(Guid id);
         Task<CheckAvailabilityResponse> CheckAvailabilityReservation(CheckAvailabilityParams request);
+        CheckTimeResponse CheckTimeAvailability(DateTime reservationDateTime);
 
         // Deposit
         Task<DepositStatusResponse> GetDepositStatus(Guid reservationId);

@@ -1,19 +1,21 @@
 ﻿using AutoMapper;
+using Hangfire;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using RestX.AdminDAL.Context;
 using RestX.BLL.DataTranferObjects.Tenants;
+using RestX.BLL.Exceptionhandling;
 using RestX.BLL.Interfaces;
 using RestX.DAL.DataSeeders;
 using RestX.Models.Enum;
 using RestX.Models.Tenants;
 using Serilog;
 using System.Text.RegularExpressions;
-using Hangfire;
-using Microsoft.EntityFrameworkCore.Storage;
 using TenantConfiguration = RestX.BLL.DataTranferObjects.Tenants.TenantConfiguration;
 
 namespace RestX.BLL.Services
@@ -212,6 +214,8 @@ namespace RestX.BLL.Services
                 tenant.ExpiredAt = model.ExpiredAt == default
                     ? DateTime.UtcNow.AddHours(7).AddYears(1)
                     : model.ExpiredAt;
+                tenant.TaxRate = model.TaxRate;
+                tenant.ServiceChargeRate = model.ServiceChargeRate;
 
                 tenant.BusinessName = model.BusinessName;
                 tenant.BusinessAddressLine1 = model.BusinessAddressLine1;
@@ -330,6 +334,9 @@ namespace RestX.BLL.Services
                 ExpiredAt = model.ExpiredAt == default
                     ? DateTime.UtcNow.AddHours(7).AddYears(1)
                     : model.ExpiredAt,
+
+                TaxRate = model.TaxRate,
+                ServiceChargeRate = model.ServiceChargeRate,
 
                 // Business
                 BusinessName = model.BusinessName,
@@ -499,17 +506,84 @@ namespace RestX.BLL.Services
 
         public async Task DeleteTenant(string id)
         {
-            var tenant = await adminRepo.GetByIdAsync<Tenant>(Guid.Parse(id));
+            if (string.IsNullOrWhiteSpace(id))
+            {
+                throw new AppException("Tenant id is required.");
+            }
 
-            if (tenant == null)
-                return;
+            if (!Guid.TryParse(id, out Guid tenantId))
+            {
+                throw new AppException("Tenant id is invalid.");
+            }
 
-            await DropTenantDatabaseAsync(tenant.ConnectionString);
-            adminRepo.Delete<Tenant>(tenant.Id);
-            await adminRepo.SaveAsync();
-            await RedisService.RemoveAsync($"{tenant.Hostname.ToLower():Tenant}");
+            try
+            {
+                Tenant? tenant = await adminRepo.GetByIdAsync<Tenant>(tenantId);
+
+                if (tenant == null)
+                {
+                    throw new AppException("Tenant not found.");
+                }
+
+                await DropTenantDatabaseAsync(tenant.ConnectionString);
+
+                adminRepo.Delete<Tenant>(tenant.Id);
+                await adminRepo.SaveAsync();
+
+                await RedisService.RemoveAsync($"{tenant.Hostname.ToLower()}:Tenant");
+                await RedisService.RemoveAsync($"{tenant.Hostname}:Tenant");
+            }
+            catch (AppException)
+            {
+                throw;
+            }
+            catch (SqlException ex)
+            {
+                logger.LogError(ex, "DeleteTenant SQL error. TenantId: {TenantId}", tenantId);
+                throw new AppException($"Database error while deleting tenant: {ex.Message}");
+            }
+            catch (TimeoutException ex)
+            {
+                logger.LogError(ex, "DeleteTenant timeout. TenantId: {TenantId}", tenantId);
+                throw new AppException("Delete tenant timed out. Please try again.");
+            }
+            catch (InvalidOperationException ex)
+            {
+                logger.LogError(ex, "DeleteTenant invalid operation. TenantId: {TenantId}", tenantId);
+                throw new AppException($"Cannot delete tenant due to invalid operation: {ex.Message}");
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "DeleteTenant unexpected error. TenantId: {TenantId}", tenantId);
+                throw new AppException($"Unexpected error while deleting tenant: {ex.Message}");
+            }
         }
 
+        public async Task ChangeTenantStatus(Guid id, bool status)
+        {
+            if (id == Guid.Empty)
+            {
+                throw new AppException("Tenant id is required.");
+            }
+
+            Tenant? tenant = await adminRepo.GetByIdAsync<Tenant>(id);
+            if (tenant == null)
+            {
+                throw new AppException("Tenant not found.");
+            }
+
+            if (tenant.Status == status)
+            {
+                return;
+            }
+
+            tenant.Status = status;
+            adminRepo.Update(tenant);
+            await adminRepo.SaveAsync();
+
+            await RedisService.RemoveAsync($"{tenant.Hostname}:Tenant");
+            await RedisService.RemoveAsync($"{tenant.Hostname.ToLower()}:Tenant");
+        }
         private static async Task DropTenantDatabaseAsync(string tenantConnectionString)
         {
             if (string.IsNullOrWhiteSpace(tenantConnectionString))
@@ -658,6 +732,43 @@ namespace RestX.BLL.Services
 
             Repo.Delete<RestX.Models.Tenants.TenantRequest>(tenantRequestsId);
             await Repo.SaveAsync();
+        }
+
+        public async Task<IEnumerable<DataTranferObjects.Tenants.BusinessHourDto>> GetBusinessHours(Guid tenantId)
+        {
+            var hours = await adminContext.TenantBusinessHours
+                .Where(bh => bh.TenantId == tenantId)
+                .OrderBy(bh => bh.DayOfWeek)
+                .ToListAsync();
+
+            return hours.Select(bh => new DataTranferObjects.Tenants.BusinessHourDto
+            {
+                DayOfWeek = bh.DayOfWeek,
+                OpenTime = bh.OpenTime,
+                CloseTime = bh.CloseTime,
+                IsClosed = bh.IsClosed
+            });
+        }
+
+        public async Task UpdateBusinessHours(Guid tenantId, IEnumerable<DataTranferObjects.Tenants.BusinessHourDto> hours)
+        {
+            var tenant = await adminContext.Tenants.FindAsync(tenantId);
+            if (tenant == null)
+                throw new InvalidOperationException("Tenant not found");
+
+            var existing = adminContext.TenantBusinessHours.Where(bh => bh.TenantId == tenantId);
+            adminContext.TenantBusinessHours.RemoveRange(existing);
+
+            var entities = hours.Select(h => new RestX.Models.Tenants.TenantBusinessHour
+            {
+                TenantId = tenantId,
+                DayOfWeek = h.DayOfWeek,
+                OpenTime = h.OpenTime,
+                CloseTime = h.CloseTime,
+                IsClosed = h.IsClosed
+            });
+            await adminContext.TenantBusinessHours.AddRangeAsync(entities);
+            await adminContext.SaveChangesAsync();
         }
     }
 }

@@ -59,45 +59,6 @@ namespace RestX.WebApp.Controllers
             }
         }
 
-        [HttpPost("chat/stream")]
-        [AllowAnonymous]
-        public async Task ChatStream([FromBody] AIChatRequest request)
-        {
-            if (string.IsNullOrWhiteSpace(request.Message))
-            {
-                Response.StatusCode = 400;
-                await Response.WriteAsync("Message không được để trống.");
-                return;
-            }
-
-            request.UserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            request.SessionId = await _aiMenuService.ResolveSession(Request.Cookies[SessionCookieName], request.UserId);
-
-            SetSessionCookie(request.SessionId);
-
-            try
-            {
-                await _aiMenuService.ChatStream(request, Response);
-            }
-            catch (AppException ex)
-            {
-                if (!Response.HasStarted)
-                {
-                    Response.StatusCode = 400;
-                    await Response.WriteAsync(ex.Message);
-                }
-            }
-            catch (Exception ex)
-            {
-                ExceptionHandler.RaiseException(ex);
-                if (!Response.HasStarted)
-                {
-                    Response.StatusCode = 400;
-                    await Response.WriteAsync("An internal error occurred");
-                }
-            }
-        }
-
         [HttpPost("chat/confirm-order")]
         [Authorize]
         public async Task<ActionResult<Guid>> ConfirmOrder([FromBody] AIOrderDraft draft)
@@ -195,14 +156,15 @@ namespace RestX.WebApp.Controllers
             }
         }
 
-        [HttpPost("content/campaign-pack")]
-        [Authorize(Roles = "Admin,System Admin, Staff")]
-        public async Task<ActionResult<CampaignPackResponse>> GenerateCampaignPack([FromBody] CampaignPackRequest request)
+        [HttpPost("analytics/download")]
+        [Authorize(Roles = "Admin,System Admin")]
+        public IActionResult DownloadAnalyticsPdf([FromBody] AIAnalyticsResponse data, [FromQuery] string filterType = "month")
         {
             try
             {
-                var response = await _aiMenuService.GenerateCampaignPack(request);
-                return Ok(response);
+                var pdf = _aiMenuService.ExportAnalyticsPdf(data, filterType);
+                var fileName = $"ai-report-{filterType}-{DateTime.Now:yyyyMMdd-HHmm}.pdf";
+                return File(pdf, "application/pdf", fileName);
             }
             catch (AppException ex)
             {

@@ -118,20 +118,17 @@ namespace RestX.BLL.Services
 
             if (at.HasValue)
             {
-                var bufferStart = at.Value.AddMinutes(-ReservationBufferMinutes);
-                var bufferEnd = at.Value.AddMinutes(ReservationBufferMinutes);
-
                 reservedTableIds = (await Repo.GetAsync<TableSession>(
                     filter: ts =>
                         ts.ReservationId != null &&
-                        ts.Reservation.Time >= bufferStart &&
-                        ts.Reservation.Time <= bufferEnd &&
-                        ts.Reservation.ReservationStatus.Code != "CANCELLED",
+                        ts.IsActive == true &&
+                        ts.StartedAt > at.Value &&
+                        ts.StartedAt <= at.Value.AddMinutes(ReservationBufferMinutes),
                     includeProperties: "Reservation.ReservationStatus"
                 )).Select(ts => ts.TableId).ToHashSet();
 
                 occupiedTableIds = (await Repo.GetAsync<TableSession>(
-                    filter: ts => ts.IsActive && ts.StartedAt.AddMinutes(ReservationBufferMinutes) > at.Value
+                    filter: ts => ts.IsActive == true && ts.StartedAt <= at.Value
                 )).Select(ts => ts.TableId).ToHashSet();
             }
 

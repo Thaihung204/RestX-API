@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using RestX.BLL.DataTranferObjects.Common;
+using RestX.BLL.DataTranferObjects.Orders;
 using RestX.BLL.DataTranferObjects.Payments;
 using RestX.BLL.DataTranferObjects.Reservation;
 using RestX.BLL.DataTranferObjects.Tenants;
@@ -11,6 +12,7 @@ using RestX.BLL.Exceptionhandling;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Reservations;
 using RestX.BLL.Interfaces.Tables;
+using RestX.BLL.Services;
 using RestX.Models.Enum;
 using RestX.Models.Identity;
 using RestX.Models.Tenants;
@@ -27,9 +29,11 @@ namespace RestX.WebApp.Controllers
         private readonly IReservationService reservationService;
         private readonly ITableService tableService;
         private readonly IDepositConfigService depositConfigService;
+        private readonly IOrderService orderService;
         private readonly IHubContext<SignalrServer> hub;
         public ReservationsController(
             IReservationService reservationService,
+            IOrderService orderService,
             ITableService tableService,
             IDepositConfigService depositConfigService,
             IHubContext<SignalrServer> hub,
@@ -39,9 +43,105 @@ namespace RestX.WebApp.Controllers
             IEnumerable<ActiveTenant> tenant) : base(mapper, userManager, exceptionHandler, tenant)
         {
             this.reservationService = reservationService;
+            this.orderService = orderService;
             this.tableService = tableService;
             this.depositConfigService = depositConfigService;
             this.hub = hub;
+        }
+
+        [HttpPost("check-time")]
+        [AllowAnonymous]
+        public IActionResult CheckTime([FromBody] CheckTimeRequest request)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                    return BadRequest(new { success = false, message = "Validation failed", errors = ModelState });
+
+                var result = reservationService.CheckTimeAvailability(request.ReservationDateTime);
+                return Ok(new { success = true, data = result });
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest(new { success = false, message = "An internal error occurred" });
+            }
+        }
+
+        [HttpPost("check-tables")]
+        [AllowAnonymous]
+        public async Task<IActionResult> CheckTables([FromBody] CheckAvailabilityParams request)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                    return BadRequest(new { success = false, message = "Validation failed", errors = ModelState });
+
+                var result = await reservationService.CheckAvailabilityReservation(request);
+                return Ok(new { success = true, data = result });
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { success = false, message = ex.Message });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { success = false, message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest(new { success = false, message = "An internal error occurred" });
+            }
+        }
+
+        [HttpPost("{id:guid}/pre-order")]
+        [Authorize(Roles = "Admin,System Admin,Staff,Customer")]
+        public async Task<IActionResult> PreOrder(Guid id, [FromBody] Order order)
+        {
+            try
+            {
+                ApplicationUser? user = await GetCurrentUserAsync();
+                string userId = user?.Id.ToString() ?? string.Empty;
+
+                Order result = await orderService.PreOrderByReservation(id, order, userId);
+
+                return Ok(new
+                {
+                    success = true,
+                    message = "Pre-order created successfully",
+                    data = result
+                });
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { success = false, message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { success = false, message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest(new { success = false, message = "An internal error occurred" });
+            }
         }
 
         [HttpPost]
@@ -163,7 +263,7 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpGet("{id:guid}")]
-        [Authorize(Roles = "Admin,System Admin,Staff,Customer")]
+        [AllowAnonymous]
         public async Task<IActionResult> GetReservationById(Guid id)
         {
             try

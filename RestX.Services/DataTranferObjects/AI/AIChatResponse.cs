@@ -5,7 +5,7 @@ namespace RestX.BLL.DataTranferObjects.AI
         public string SessionId { get; set; } = string.Empty;
         public string Message { get; set; } = string.Empty;
         public List<AISuggestion> Suggestions { get; set; } = new();
-        public List<AISuggestion> UpsellSuggestions { get; set; } = new();
+        public string UpsellHint { get; set; } = string.Empty;
         public List<string> QuickReplies { get; set; } = new();
         public AIOrderDraft? OrderDraft { get; set; }
         public Guid? CreatedOrderId { get; set; }
@@ -16,6 +16,8 @@ namespace RestX.BLL.DataTranferObjects.AI
         public Guid DishId { get; set; }
         public string DishName { get; set; } = string.Empty;
         public decimal Price { get; set; }
+        public int Quantity { get; set; } = 1;
+        public decimal TotalPrice => Price * Quantity;
         public string? ImageUrl { get; set; }
         public string Reason { get; set; } = string.Empty;
         public string Category { get; set; } = string.Empty;

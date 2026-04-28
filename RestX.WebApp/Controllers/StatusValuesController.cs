@@ -112,6 +112,27 @@ public class StatusValuesController : BaseController
         }
     }
 
+    [HttpPut("{typeCode}/display-order")]
+    public async Task<IActionResult> UpdateDisplayOrder(
+        [FromRoute] string typeCode,
+        [FromBody] List<StatusValues> items)
+    {
+        try
+        {
+            await statusValueService.UpdateDisplayOrder(typeCode, items);
+            return Ok(new { success = true });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { success = false, message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            this.ExceptionHandler.RaiseException(ex);
+            return BadRequest(new { success = false, message = "An internal error occurred" });
+        }
+    }
+
     [HttpDelete("{typeCode}/{id}")]
     public async Task<IActionResult> DeleteStatus([FromRoute] string typeCode, [Required] int id)
     {

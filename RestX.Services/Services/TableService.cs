@@ -12,6 +12,7 @@ using RestX.Models.Orders;
 using RestX.Models.Reservations;
 using RestX.Models.Tables;
 using RestX.Models.Tenants;
+using System.Text.RegularExpressions;
 
 namespace RestX.BLL.Services
 {
@@ -35,10 +36,14 @@ namespace RestX.BLL.Services
 
         public async Task<IEnumerable<TableItem>> GetAllTables()
         {
-            var tables = (await Repo.GetAllAsync<Table>(
-                        orderBy: q => q.OrderBy(t => t.Code),
+            List<Table> tables = (await Repo.GetAllAsync<Table>(
                         includeProperties: "Table3DModel,Floor"
                     )).ToList();
+
+            tables = tables
+                .OrderBy(t => t.Code, NaturalTableCodeComparer.Instance)
+                .ToList();
+
             return mapper.Map<List<TableItem>>(tables);
         }
 
@@ -248,15 +253,33 @@ namespace RestX.BLL.Services
 
         public async Task<IEnumerable<TableSessionInfo>> GetAllTableSession(DateTime? at = null)
         {
-            DateTime targetTime = at ?? DateTime.UtcNow.AddHours(7);
+            List<TableSession> sessions;
+            DateTime targetTime;
 
-            List<TableSession> sessions = (await Repo.GetAsync<TableSession>(
-                filter: ts => ts.IsActive
-                           && ts.StartedAt <= targetTime
-                           && (ts.EndedAt == null || ts.EndedAt > targetTime),
-                orderBy: q => q.OrderBy(ts => ts.Table.Code),
-                includeProperties: "Table,Order"
-            )).ToList();
+            if (at.HasValue)
+            {
+                targetTime = at.Value;
+
+                sessions = (await Repo.GetAsync<TableSession>(
+                    filter: ts => ts.StartedAt <= targetTime
+                               && (ts.EndedAt == null || ts.EndedAt >= targetTime),
+                    includeProperties: "Table,Order,Reservation,Reservation.Customer,Reservation.Customer.ApplicationUser"
+                )).ToList();
+            }
+            else
+            {
+                targetTime = DateTime.UtcNow.AddHours(7);
+
+                sessions = (await Repo.GetAsync<TableSession>(
+                    filter: ts => ts.IsActive
+                               && ts.StartedAt <= targetTime,
+                    includeProperties: "Table,Order,Reservation,Reservation.Customer,Reservation.Customer.ApplicationUser"
+                )).ToList();
+            }
+
+            sessions = sessions
+                .OrderBy(ts => ts.Table?.Code, NaturalTableCodeComparer.Instance)
+                .ToList();
 
             return mapper.Map<List<TableSessionInfo>>(sessions);
         }
@@ -286,18 +309,24 @@ namespace RestX.BLL.Services
                            && (ts.EndedAt == null || ts.EndedAt > now),
                 includeProperties: "Table,Order")).ToList();
 
-            // Create session for tables without active session
             foreach (Guid tableId in tableIds)
             {
                 if (!sessions.Any(s => s.TableId == tableId))
                 {
                     TableSession newSession = await CreateTableSession(tableId, userId, request.CustomerId, request.ReservationId);
                     newSession = await Repo.GetOneAsync<TableSession>(filter: ts => ts.Id == newSession.Id, includeProperties: "Table,Order");
+
+                    if (request.ReservationId.HasValue && newSession.StartedAt > now)
+                    {
+                        newSession.StartedAt = now;
+                        newSession.EndedAt = now.AddMinutes(ReservationBufferMinutes);
+                        Repo.Update(newSession);
+                    }
+
                     sessions.Add(newSession);
                 }
             }
 
-            // Collect distinct order ids present in sessions
             List<Guid> orderIds = sessions
                 .Where(s => s.OrderId.HasValue)
                 .Select(s => s.OrderId!.Value)
@@ -310,7 +339,6 @@ namespace RestX.BLL.Services
                 Sessions = mapper.Map<List<RestX.BLL.DataTranferObjects.Table.TableSessionInfo>>(sessions)
             };
 
-            // Case: no orders -> sessions created/validated
             if (!orderIds.Any())
             {
                 response.OrderId = null;
@@ -345,6 +373,69 @@ namespace RestX.BLL.Services
             response.Message = "Multiple existing orders found. Manual resolution required.";
             response.Sessions = mapper.Map<List<RestX.BLL.DataTranferObjects.Table.TableSessionInfo>>(sessions);
             return response;
+        }
+
+        private sealed class NaturalTableCodeComparer : IComparer<string?>
+        {
+            public static NaturalTableCodeComparer Instance { get; } = new NaturalTableCodeComparer();
+
+            public int Compare(string? x, string? y)
+            {
+                if (ReferenceEquals(x, y))
+                {
+                    return 0;
+                }
+
+                if (x == null)
+                {
+                    return -1;
+                }
+
+                if (y == null)
+                {
+                    return 1;
+                }
+
+                MatchCollection xParts = Regex.Matches(x, @"\d+|\D+");
+                MatchCollection yParts = Regex.Matches(y, @"\d+|\D+");
+
+                int max = Math.Min(xParts.Count, yParts.Count);
+
+                for (int i = 0; i < max; i++)
+                {
+                    string xPart = xParts[i].Value;
+                    string yPart = yParts[i].Value;
+
+                    bool xIsNumber = int.TryParse(xPart, out int xNumber);
+                    bool yIsNumber = int.TryParse(yPart, out int yNumber);
+
+                    int result;
+                    if (xIsNumber && yIsNumber)
+                    {
+                        result = xNumber.CompareTo(yNumber);
+                        if (result != 0)
+                        {
+                            return result;
+                        }
+
+                        result = xPart.Length.CompareTo(yPart.Length);
+                        if (result != 0)
+                        {
+                            return result;
+                        }
+                    }
+                    else
+                    {
+                        result = string.Compare(xPart, yPart, StringComparison.OrdinalIgnoreCase);
+                        if (result != 0)
+                        {
+                            return result;
+                        }
+                    }
+                }
+
+                return xParts.Count.CompareTo(yParts.Count);
+            }
         }
 
         #region Constraint Helpers

@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Http;
 using RestX.Models.Tenants;
+using System.ComponentModel.DataAnnotations;
 
 public class TenantItem
 {
@@ -27,6 +28,12 @@ public class TenantItem
     public string? NetworkIp { get; set; }
     public string? ConnectionString { get; set; }
     public DateTime ExpiredAt { get; set; }
+
+    [Range(0, 100)]
+    public decimal TaxRate { get; set; } = 0m;
+
+    [Range(0, 100)]
+    public decimal ServiceChargeRate { get; set; } = 0m;
 
     // Business
     public string BusinessName { get; set; }

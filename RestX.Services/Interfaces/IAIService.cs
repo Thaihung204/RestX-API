@@ -8,7 +8,6 @@ namespace RestX.BLL.Interfaces
         // Chat
         Task<string> ResolveSession(string? cookieSessionId, string? userId);
         Task<AIChatResponse> Chat(AIChatRequest request);
-        Task ChatStream(AIChatRequest request, HttpResponse httpResponse);
         Task<Guid> ConfirmOrder(string sessionId, string userId, AIOrderDraft draft);
         Task ClearSession(string sessionId);
         Task<ChatHistoryResponse?> GetHistory(string? sessionId, string? userId = null);
@@ -16,9 +15,9 @@ namespace RestX.BLL.Interfaces
 
         // Content Generation
         Task<ContentGenerateResponse> GenerateContent(ContentGenerateRequest request);
-        Task<CampaignPackResponse> GenerateCampaignPack(CampaignPackRequest request);
 
         // Analytics
         Task<AIAnalyticsResponse> AnalyzeDashboard(AIAnalyticsRequest request);
+        byte[] ExportAnalyticsPdf(AIAnalyticsResponse data, string filterType);
     }
 }

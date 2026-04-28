@@ -58,13 +58,20 @@ namespace RestX.BLL.Services
 
         public async Task<Guid> UpsertCategory(CategoryItem dto)
         {
+            await ValidateCategoryData(dto);
+
             Category category;
 
             if (dto.Id != null)
             {
                 category = await Repo.GetByIdAsync<Category>(dto.Id.Value);
-                category.Name = dto.Name;
-                category.Description = dto.Description;
+                if (category == null)
+                {
+                    throw new AppException("Category not found");
+                }
+
+                category.Name = dto.Name.Trim();
+                category.Description = (dto.Description ?? string.Empty).Trim();
                 category.ParentId = dto.ParentId;
                 category.IsActive = dto.IsActive;
                 category.DisplayOrder = dto.DisplayOrder;
@@ -102,8 +109,8 @@ namespace RestX.BLL.Services
             category = new Category
             {
                 Id = Guid.NewGuid(),
-                Name = dto.Name,
-                Description = dto.Description,
+                Name = dto.Name.Trim(),
+                Description = (dto.Description ?? string.Empty).Trim(),
                 ParentId = dto.ParentId,
                 IsActive = dto.IsActive,
                 ImageUrl = dto.ImageUrl,
@@ -122,6 +129,49 @@ namespace RestX.BLL.Services
             return category.Id;
         }
 
+        private async Task ValidateCategoryData(CategoryItem dto)
+        {
+            if (dto == null)
+            {
+                throw new AppException("Category data is required.");
+            }
+
+            if (string.IsNullOrWhiteSpace(dto.Name) || dto.Name.Trim().Length > 255)
+            {
+                throw new AppException("Category name is required and must be <= 255 characters.");
+            }
+
+            string description = (dto.Description ?? string.Empty).Trim();
+            if (description.Length > 1000)
+            {
+                throw new AppException("Category description must be <= 1000 characters.");
+            }
+
+            if (dto.Id.HasValue && dto.ParentId.HasValue && dto.Id.Value == dto.ParentId.Value)
+            {
+                throw new AppException("Category cannot be its own parent.");
+            }
+
+            if (dto.ParentId.HasValue)
+            {
+                Category? parent = await Repo.GetByIdAsync<Category>(dto.ParentId.Value);
+                if (parent == null)
+                {
+                    throw new AppException("Parent category not found.");
+                }
+            }
+
+            string normalizedName = dto.Name.Trim().ToLowerInvariant();
+            bool duplicateName = await Repo.GetExistsAsync<Category>(c =>
+                c.Name.ToLower() == normalizedName
+                && c.ParentId == dto.ParentId
+                && (!dto.Id.HasValue || c.Id != dto.Id.Value));
+
+            if (duplicateName)
+            {
+                throw new AppException("Category name already exists in the same parent.");
+            }
+        }
         public async Task UpdateDisplayOrder(List<CategoryItem> categories)
         {
             if (categories == null || categories.Count == 0)
@@ -191,10 +241,30 @@ namespace RestX.BLL.Services
 
         public async Task DeleteCategory(Guid id)
         {
-            var category = await Repo.GetByIdAsync<Category>(id);
+            if (id == Guid.Empty)
+            {
+                throw new AppException("Category id is required.");
+            }
+
+            Category? category = await Repo.GetByIdAsync<Category>(id);
             if (category == null)
-                return;
-            await cloudinaryService.DeleteAsync($"{CurrentTenant.Name.Replace(" ", "")}/categories/{id}/{id}");
+            {
+                throw new AppException("Category not found.");
+            }
+
+            bool hasSubCategories = await Repo.GetExistsAsync<Category>(c => c.ParentId == id);
+            if (hasSubCategories)
+            {
+                throw new AppException("Cannot delete category because it has sub-categories.");
+            }
+
+            bool hasDishes = await Repo.GetExistsAsync<Dish>(d => d.CategoryId == id);
+            if (hasDishes)
+            {
+                throw new AppException("Cannot delete category because it is being used by one or more dishes.");
+            }
+
+            await cloudinaryService.DeleteAsync($"{CurrentTenant.Name.Replace(" ", "")}/categories/{id}");
 
             Repo.Delete<Category>(id);
             await Repo.SaveAsync();

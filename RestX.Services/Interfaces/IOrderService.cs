@@ -4,6 +4,7 @@ namespace RestX.BLL.Interfaces
 {
     public interface IOrderService
     {
+        Task<OrderSearchResult> GetCurrentOrders(OrderSearch model);
         Task<OrderSearchResult> GetAllOrders(OrderSearch model);
         Task<Order?> GetOrderById(Guid id);
         Task<Order> CheckSessionBeforeOrder(Order order, string userId);
@@ -14,6 +15,7 @@ namespace RestX.BLL.Interfaces
         Task<bool> UpdateOrderDetailStatus(Guid orderDetailId, int statusId, string userId);
         Task<IEnumerable<OrderDetail>> GetAllOrderDetails();
         Task<Order?> GetOrderByTableId(Guid tableId);
+        Task<Order> PreOrderByReservation(Guid reservationId, Order order, string userId);
 
         Task<byte[]> ExportAsync(OrderSearch filter);
         Task<ApplyDiscountResponse> ApplyDiscount(Guid orderId, ApplyDiscountRequest request);

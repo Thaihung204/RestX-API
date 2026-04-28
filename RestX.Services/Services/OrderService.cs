@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.Extensions.FileSystemGlobbing.Internal;
 using OfficeOpenXml;
 using PayOS.Resources.V1.Payouts.Batch;
@@ -16,6 +17,7 @@ using RestX.Models.Common;
 using RestX.Models.Customers;
 using RestX.Models.Enum;
 using RestX.Models.Enum;
+using RestX.Models.Identity;
 using RestX.Models.Loyalty;
 using RestX.Models.Menu;
 using RestX.Models.Orders;
@@ -23,7 +25,9 @@ using RestX.Models.Promotions;
 using RestX.Models.Reservations;
 using RestX.Models.Tables;
 using RestX.Models.Tenants;
+using StackExchange.Redis;
 using System.Data;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Channels;
 
@@ -52,40 +56,156 @@ namespace RestX.BLL.Services
             this.mapper = mapper;
         }
 
-        public async Task<OrderSearchResult> GetAllOrders(OrderSearch model)
+        public async Task<OrderSearchResult> GetCurrentOrders(OrderSearch model)
         {
             if (model.Page <= 0) model.Page = 1;
             if (model.ItemsPerPage <= 0) model.ItemsPerPage = 20;
             if (model.ItemsPerPage > 200) model.ItemsPerPage = 200;
 
-            var result = new OrderSearchResult
+            OrderSearchResult result = new OrderSearchResult
             {
                 Page = model.Page,
                 ItemsPerPage = model.ItemsPerPage
             };
 
-            var query = new StringBuilder();
+            StringBuilder query = new StringBuilder();
             query.Append(@"
                 SELECT #SELECT#
                 FROM dbo.Orders o
                 WHERE 1 = 1
             ");
 
-            var countParams = new List<SqlParameter>();
-            var queryParams = new List<SqlParameter>();
+            List<SqlParameter> countParams = new List<SqlParameter>();
+            List<SqlParameter> queryParams = new List<SqlParameter>();
+
+            DateTime now = DateTime.UtcNow.AddHours(7);
+
+            query.Append(@"
+                AND (
+                    o.OrderStatusId <> @OpenStatus
+                    OR EXISTS (
+                        SELECT 1
+                        FROM dbo.TableSessions ts
+                        WHERE ts.OrderId = o.Id
+                          AND ts.IsActive = 1
+                          AND ts.StartedAt <= @Now
+                    )
+                )
+            ");
+
+            countParams.Add(new SqlParameter("OpenStatus", SqlDbType.Int) { Value = (int)OrderStatus.Open });
+            queryParams.Add(new SqlParameter("OpenStatus", SqlDbType.Int) { Value = (int)OrderStatus.Open });
+
+            countParams.Add(new SqlParameter("Now", SqlDbType.DateTime2) { Value = now });
+            queryParams.Add(new SqlParameter("Now", SqlDbType.DateTime2) { Value = now });
 
             if (model.Status.HasValue)
             {
+                int statusValue = (int)model.Status.Value;
                 query.Append(" AND o.OrderStatusId = @Status ");
 
-                var statusValue = (int)model.Status.Value;
                 countParams.Add(new SqlParameter("Status", SqlDbType.Int) { Value = statusValue });
                 queryParams.Add(new SqlParameter("Status", SqlDbType.Int) { Value = statusValue });
             }
 
+            if (!string.IsNullOrWhiteSpace(model.Reference))
+            {
+                string reference = model.Reference.Trim();
+                query.Append(" AND o.Reference LIKE @Reference ");
+
+                countParams.Add(new SqlParameter("Reference", SqlDbType.NVarChar) { Value = $"%{reference}%" });
+                queryParams.Add(new SqlParameter("Reference", SqlDbType.NVarChar) { Value = $"%{reference}%" });
+            }
+
+            if (model.Total.HasValue)
+            {
+                query.Append(" AND o.TotalAmount = @Total ");
+
+                countParams.Add(new SqlParameter("Total", SqlDbType.Decimal) { Value = model.Total.Value });
+                queryParams.Add(new SqlParameter("Total", SqlDbType.Decimal) { Value = model.Total.Value });
+            }
+
+            if (model.ItemCount.HasValue)
+            {
+                query.Append(@"
+                    AND (
+                        SELECT ISNULL(SUM(od.Quantity), 0)
+                        FROM dbo.OrderDetails od
+                        WHERE od.OrderId = o.Id
+                    ) = @ItemCount
+                ");
+
+                countParams.Add(new SqlParameter("ItemCount", SqlDbType.Int) { Value = model.ItemCount.Value });
+                queryParams.Add(new SqlParameter("ItemCount", SqlDbType.Int) { Value = model.ItemCount.Value });
+            }
+
+            if (model.PaymentStatus.HasValue)
+            {
+                int paymentStatusValue = (int)model.PaymentStatus.Value;
+
+                query.Append(@"
+                    AND EXISTS (
+                        SELECT 1
+                        FROM dbo.Payments p
+                        WHERE p.OrderId = o.Id
+                          AND p.Status = @PaymentStatus
+                    )
+                ");
+
+                countParams.Add(new SqlParameter("PaymentStatus", SqlDbType.Int) { Value = paymentStatusValue });
+                queryParams.Add(new SqlParameter("PaymentStatus", SqlDbType.Int) { Value = paymentStatusValue });
+            }
+
+            if (!string.IsNullOrWhiteSpace(model.CustomerName))
+            {
+                string customerName = model.CustomerName.Trim();
+
+                List<Models.Customers.Customer> matchedCustomers = (await Repo.GetAsync<Models.Customers.Customer>(
+                    filter: c => c.ApplicationUser != null && c.ApplicationUser.FullName.Contains(customerName),
+                    includeProperties: "ApplicationUser")).ToList();
+
+                List<Guid> matchedCustomerIds = matchedCustomers.Select(c => c.Id).Distinct().ToList();
+
+                if (!matchedCustomerIds.Any())
+                {
+                    query.Append(" AND 1 = 0 ");
+                }
+                else
+                {
+                    List<string> customerParamNames = new List<string>();
+                    for (int i = 0; i < matchedCustomerIds.Count; i++)
+                    {
+                        string paramName = $"CustomerId{i}";
+                        customerParamNames.Add("@" + paramName);
+
+                        countParams.Add(new SqlParameter(paramName, SqlDbType.UniqueIdentifier) { Value = matchedCustomerIds[i] });
+                        queryParams.Add(new SqlParameter(paramName, SqlDbType.UniqueIdentifier) { Value = matchedCustomerIds[i] });
+                    }
+
+                    query.Append($" AND o.CustomerId IN ({string.Join(", ", customerParamNames)}) ");
+                }
+            }
+
+            if (model.Time.HasValue)
+            {
+                DateTime timeFromUtc = model.Time.Value.Kind == DateTimeKind.Unspecified
+                    ? DateTime.SpecifyKind(model.Time.Value, DateTimeKind.Utc)
+                    : model.Time.Value.ToUniversalTime();
+
+                DateTime timeToUtcExclusive = timeFromUtc.Date.AddDays(1);
+
+                query.Append(" AND o.CreatedDate >= @TimeFrom AND o.CreatedDate < @TimeToExclusive ");
+
+                countParams.Add(new SqlParameter("TimeFrom", SqlDbType.DateTime2) { Value = timeFromUtc.Date });
+                countParams.Add(new SqlParameter("TimeToExclusive", SqlDbType.DateTime2) { Value = timeToUtcExclusive });
+
+                queryParams.Add(new SqlParameter("TimeFrom", SqlDbType.DateTime2) { Value = timeFromUtc.Date });
+                queryParams.Add(new SqlParameter("TimeToExclusive", SqlDbType.DateTime2) { Value = timeToUtcExclusive });
+            }
+
             if (model.From.HasValue)
             {
-                var fromUtc = model.From.Value.Kind == DateTimeKind.Unspecified
+                DateTime fromUtc = model.From.Value.Kind == DateTimeKind.Unspecified
                     ? DateTime.SpecifyKind(model.From.Value, DateTimeKind.Utc)
                     : model.From.Value.ToUniversalTime();
 
@@ -97,7 +217,7 @@ namespace RestX.BLL.Services
 
             if (model.To.HasValue)
             {
-                var toUtcExclusive = (model.To.Value.Kind == DateTimeKind.Unspecified
+                DateTime toUtcExclusive = (model.To.Value.Kind == DateTimeKind.Unspecified
                         ? DateTime.SpecifyKind(model.To.Value, DateTimeKind.Utc)
                         : model.To.Value.ToUniversalTime())
                     .Date
@@ -109,7 +229,7 @@ namespace RestX.BLL.Services
                 queryParams.Add(new SqlParameter("ToExclusive", SqlDbType.DateTime2) { Value = toUtcExclusive });
             }
 
-            var countQuery = query.ToString().Replace("#SELECT#", "COUNT(1)");
+            string countQuery = query.ToString().Replace("#SELECT#", "COUNT(1)");
             result.TotalCount = await Repo.ExecuteSqlCommandAsync<int>(
                 countQuery,
                 countParams.Any() ? countParams.Cast<object>().ToArray() : null
@@ -119,9 +239,9 @@ namespace RestX.BLL.Services
                 ? 0
                 : (int)Math.Ceiling((decimal)result.TotalCount / result.ItemsPerPage);
 
-            var skip = result.Page <= 1 ? 0 : (result.Page - 1) * result.ItemsPerPage;
+            int skip = result.Page <= 1 ? 0 : (result.Page - 1) * result.ItemsPerPage;
 
-            var selectItems = @"
+            string selectItems = @"
                 o.Id,
                 o.Reference,
                 o.CustomerId,
@@ -135,10 +255,13 @@ namespace RestX.BLL.Services
                 o.CompletedAt,
                 o.CancelledAt,
                 o.HandledBy,
-                o.CreatedDate
+                o.CreatedDate,
+                o.ModifiedDate,
+                o.CreatedBy,
+                o.ModifiedBy
             ";
 
-            var mainQuery = query.ToString().Replace("#SELECT#", selectItems);
+            string mainQuery = query.ToString().Replace("#SELECT#", selectItems);
 
             mainQuery += (model.SortBy?.ToLowerInvariant()) switch
             {
@@ -148,7 +271,7 @@ namespace RestX.BLL.Services
 
             mainQuery += $" OFFSET {skip} ROWS FETCH NEXT {result.ItemsPerPage} ROWS ONLY";
 
-            var orders = await Repo.ExecuteSqlSelectAsync<Models.Orders.Order>(
+            List<Models.Orders.Order> orders = await Repo.ExecuteSqlSelectAsync<Models.Orders.Order>(
                 mainQuery,
                 queryParams.Any() ? queryParams.Cast<object>().ToArray() : null
             );
@@ -159,19 +282,20 @@ namespace RestX.BLL.Services
                 return result;
             }
 
-            var orderIds = orders.Select(o => o.Id).ToList();
-            var idParams = orderIds
+            List<Guid> orderIds = orders.Select(o => o.Id).ToList();
+            List<SqlParameter> idParams = orderIds
                 .Select((id, i) => new SqlParameter($"OrderId{i}", SqlDbType.UniqueIdentifier) { Value = id })
                 .ToList();
 
-            var inClause = string.Join(", ", idParams.Select(p => "@" + p.ParameterName));
+            string inClause = string.Join(", ", idParams.Select(p => "@" + p.ParameterName));
 
-            var orderDetailsQuery = $@"
+            string orderDetailsQuery = $@"
                 SELECT
                     od.Id,
                     od.OrderId,
                     od.DishId,
                     od.Quantity,
+                    od.UnitPrice,
                     od.Note,
                     od.ItemStatusId
                 FROM dbo.OrderDetails od
@@ -179,7 +303,7 @@ namespace RestX.BLL.Services
                 ORDER BY od.OrderId, od.Id
             ";
 
-            var itemStatusesQuery = $@"
+            string itemStatusesQuery = $@"
                 SELECT
                     sv.Id,
                     sv.Name
@@ -191,59 +315,59 @@ namespace RestX.BLL.Services
                 )
             ";
 
-            var orderDetails = await Repo.ExecuteSqlSelectAsync<Models.Orders.OrderDetail>(
+            List<Models.Orders.OrderDetail> orderDetails = await Repo.ExecuteSqlSelectAsync<Models.Orders.OrderDetail>(
                 orderDetailsQuery,
                 CloneParams(idParams)
             );
 
-            var itemStatuses = await Repo.ExecuteSqlSelectAsync<StatusValue>(
+            List<StatusValue> itemStatuses = await Repo.ExecuteSqlSelectAsync<StatusValue>(
                 itemStatusesQuery,
                 CloneParams(idParams)
             );
 
-            var dishIds = orderDetails.Select(d => d.DishId).Distinct().ToList();
-            var dishes = new List<Models.Menu.Dish>();
+            List<Guid> dishIds = orderDetails.Select(d => d.DishId).Distinct().ToList();
+            List<Models.Menu.Dish> dishes = new List<Models.Menu.Dish>();
             if (dishIds.Any())
             {
                 dishes = (await Repo.GetAsync<Models.Menu.Dish>(d => dishIds.Contains(d.Id))).ToList();
             }
-            var dishesById = dishes.ToDictionary(d => d.Id, d => d);
 
-            var detailsByOrderId = orderDetails
+            Dictionary<Guid, Models.Menu.Dish> dishesById = dishes.ToDictionary(d => d.Id, d => d);
+
+            Dictionary<Guid, List<Models.Orders.OrderDetail>> detailsByOrderId = orderDetails
                 .GroupBy(d => d.OrderId)
-                .ToDictionary(
-                    g => g.Key,
-                    g => GroupOrderDetailsByDish(g) 
-                );
+                .ToDictionary(g => g.Key, g => g.ToList());
 
-            var statusById = itemStatuses
+            Dictionary<int, StatusValue> statusById = itemStatuses
                 .GroupBy(s => s.Id)
                 .ToDictionary(g => g.Key, g => g.First());
 
-            var paidPayments = await Repo.GetAsync<Payment>(
+            IEnumerable<Payment> paidPayments = await Repo.GetAsync<Payment>(
                 p => p.OrderId.HasValue && orderIds.Contains(p.OrderId.Value) && p.Status == PaymentStatus.Success);
-            var paidOrderIds = paidPayments.Select(p => p.OrderId!.Value).ToHashSet();
+            HashSet<Guid> paidOrderIds = paidPayments.Select(p => p.OrderId!.Value).ToHashSet();
 
-            var tableSessions = await Repo.GetAsync<Models.Reservations.TableSession>(
+            IEnumerable<Models.Reservations.TableSession> tableSessions = await Repo.GetAsync<Models.Reservations.TableSession>(
                 filter: ts => ts.OrderId.HasValue && orderIds.Contains(ts.OrderId.Value),
                 includeProperties: "Table"
             );
 
-            var sessionsByOrderId = tableSessions
+            Dictionary<Guid, List<Models.Reservations.TableSession>> sessionsByOrderId = tableSessions
                 .Where(ts => ts.OrderId.HasValue)
                 .GroupBy(ts => ts.OrderId!.Value)
                 .ToDictionary(g => g.Key, g => g.ToList());
 
-            foreach (var o in orders)
+            foreach (Models.Orders.Order o in orders)
             {
-                if (detailsByOrderId.TryGetValue(o.Id, out var ods))
+                if (detailsByOrderId.TryGetValue(o.Id, out List<Models.Orders.OrderDetail>? ods))
                 {
-                    foreach (var d in ods)
+                    foreach (Models.Orders.OrderDetail d in ods)
                     {
-                        if (statusById.TryGetValue(d.ItemStatusId, out var s))
+                        if (statusById.TryGetValue(d.ItemStatusId, out StatusValue? s))
+                        {
                             d.ItemStatus = s;
+                        }
 
-                        if (dishesById.TryGetValue(d.DishId, out var dish))
+                        if (dishesById.TryGetValue(d.DishId, out Models.Menu.Dish? dish))
                         {
                             d.Dish = dish;
                         }
@@ -252,7 +376,7 @@ namespace RestX.BLL.Services
                     o.OrderDetails = ods;
                 }
 
-                if (sessionsByOrderId.TryGetValue(o.Id, out var sessions))
+                if (sessionsByOrderId.TryGetValue(o.Id, out List<Models.Reservations.TableSession>? sessions))
                 {
                     o.TableSessions = sessions;
                 }
@@ -262,19 +386,19 @@ namespace RestX.BLL.Services
 
             result.Orders = mapper.Map<List<DataTranferObjects.Orders.Order>>(orders);
 
-            var customerIds = orders.Where(o => o.CustomerId != null).Select(o => o.CustomerId).Distinct().ToList();
+            List<Guid?> customerIds = orders.Where(o => o.CustomerId != null).Select(o => o.CustomerId).Distinct().ToList();
             if (customerIds.Any())
             {
-                var customers = await Repo.GetAsync<Models.Customers.Customer>(
+                IEnumerable<Models.Customers.Customer> customers = await Repo.GetAsync<Models.Customers.Customer>(
                     filter: c => customerIds.Contains(c.Id),
                     includeProperties: "ApplicationUser"
                 );
 
-                var customersDict = customers.ToDictionary(c => c.Id, c => c);
+                Dictionary<Guid, Models.Customers.Customer> customersDict = customers.ToDictionary(c => c.Id, c => c);
 
-                foreach (var dtoOrder in result.Orders)
+                foreach (DataTranferObjects.Orders.Order dtoOrder in result.Orders)
                 {
-                    if (customersDict.TryGetValue(dtoOrder.CustomerId, out var customer))
+                    if (customersDict.TryGetValue(dtoOrder.CustomerId, out Models.Customers.Customer? customer))
                     {
                         dtoOrder.CustomerName = customer.ApplicationUser?.FullName;
                         dtoOrder.CustomerEmail = customer.ApplicationUser?.Email;
@@ -284,6 +408,361 @@ namespace RestX.BLL.Services
 
             return result;
         }
+
+
+        public async Task<OrderSearchResult> GetAllOrders(OrderSearch model)
+        {
+            if (model.Page <= 0) model.Page = 1;
+            if (model.ItemsPerPage <= 0) model.ItemsPerPage = 20;
+            if (model.ItemsPerPage > 200) model.ItemsPerPage = 200;
+
+            OrderSearchResult result = new OrderSearchResult
+            {
+                Page = model.Page,
+                ItemsPerPage = model.ItemsPerPage
+            };
+
+            StringBuilder query = new StringBuilder();
+            query.Append(@"
+                SELECT #SELECT#
+                FROM dbo.Orders o
+                WHERE 1 = 1
+            ");
+
+            List<SqlParameter> countParams = new List<SqlParameter>();
+            List<SqlParameter> queryParams = new List<SqlParameter>();
+
+            //DateTime now = DateTime.UtcNow.AddHours(7);
+
+            //query.Append(@"
+            //    AND (
+            //        o.OrderStatusId <> @OpenStatus
+            //        OR EXISTS (
+            //            SELECT 1
+            //            FROM dbo.TableSessions ts
+            //            WHERE ts.OrderId = o.Id
+            //              AND ts.IsActive = 1
+            //              AND ts.StartedAt <= @Now
+            //        )
+            //    )
+            //");
+
+            //countParams.Add(new SqlParameter("OpenStatus", SqlDbType.Int) { Value = (int)OrderStatus.Open });
+            //queryParams.Add(new SqlParameter("OpenStatus", SqlDbType.Int) { Value = (int)OrderStatus.Open });
+
+            //countParams.Add(new SqlParameter("Now", SqlDbType.DateTime2) { Value = now });
+            //queryParams.Add(new SqlParameter("Now", SqlDbType.DateTime2) { Value = now });
+
+            if (model.Status.HasValue)
+            {
+                int statusValue = (int)model.Status.Value;
+                query.Append(" AND o.OrderStatusId = @Status ");
+
+                countParams.Add(new SqlParameter("Status", SqlDbType.Int) { Value = statusValue });
+                queryParams.Add(new SqlParameter("Status", SqlDbType.Int) { Value = statusValue });
+            }
+
+            if (!string.IsNullOrWhiteSpace(model.Reference))
+            {
+                string reference = model.Reference.Trim();
+                query.Append(" AND o.Reference LIKE @Reference ");
+
+                countParams.Add(new SqlParameter("Reference", SqlDbType.NVarChar) { Value = $"%{reference}%" });
+                queryParams.Add(new SqlParameter("Reference", SqlDbType.NVarChar) { Value = $"%{reference}%" });
+            }
+
+            if (model.Total.HasValue)
+            {
+                query.Append(" AND o.TotalAmount = @Total ");
+
+                countParams.Add(new SqlParameter("Total", SqlDbType.Decimal) { Value = model.Total.Value });
+                queryParams.Add(new SqlParameter("Total", SqlDbType.Decimal) { Value = model.Total.Value });
+            }
+
+            if (model.ItemCount.HasValue)
+            {
+                query.Append(@"
+                    AND (
+                        SELECT ISNULL(SUM(od.Quantity), 0)
+                        FROM dbo.OrderDetails od
+                        WHERE od.OrderId = o.Id
+                    ) = @ItemCount
+                ");
+
+                countParams.Add(new SqlParameter("ItemCount", SqlDbType.Int) { Value = model.ItemCount.Value });
+                queryParams.Add(new SqlParameter("ItemCount", SqlDbType.Int) { Value = model.ItemCount.Value });
+            }
+
+            if (model.PaymentStatus.HasValue)
+            {
+                int paymentStatusValue = (int)model.PaymentStatus.Value;
+
+                query.Append(@"
+                    AND EXISTS (
+                        SELECT 1
+                        FROM dbo.Payments p
+                        WHERE p.OrderId = o.Id
+                          AND p.Status = @PaymentStatus
+                    )
+                ");
+
+                countParams.Add(new SqlParameter("PaymentStatus", SqlDbType.Int) { Value = paymentStatusValue });
+                queryParams.Add(new SqlParameter("PaymentStatus", SqlDbType.Int) { Value = paymentStatusValue });
+            }
+
+            if (!string.IsNullOrWhiteSpace(model.CustomerName))
+            {
+                string customerName = model.CustomerName.Trim();
+
+                List<Models.Customers.Customer> matchedCustomers = (await Repo.GetAsync<Models.Customers.Customer>(
+                    filter: c => c.ApplicationUser != null && c.ApplicationUser.FullName.Contains(customerName),
+                    includeProperties: "ApplicationUser")).ToList();
+
+                List<Guid> matchedCustomerIds = matchedCustomers.Select(c => c.Id).Distinct().ToList();
+
+                if (!matchedCustomerIds.Any())
+                {
+                    query.Append(" AND 1 = 0 ");
+                }
+                else
+                {
+                    List<string> customerParamNames = new List<string>();
+                    for (int i = 0; i < matchedCustomerIds.Count; i++)
+                    {
+                        string paramName = $"CustomerId{i}";
+                        customerParamNames.Add("@" + paramName);
+
+                        countParams.Add(new SqlParameter(paramName, SqlDbType.UniqueIdentifier) { Value = matchedCustomerIds[i] });
+                        queryParams.Add(new SqlParameter(paramName, SqlDbType.UniqueIdentifier) { Value = matchedCustomerIds[i] });
+                    }
+
+                    query.Append($" AND o.CustomerId IN ({string.Join(", ", customerParamNames)}) ");
+                }
+            }
+
+            if (model.Time.HasValue)
+            {
+                DateTime timeFromUtc = model.Time.Value.Kind == DateTimeKind.Unspecified
+                    ? DateTime.SpecifyKind(model.Time.Value, DateTimeKind.Utc)
+                    : model.Time.Value.ToUniversalTime();
+
+                DateTime timeToUtcExclusive = timeFromUtc.Date.AddDays(1);
+
+                query.Append(" AND o.CreatedDate >= @TimeFrom AND o.CreatedDate < @TimeToExclusive ");
+
+                countParams.Add(new SqlParameter("TimeFrom", SqlDbType.DateTime2) { Value = timeFromUtc.Date });
+                countParams.Add(new SqlParameter("TimeToExclusive", SqlDbType.DateTime2) { Value = timeToUtcExclusive });
+
+                queryParams.Add(new SqlParameter("TimeFrom", SqlDbType.DateTime2) { Value = timeFromUtc.Date });
+                queryParams.Add(new SqlParameter("TimeToExclusive", SqlDbType.DateTime2) { Value = timeToUtcExclusive });
+            }
+
+            if (model.From.HasValue)
+            {
+                DateTime fromUtc = model.From.Value.Kind == DateTimeKind.Unspecified
+                    ? DateTime.SpecifyKind(model.From.Value, DateTimeKind.Utc)
+                    : model.From.Value.ToUniversalTime();
+
+                query.Append(" AND o.CreatedDate >= @From ");
+
+                countParams.Add(new SqlParameter("From", SqlDbType.DateTime2) { Value = fromUtc });
+                queryParams.Add(new SqlParameter("From", SqlDbType.DateTime2) { Value = fromUtc });
+            }
+
+            if (model.To.HasValue)
+            {
+                DateTime toUtcExclusive = (model.To.Value.Kind == DateTimeKind.Unspecified
+                        ? DateTime.SpecifyKind(model.To.Value, DateTimeKind.Utc)
+                        : model.To.Value.ToUniversalTime())
+                    .Date
+                    .AddDays(1);
+
+                query.Append(" AND o.CreatedDate < @ToExclusive ");
+
+                countParams.Add(new SqlParameter("ToExclusive", SqlDbType.DateTime2) { Value = toUtcExclusive });
+                queryParams.Add(new SqlParameter("ToExclusive", SqlDbType.DateTime2) { Value = toUtcExclusive });
+            }
+
+            string countQuery = query.ToString().Replace("#SELECT#", "COUNT(1)");
+            result.TotalCount = await Repo.ExecuteSqlCommandAsync<int>(
+                countQuery,
+                countParams.Any() ? countParams.Cast<object>().ToArray() : null
+            );
+
+            result.TotalPages = result.ItemsPerPage <= 0
+                ? 0
+                : (int)Math.Ceiling((decimal)result.TotalCount / result.ItemsPerPage);
+
+            int skip = result.Page <= 1 ? 0 : (result.Page - 1) * result.ItemsPerPage;
+
+            string selectItems = @"
+                o.Id,
+                o.Reference,
+                o.CustomerId,
+                o.ReservationId,
+                o.OrderStatusId,
+                o.SubTotal,
+                o.DiscountAmount,
+                o.TaxAmount,
+                o.ServiceCharge,
+                o.TotalAmount,
+                o.CompletedAt,
+                o.CancelledAt,
+                o.HandledBy,
+                o.CreatedDate,
+                o.ModifiedDate,
+                o.CreatedBy,
+                o.ModifiedBy
+            ";
+
+            string mainQuery = query.ToString().Replace("#SELECT#", selectItems);
+
+            mainQuery += (model.SortBy?.ToLowerInvariant()) switch
+            {
+                "created_asc" => " ORDER BY o.CreatedDate ASC",
+                _ => " ORDER BY o.CreatedDate DESC"
+            };
+
+            mainQuery += $" OFFSET {skip} ROWS FETCH NEXT {result.ItemsPerPage} ROWS ONLY";
+
+            List<Models.Orders.Order> orders = await Repo.ExecuteSqlSelectAsync<Models.Orders.Order>(
+                mainQuery,
+                queryParams.Any() ? queryParams.Cast<object>().ToArray() : null
+            );
+
+            if (orders.Count == 0)
+            {
+                result.Orders = new List<DataTranferObjects.Orders.Order>();
+                return result;
+            }
+
+            List<Guid> orderIds = orders.Select(o => o.Id).ToList();
+            List<SqlParameter> idParams = orderIds
+                .Select((id, i) => new SqlParameter($"OrderId{i}", SqlDbType.UniqueIdentifier) { Value = id })
+                .ToList();
+
+            string inClause = string.Join(", ", idParams.Select(p => "@" + p.ParameterName));
+
+            string orderDetailsQuery = $@"
+                SELECT
+                    od.Id,
+                    od.OrderId,
+                    od.DishId,
+                    od.Quantity,
+                    od.UnitPrice,
+                    od.Note,
+                    od.ItemStatusId
+                FROM dbo.OrderDetails od
+                WHERE od.OrderId IN ({inClause})
+                ORDER BY od.OrderId, od.Id
+            ";
+
+            string itemStatusesQuery = $@"
+                SELECT
+                    sv.Id,
+                    sv.Name
+                FROM dbo.StatusValues sv
+                WHERE sv.Id IN (
+                    SELECT DISTINCT od.ItemStatusId
+                    FROM dbo.OrderDetails od
+                    WHERE od.OrderId IN ({inClause})
+                )
+            ";
+
+            List<Models.Orders.OrderDetail> orderDetails = await Repo.ExecuteSqlSelectAsync<Models.Orders.OrderDetail>(
+                orderDetailsQuery,
+                CloneParams(idParams)
+            );
+
+            List<StatusValue> itemStatuses = await Repo.ExecuteSqlSelectAsync<StatusValue>(
+                itemStatusesQuery,
+                CloneParams(idParams)
+            );
+
+            List<Guid> dishIds = orderDetails.Select(d => d.DishId).Distinct().ToList();
+            List<Models.Menu.Dish> dishes = new List<Models.Menu.Dish>();
+            if (dishIds.Any())
+            {
+                dishes = (await Repo.GetAsync<Models.Menu.Dish>(d => dishIds.Contains(d.Id))).ToList();
+            }
+
+            Dictionary<Guid, Models.Menu.Dish> dishesById = dishes.ToDictionary(d => d.Id, d => d);
+
+            Dictionary<Guid, List<Models.Orders.OrderDetail>> detailsByOrderId = orderDetails
+                .GroupBy(d => d.OrderId)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            Dictionary<int, StatusValue> statusById = itemStatuses
+                .GroupBy(s => s.Id)
+                .ToDictionary(g => g.Key, g => g.First());
+
+            IEnumerable<Payment> paidPayments = await Repo.GetAsync<Payment>(
+                p => p.OrderId.HasValue && orderIds.Contains(p.OrderId.Value) && p.Status == PaymentStatus.Success);
+            HashSet<Guid> paidOrderIds = paidPayments.Select(p => p.OrderId!.Value).ToHashSet();
+
+            IEnumerable<Models.Reservations.TableSession> tableSessions = await Repo.GetAsync<Models.Reservations.TableSession>(
+                filter: ts => ts.OrderId.HasValue && orderIds.Contains(ts.OrderId.Value),
+                includeProperties: "Table"
+            );
+
+            Dictionary<Guid, List<Models.Reservations.TableSession>> sessionsByOrderId = tableSessions
+                .Where(ts => ts.OrderId.HasValue)
+                .GroupBy(ts => ts.OrderId!.Value)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            foreach (Models.Orders.Order o in orders)
+            {
+                if (detailsByOrderId.TryGetValue(o.Id, out List<Models.Orders.OrderDetail>? ods))
+                {
+                    foreach (Models.Orders.OrderDetail d in ods)
+                    {
+                        if (statusById.TryGetValue(d.ItemStatusId, out StatusValue? s))
+                        {
+                            d.ItemStatus = s;
+                        }
+
+                        if (dishesById.TryGetValue(d.DishId, out Models.Menu.Dish? dish))
+                        {
+                            d.Dish = dish;
+                        }
+                    }
+
+                    o.OrderDetails = ods;
+                }
+
+                if (sessionsByOrderId.TryGetValue(o.Id, out List<Models.Reservations.TableSession>? sessions))
+                {
+                    o.TableSessions = sessions;
+                }
+
+                o.IsPaid = paidOrderIds.Contains(o.Id);
+            }
+
+            result.Orders = mapper.Map<List<DataTranferObjects.Orders.Order>>(orders);
+
+            List<Guid?> customerIds = orders.Where(o => o.CustomerId != null).Select(o => o.CustomerId).Distinct().ToList();
+            if (customerIds.Any())
+            {
+                IEnumerable<Models.Customers.Customer> customers = await Repo.GetAsync<Models.Customers.Customer>(
+                    filter: c => customerIds.Contains(c.Id),
+                    includeProperties: "ApplicationUser"
+                );
+
+                Dictionary<Guid, Models.Customers.Customer> customersDict = customers.ToDictionary(c => c.Id, c => c);
+
+                foreach (DataTranferObjects.Orders.Order dtoOrder in result.Orders)
+                {
+                    if (customersDict.TryGetValue(dtoOrder.CustomerId, out Models.Customers.Customer? customer))
+                    {
+                        dtoOrder.CustomerName = customer.ApplicationUser?.FullName;
+                        dtoOrder.CustomerEmail = customer.ApplicationUser?.Email;
+                    }
+                }
+            }
+
+            return result;
+        }
+
         private static object[] CloneParams(IEnumerable<SqlParameter> parameters)
             => parameters
                 .Select(p => new SqlParameter(p.ParameterName, p.SqlDbType)
@@ -305,7 +784,7 @@ namespace RestX.BLL.Services
                 includeProperties: "OrderDetails,OrderDetails.Dish,OrderDetails.ItemStatus,Payments,Customer,Customer.ApplicationUser,Reservation,TableSessions,TableSessions.Table"
             ); 
 
-            order.OrderDetails = GroupOrderDetailsByDish(order.OrderDetails);
+            //order.OrderDetails = GroupOrderDetailsByDish(order.OrderDetails);
 
             var mappedOrder = mapper.Map<DataTranferObjects.Orders.Order>(order);
             if (order.Payments != null && order.Payments.Any())
@@ -330,7 +809,12 @@ namespace RestX.BLL.Services
 
         public async Task<DataTranferObjects.Orders.Order> CheckSessionBeforeOrder(DataTranferObjects.Orders.Order order, string userId)
         {
-            var activeSession = await tableService.GetActiveTableSession(order.TableId);
+            var activeSession = await Repo.GetFirstAsync<TableSession>(
+                filter: ts => ts.TableId == order.TableId && ts.IsActive
+                           && ts.StartedAt <= DateTime.UtcNow.AddHours(7)
+            );
+
+            //var activeSession = await tableService.GetActiveTableSession(order.TableId);
 
             if (activeSession != null)
             {
@@ -376,8 +860,61 @@ namespace RestX.BLL.Services
 
         }
 
+        private async Task ValidateOrderInput(DataTranferObjects.Orders.Order order)
+        {
+            if (order == null)
+            {
+                throw new AppException("Order data is required.");
+            }
+
+            if (order.CustomerId == Guid.Empty)
+            {
+                throw new AppException("CustomerId is required.");
+            }
+
+            bool customerExists = await Repo.GetExistsAsync<Customer>(c => c.Id == order.CustomerId);
+            if (!customerExists)
+            {
+                throw new AppException("Customer not found.");
+            }
+
+            decimal discountAmount = order.DiscountAmount ?? 0m;
+            decimal taxAmount = order.TaxAmount ?? 0m;
+            decimal serviceCharge = order.ServiceCharge ?? 0m;
+
+            if (discountAmount < 0 || taxAmount < 0 || serviceCharge < 0)
+            {
+                throw new AppException("DiscountAmount, TaxAmount, ServiceCharge cannot be negative.");
+            }
+
+            List<DataTranferObjects.Orders.OrderDetail> details = order.OrderDetails ?? new List<DataTranferObjects.Orders.OrderDetail>();
+            if (!details.Any())
+            {
+                throw new AppException("Order must contain at least one order detail.");
+            }
+
+            foreach (DataTranferObjects.Orders.OrderDetail detail in details)
+            {
+                if (detail.DishId == Guid.Empty)
+                {
+                    throw new AppException("DishId is required.");
+                }
+
+                if (detail.Quantity <= 0)
+                {
+                    throw new AppException("Quantity must be greater than 0.");
+                }
+
+                if (!string.IsNullOrWhiteSpace(detail.Note) && detail.Note.Trim().Length > 500)
+                {
+                    throw new AppException("Order detail note cannot exceed 500 characters.");
+                }
+            }
+        }
+
         public async Task<Models.Orders.Order> UpsertOrder(DataTranferObjects.Orders.Order order, string userId)
         {
+            await ValidateOrderInput(order);
             Models.Orders.Order orderEntity;
 
             // CREATE
@@ -401,8 +938,7 @@ namespace RestX.BLL.Services
 
                 decimal additionalSubTotal = 0;
 
-                var statuses = await statusValueService.GetStatuses("order-detail");
-                int itemDefaultStatusId = statuses.First(x => x.IsDefault).Id;
+                int itemPreparingStatusId = await GetPreparingOrderDetailStatusId();
 
                 Dictionary<Guid, int> dishQuantitiesToDeduct = new Dictionary<Guid, int>();
 
@@ -421,8 +957,9 @@ namespace RestX.BLL.Services
                         {
                             DishId = d.DishId,
                             Quantity = d.Quantity,
+                            UnitPrice = dish.Price,
                             Note = d.Note,
-                            ItemStatusId = itemDefaultStatusId
+                            ItemStatusId = itemPreparingStatusId
                         });
 
                         if (dishQuantitiesToDeduct.ContainsKey(d.DishId))
@@ -465,8 +1002,7 @@ namespace RestX.BLL.Services
 
                 decimal additionalSubTotal = 0;
 
-                var statuses = await statusValueService.GetStatuses("order-detail");
-                int itemDefaultStatusId = statuses.First(x => x.IsDefault).Id;
+                int itemPreparingStatusId = await GetPreparingOrderDetailStatusId();
 
                 Dictionary<Guid, int> dishQuantitiesToDeduct = new Dictionary<Guid, int>();
 
@@ -484,8 +1020,9 @@ namespace RestX.BLL.Services
                             OrderId = orderEntity.Id,
                             DishId = d.DishId,
                             Quantity = d.Quantity,
+                            UnitPrice = dish.Price,
                             Note = d.Note,
-                            ItemStatusId = itemDefaultStatusId
+                            ItemStatusId = itemPreparingStatusId
                         };
 
                         additionalSubTotal += d.Quantity * dish.Price;
@@ -520,6 +1057,8 @@ namespace RestX.BLL.Services
 
         public async Task<Guid> UpdateOrder(Guid id, DataTranferObjects.Orders.Order order, string userId)
         {
+            await ValidateOrderInput(order);
+
             Models.Orders.Order? orderEntity = await Repo.GetOneAsync<Models.Orders.Order>(
                 filter: o => o.Id == id,
                 includeProperties: "OrderDetails,Payments"
@@ -538,8 +1077,7 @@ namespace RestX.BLL.Services
             List<Dish> requestDishes = (await Repo.GetAsync<Dish>(filter: d => requestDishIds.Contains(d.Id))).ToList();
             Dictionary<Guid, Dish> requestDishesById = requestDishes.ToDictionary(d => d.Id, d => d);
 
-            IEnumerable<RestX.BLL.DataTranferObjects.Status.StatusValues> statuses = await statusValueService.GetStatuses("order-detail");
-            int itemDefaultStatusId = statuses.First(x => x.IsDefault).Id;
+            int itemPreparingStatusId = await GetPreparingOrderDetailStatusId();
 
             decimal discountAmount = order.DiscountAmount ?? 0m;
             decimal taxAmount = order.TaxAmount ?? 0m;
@@ -558,7 +1096,7 @@ namespace RestX.BLL.Services
             if (orderEntity.OrderDetails?.Any() == true)
             {
                 List<Models.Orders.OrderDetail> oldPreparingDetails = orderEntity.OrderDetails
-                    .Where(x => x.ItemStatusId == itemDefaultStatusId)
+                    .Where(x => x.ItemStatusId == itemPreparingStatusId)
                     .ToList();
 
                 if (oldPreparingDetails.Any())
@@ -616,8 +1154,9 @@ namespace RestX.BLL.Services
                         OrderId = orderEntity.Id,
                         DishId = d.DishId,
                         Quantity = d.Quantity,
+                        UnitPrice = dish.Price,
                         Note = d.Note,
-                        ItemStatusId = itemDefaultStatusId
+                        ItemStatusId = itemPreparingStatusId
                     };
 
                     orderEntity.OrderDetails.Add(newDetail);
@@ -656,6 +1195,11 @@ namespace RestX.BLL.Services
 
         public async Task<bool> UpdateStatus(Guid orderId, int statusId, string userId)
         {
+            if (!Enum.IsDefined(typeof(OrderStatus), statusId))
+            {
+                throw new AppException("Invalid order status.");
+            }
+
             Models.Orders.Order? order = await Repo.GetOneAsync<Models.Orders.Order>(
                 filter: o => o.Id == orderId,
                 includeProperties: "OrderDetails"
@@ -663,7 +1207,22 @@ namespace RestX.BLL.Services
 
             if (order == null) throw new AppException("No order");
 
+            int previousStatusId = order.OrderStatusId;
             order.OrderStatusId = statusId;
+
+            if (previousStatusId == (int)OrderStatus.Open && statusId == (int)OrderStatus.Completed)
+            {
+                List<Models.Reservations.TableSession> activeSessions = (await Repo.GetAsync<Models.Reservations.TableSession>(
+                    filter: ts => ts.OrderId == orderId && ts.IsActive
+                )).ToList();
+
+                foreach (Models.Reservations.TableSession session in activeSessions)
+                {
+                    session.IsActive = false;
+                    session.EndedAt = DateTime.UtcNow.AddHours(7);
+                    Repo.Update(session, userId);
+                }
+            }
 
             if (statusId == (int)OrderStatus.Cancelled)
             {
@@ -734,14 +1293,25 @@ namespace RestX.BLL.Services
         }
         public async Task<bool> UpdateOrderDetailStatus(Guid orderDetailId, int statusId, string userId)
         {
-            Models.Orders.OrderDetail? orderDetail = await Repo.GetByIdAsync<Models.Orders.OrderDetail>(orderDetailId);
-            if (orderDetail == null)
-                return false;
+            Models.Orders.OrderDetail? orderDetail = await Repo.GetOneAsync<Models.Orders.OrderDetail>(
+                filter: od => od.Id == orderDetailId,
+                includeProperties: "Dish,Order");
 
-            int oldStatusId = orderDetail.ItemStatusId;
+            if (orderDetail == null)
+            {
+                return false;
+            }
 
             List<RestX.BLL.DataTranferObjects.Status.StatusValues> orderDetailStatuses =
                 (await statusValueService.GetStatuses("order-detail")).ToList();
+
+            bool statusExists = orderDetailStatuses.Any(x => x.Id == statusId);
+            if (!statusExists)
+            {
+                throw new AppException("Invalid order detail status.");
+            }
+
+            int oldStatusId = orderDetail.ItemStatusId;
 
             RestX.BLL.DataTranferObjects.Status.StatusValues? preparingStatus = orderDetailStatuses.FirstOrDefault(x =>
                 string.Equals(x.Code, "PREPARING", StringComparison.OrdinalIgnoreCase));
@@ -759,7 +1329,6 @@ namespace RestX.BLL.Services
 
                 await ingredientService.DeductFromRecipes(dishQtyToDeduct);
             }
-
             else if (preparingStatus != null
                 && cancelledStatus != null
                 && oldStatusId == preparingStatus.Id
@@ -790,27 +1359,55 @@ namespace RestX.BLL.Services
                 }
             }
 
-            orderDetail.ItemStatusId = statusId;
+            if (cancelledStatus != null
+                && oldStatusId != cancelledStatus.Id
+                && statusId == cancelledStatus.Id
+                && orderDetail.Order != null)
+            {
+                decimal cancelledAmount = orderDetail.Quantity * orderDetail.UnitPrice;
 
+                orderDetail.Order.SubTotal -= cancelledAmount;
+                if (orderDetail.Order.SubTotal < 0)
+                {
+                    orderDetail.Order.SubTotal = 0;
+                }
+
+                orderDetail.Order.CalculateTotalAmount();
+            }
+
+            orderDetail.ItemStatusId = statusId;
             Repo.Update(orderDetail, userId);
+
+            if (orderDetail.Order != null)
+            {
+                Repo.Update(orderDetail.Order, userId);
+            }
+
             await Repo.SaveAsync();
 
             return true;
         }
-
         public async Task<IEnumerable<DataTranferObjects.Orders.OrderDetail>> GetAllOrderDetails()
         {
             var orderDetailStatuses = await statusValueService.GetStatuses("order-detail");
-            var initialStatus = orderDetailStatuses.FirstOrDefault(x => x.IsDefault)
-                                ?? orderDetailStatuses.FirstOrDefault();
+            var preparingStatus = orderDetailStatuses.FirstOrDefault(x => x.Code == "PREPARING");
 
-            if (initialStatus == null)
+            if (preparingStatus == null)
                 return Enumerable.Empty<DataTranferObjects.Orders.OrderDetail>();
 
             var startOfDay = DateTime.UtcNow.AddHours(7).Date;
 
+            var now = DateTime.UtcNow.AddHours(7);
+
             var orderDetails = (await Repo.GetAsync<Models.Orders.OrderDetail>(
-                filter: od => od.ItemStatusId == initialStatus.Id && od.CreatedDate >= startOfDay,
+                filter: od => od.ItemStatusId == preparingStatus.Id
+                              && od.CreatedDate >= startOfDay
+                              && od.Order != null
+                              && od.Order.OrderStatusId == (int)OrderStatus.Open
+                              && od.Order.TableSessions.Any(ts =>
+                                      ts.IsActive &&
+                                      ts.StartedAt <= now
+                              ),
                 orderBy: query => query.OrderBy(od => od.CreatedDate),
                 includeProperties: "ItemStatus,Dish,Order,Order.TableSessions,Order.TableSessions.Table"
             )).ToList();
@@ -870,32 +1467,47 @@ namespace RestX.BLL.Services
 
             return reference;
         }
-
-        private List<Models.Orders.OrderDetail> GroupOrderDetailsByDish(IEnumerable<Models.Orders.OrderDetail> orderDetails)
+        private async Task<int> GetPreparingOrderDetailStatusId()
         {
-            if (orderDetails == null || !orderDetails.Any())
+            IEnumerable<RestX.BLL.DataTranferObjects.Status.StatusValues> statuses =
+                await statusValueService.GetStatuses("order-detail");
+
+            RestX.BLL.DataTranferObjects.Status.StatusValues? preparingStatus = statuses.FirstOrDefault(
+                x => string.Equals(x.Code, "PREPARING", StringComparison.OrdinalIgnoreCase));
+
+            if (preparingStatus == null)
             {
-                return new List<Models.Orders.OrderDetail>();
+                throw new AppException("Status 'PREPARING' for 'order-detail' was not found.");
             }
 
-            return orderDetails
-                .GroupBy(d => new { d.DishId, d.ItemStatusId })
-                .Select(dishGroup =>
-                {
-                    var firstItem = dishGroup.First();
-
-                    firstItem.Quantity = dishGroup.Sum(x => x.Quantity);
-
-                    var notes = dishGroup
-                        .Where(x => !string.IsNullOrWhiteSpace(x.Note))
-                        .Select(x => x.Note.Trim())
-                        .Distinct();
-                    firstItem.Note = string.Join("; ", notes);
-
-                    return firstItem;
-                })
-                .ToList();
+            return preparingStatus.Id;
         }
+        
+        //private List<Models.Orders.OrderDetail> GroupOrderDetailsByDish(IEnumerable<Models.Orders.OrderDetail> orderDetails)
+        //{
+        //    if (orderDetails == null || !orderDetails.Any())
+        //    {
+        //        return new List<Models.Orders.OrderDetail>();
+        //    }
+
+        //    return orderDetails
+        //        .GroupBy(d => new { d.DishId, d.ItemStatusId })
+        //        .Select(dishGroup =>
+        //        {
+        //            var firstItem = dishGroup.First();
+
+        //            firstItem.Quantity = dishGroup.Sum(x => x.Quantity);
+
+        //            var notes = dishGroup
+        //                .Where(x => !string.IsNullOrWhiteSpace(x.Note))
+        //                .Select(x => x.Note.Trim())
+        //                .Distinct();
+        //            firstItem.Note = string.Join("; ", notes);
+
+        //            return firstItem;
+        //        })
+        //        .ToList();
+        //}
 
         public async Task<DataTranferObjects.Orders.Order?> GetOrderByTableId(Guid tableId)
         {
@@ -904,8 +1516,7 @@ namespace RestX.BLL.Services
             var activeSessions = (await Repo.GetAsync<Models.Reservations.TableSession>(
                     filter: ts => ts.TableId == tableId
                                && ts.IsActive
-                               && ts.StartedAt <= now
-                               && (ts.EndedAt == null || ts.EndedAt > now),
+                               && ts.StartedAt <= now,
                     orderBy: query => query.OrderByDescending(ts => ts.StartedAt)
                 )).ToList();
 
@@ -922,6 +1533,104 @@ namespace RestX.BLL.Services
             }
 
             return await GetOrderById(sessionWithOrder.OrderId!.Value);
+        }
+
+        public async Task<DataTranferObjects.Orders.Order> PreOrderByReservation(
+            Guid reservationId,
+            DataTranferObjects.Orders.Order order,
+            string userId)
+        {
+            if (reservationId == Guid.Empty)
+            {
+                throw new AppException("ReservationId is required.");
+            }
+
+            Models.Reservations.Reservation? reservation = await Repo.GetOneAsync<Models.Reservations.Reservation>(
+                filter: r => r.Id == reservationId,
+                includeProperties: "ReservationStatus,TableSessions"
+            );
+
+            if (reservation == null)
+            {
+                throw new AppException("Reservation not found.");
+            }
+
+            string reservationStatusCode = reservation.ReservationStatus?.Code ?? string.Empty;
+            if (string.Equals(reservationStatusCode, "CANCELLED", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new AppException("Cannot pre-order for a cancelled reservation.");
+            }
+
+            if (reservation.CheckedInAt.HasValue)
+            {
+                throw new AppException("Reservation already checked in. Please order by table/session flow.");
+            }
+
+            DateTime now = DateTime.UtcNow.AddHours(7);
+            if (reservation.Time <= now)
+            {
+                throw new AppException("Reservation time has started. Please order by table/session flow.");
+            }
+
+            List<Models.Reservations.TableSession> sessions = (await Repo.GetAsync<Models.Reservations.TableSession>(
+                filter: ts => ts.ReservationId == reservationId && ts.IsActive
+            )).ToList();
+
+            if (!sessions.Any())
+            {
+                throw new AppException("No active table session found for this reservation.");
+            }
+
+            Models.Orders.Order? existingOrder = await Repo.GetFirstAsync<Models.Orders.Order>(
+                filter: o => o.ReservationId == reservationId,
+                orderBy: q => q.OrderByDescending(o => o.CreatedDate)
+            );
+
+            if (existingOrder != null && existingOrder.OrderStatusId == (int)OrderStatus.Completed)
+            {
+                throw new AppException("Reservation order was already completed.");
+            }
+
+            order.CustomerId = reservation.CustomerId;
+            order.ReservationId = reservationId;
+
+            Models.Orders.Order savedOrder;
+
+            if (existingOrder != null && existingOrder.OrderStatusId != (int)OrderStatus.Cancelled)
+            {
+                order.Id = existingOrder.Id;
+                order.Reference ??= existingOrder.Reference;
+                order.DiscountAmount ??= existingOrder.DiscountAmount;
+                order.TaxAmount ??= existingOrder.TaxAmount;
+                order.ServiceCharge ??= existingOrder.ServiceCharge;
+                order.CompletedAt ??= existingOrder.CompletedAt;
+                order.CancelledAt ??= existingOrder.CancelledAt;
+                order.HandledBy ??= existingOrder.HandledBy;
+
+                await UpdateOrder(existingOrder.Id, order, userId);
+
+                savedOrder = await Repo.GetByIdAsync<Models.Orders.Order>(existingOrder.Id)
+                    ?? throw new AppException("Order not found after update.");
+            }
+            else
+            {
+                order.Id = null;
+                savedOrder = await UpsertOrder(order, userId);
+            }
+
+            foreach (Models.Reservations.TableSession session in sessions)
+            {
+                if (session.OrderId != savedOrder.Id)
+                {
+                    session.OrderId = savedOrder.Id;
+                    Repo.Update(session, userId);
+                }
+            }
+
+            await Repo.SaveAsync();
+
+            DataTranferObjects.Orders.Order? result = await GetOrderById(savedOrder.Id);
+            return result ?? mapper.Map<DataTranferObjects.Orders.Order>(savedOrder);
         }
 
         public async Task<byte[]> ExportAsync(OrderSearch filter)

@@ -380,8 +380,14 @@ namespace RestX.AdminDAL.Migrations
                     b.Property<string>("PropertiesJson")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<decimal>("ServiceChargeRate")
+                        .HasColumnType("decimal(5,2)");
+
                     b.Property<bool>("Status")
                         .HasColumnType("bit");
+
+                    b.Property<decimal>("TaxRate")
+                        .HasColumnType("decimal(5,2)");
 
                     b.HasKey("Id");
 
@@ -390,6 +396,37 @@ namespace RestX.AdminDAL.Migrations
                         .HasFilter("[Hostname] IS NOT NULL");
 
                     b.ToTable("Tenants");
+                });
+
+            modelBuilder.Entity("RestX.Models.Tenants.TenantBusinessHour", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<TimeSpan>("CloseTime")
+                        .HasColumnType("time");
+
+                    b.Property<byte>("DayOfWeek")
+                        .HasColumnType("tinyint");
+
+                    b.Property<bool>("IsClosed")
+                        .HasColumnType("bit");
+
+                    b.Property<TimeSpan>("OpenTime")
+                        .HasColumnType("time");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "DayOfWeek")
+                        .IsUnique();
+
+                    b.ToTable("TenantBusinessHours");
                 });
 
             modelBuilder.Entity("RestX.Models.Tenants.TenantRequest", b =>
@@ -543,6 +580,17 @@ namespace RestX.AdminDAL.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("RestX.Models.Tenants.TenantBusinessHour", b =>
+                {
+                    b.HasOne("RestX.Models.Tenants.Tenant", "Tenant")
+                        .WithMany("BusinessHours")
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Tenant");
+                });
+
             modelBuilder.Entity("RestX.Models.Tenants.TenantSetting", b =>
                 {
                     b.HasOne("RestX.Models.Tenants.Tenant", "Tenant")
@@ -556,6 +604,8 @@ namespace RestX.AdminDAL.Migrations
 
             modelBuilder.Entity("RestX.Models.Tenants.Tenant", b =>
                 {
+                    b.Navigation("BusinessHours");
+
                     b.Navigation("TenantSettings");
                 });
 #pragma warning restore 612, 618

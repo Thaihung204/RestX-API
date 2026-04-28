@@ -10,6 +10,10 @@
         public string Hostname { get; set; }
         public bool IsActive { get; set; }
         public string Prefix { get; set; }
+
+        public decimal TaxRate { get; set; }
+        public decimal ServiceChargeRate { get; set; }
+
         public string PrimaryColor { get; set; }
         public string LightBaseColor { get; set; }
         public string LightSurfaceColor { get; set; }
@@ -36,6 +40,7 @@
         public string BusinessCompanyNumber { get; set; }
         public string BusinessOpeningHours { get; set; }
         public string AboutUs { get; set; }
+        public List<TenantBusinessHour> BusinessHours { get; set; } = new();
         public TenantConfiguration Configuration { get; set; }
     }
 }

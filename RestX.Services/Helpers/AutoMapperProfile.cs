@@ -7,6 +7,7 @@ using RestX.BLL.DataTranferObjects.Combo;
 using RestX.BLL.DataTranferObjects.Customer;
 using RestX.BLL.DataTranferObjects.Dish;
 using RestX.BLL.DataTranferObjects.Employee;
+using RestX.BLL.DataTranferObjects.Feedback;
 using RestX.BLL.DataTranferObjects.Inventory;
 using RestX.BLL.DataTranferObjects.Payments;
 using RestX.BLL.DataTranferObjects.Reservation;
@@ -16,6 +17,7 @@ using RestX.BLL.DataTranferObjects.Tenants;
 using RestX.Models.Common;
 using RestX.Models.Customers;
 using RestX.Models.Enum;
+using RestX.Models.Feedbacks;
 using RestX.Models.HR;
 using RestX.Models.Identity;
 using RestX.Models.Inventory;
@@ -140,7 +142,12 @@ namespace RestX.BLL.Helpers
                 .ForMember(dest => dest.OrderDetails, opt => opt.Ignore()); CreateMap<Models.Inventory.IngredientCategory, DataTranferObjects.Inventory.IngredientCategory>().ReverseMap();
 
             CreateMap<LoyaltyPointBandEntity, DataTranferObjects.Loyalty.LoyaltyPointBand>().ReverseMap();
-            CreateMap<Models.Orders.Payment, PaymentDetail>();
+            CreateMap<Models.Orders.Payment, PaymentDetail>()
+                .ForMember(dest => dest.Customer, opt => opt.Ignore())
+                .ForMember(dest => dest.Order, opt => opt.Ignore())
+                .ForMember(dest => dest.Reservation, opt => opt.Ignore())
+                .ForMember(dest => dest.DepositPaid, opt => opt.Ignore())
+                .ForMember(dest => dest.CustomerName, opt => opt.Ignore());
 
             CreateMap<StatusValue, StatusValues>();
             CreateMap<StatusValues, StatusValue>()
@@ -208,7 +215,8 @@ namespace RestX.BLL.Helpers
                 .ForMember(dest => dest.OrderReference, opt => opt.MapFrom(src => src.Order != null ? src.Order.Reference : null))
                 .ForMember(dest => dest.OrderTotalAmount, opt => opt.MapFrom(src => src.Order != null ? src.Order.TotalAmount : (decimal?)null));
             CreateMap<Notification, RestaurantNotification>().ReverseMap();
-
+            CreateMap<Feedback, FeedbackItem>().ReverseMap();
+            CreateMap<Customer, FeedbackCustomerInfo>().ReverseMap();
         }
     }
 }

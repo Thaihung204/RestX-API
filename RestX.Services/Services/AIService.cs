@@ -361,6 +361,10 @@ namespace RestX.BLL.Services
                         var httpContent = new StringContent(bodyJson, Encoding.UTF8, "application/json");
                         response = await client.PostAsync(url, httpContent, cts.Token);
                     }
+                    catch (OperationCanceledException)
+                    {
+                        break;
+                    }
                     catch (Exception) when (attempt < retryDelays.Length)
                     {
                         await Task.Delay(retryDelays[attempt]);
@@ -1066,7 +1070,7 @@ LUÔN trả về JSON hợp lệ sau, KHÔNG thêm text nào ngoài JSON:
 QUY TẮC:
 1. evidence: dùng số liệu từ 'CHỈ SỐ TÍNH TOÁN SẴN', chỉ hiển thị kết quả — không viết công thức.
 2. risk/opportunity: so sánh với benchmark (hủy đơn <5% | quay lại 35-40% | concentration <20%/khách).
-3. So sánh: ""X phần, tăng Y% so kỳ trước"" — không dùng ký hiệu toán học.
+3. So sánh kỳ trước: dùng đúng số từ data. Nếu data ghi ""món mới (chưa có kỳ trước)"" thì ghi ""món mới"", KHÔNG được tự điền N/A hay bất kỳ số nào.
 4. suggestedDishes: trích dẫn từ 'CƠ HỘI THEO MÙA' trong data.
 5. Thời gian: ""Tháng này"" | ""Quý này"" | ""Năm nay"".
 6. Số lượng: insights 3-4 (mỗi insight có action cụ thể) | topDishes top3 | suggestedDishes top3 | combos 1-2 | customers 1 object.
@@ -1088,7 +1092,7 @@ JSON OUTPUT (chỉ trả về JSON, không thêm text):
 
   ""menu"": {{
     ""topDishes"": [
-      {{ ""rank"": 1, ""dishName"": ""..."", ""evidence"": ""X phần (+Y% so kỳ trước), chiếm Z% DT"", ""reason"": ""Tại sao đang dẫn đầu"", ""action"": ""Đẩy mạnh / tăng giá / highlight"" }},
+      {{ ""rank"": 1, ""dishName"": ""..."", ""evidence"": ""X phần (món mới HOẶC +Y% so kỳ trước — lấy đúng từ data), chiếm Z% DT"", ""reason"": ""Tại sao đang dẫn đầu"", ""action"": ""Đẩy mạnh / tăng giá / highlight"" }},
       {{ ""rank"": 2, ... }},
       {{ ""rank"": 3, ... }}
     ],
@@ -1176,10 +1180,14 @@ JSON OUTPUT (chỉ trả về JSON, không thêm text):
             }
             if (summary.Revenue.Total > 0)
             {
+                var trendLookup = dishTrend.ToDictionary(t => t.Name, t => t, StringComparer.OrdinalIgnoreCase);
                 foreach (var d in topDishes.Dishes.Take(3))
                 {
                     var pct = (double)d.Revenue / (double)summary.Revenue.Total * 100;
-                    sb.AppendLine($"  [{d.Name}]: {d.Quantity} phần, chiếm {pct:F1}% tổng DT");
+                    var growthStr = trendLookup.TryGetValue(d.Name, out var trend) && trend.Trend != "new"
+                        ? $"{(trend.GrowthPercent >= 0 ? "+" : "")}{trend.GrowthPercent:F1}% so kỳ trước"
+                        : "món mới (chưa có kỳ trước)";
+                    sb.AppendLine($"  [{d.Name}]: {d.Quantity} phần, {growthStr}, chiếm {pct:F1}% tổng DT");
                 }
             }
             sb.AppendLine();
@@ -1195,8 +1203,14 @@ JSON OUTPUT (chỉ trả về JSON, không thêm text):
             sb.AppendLine();
 
             sb.AppendLine("=== MENU - TOP 5 MÓN ===");
+            var trendMap = dishTrend.ToDictionary(t => t.Name, t => t, StringComparer.OrdinalIgnoreCase);
             foreach (var d in topDishes.Dishes.Take(5))
-                sb.AppendLine($"  [{d.Name}] {d.Quantity} phần | {d.Revenue:N0}đ");
+            {
+                var growthStr = trendMap.TryGetValue(d.Name, out var tr) && tr.Trend != "new"
+                    ? $"{(tr.GrowthPercent >= 0 ? "+" : "")}{tr.GrowthPercent:F1}%"
+                    : "mới";
+                sb.AppendLine($"  [{d.Name}] {d.Quantity} phần | {d.Revenue:N0}đ | {growthStr} so kỳ trước");
+            }
 
             sb.AppendLine();
             sb.AppendLine("=== XU HƯỚNG MÓN ===");

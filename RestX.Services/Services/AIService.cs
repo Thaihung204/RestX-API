@@ -345,7 +345,7 @@ namespace RestX.BLL.Services
             var modelsToTry = _model == "gemini-2.5-flash"
                 ? new[] { "gemini-2.5-flash", "gemini-2.5-flash-lite" }
                 : new[] { _model, "gemini-2.5-flash-lite" };
-            int[] retryDelays = [1500, 3000];
+            int[] retryDelays = [500];
 
             foreach (var model in modelsToTry)
             {
@@ -357,8 +357,9 @@ namespace RestX.BLL.Services
                     response?.Dispose();
                     try
                     {
+                        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
                         var httpContent = new StringContent(bodyJson, Encoding.UTF8, "application/json");
-                        response = await client.PostAsync(url, httpContent);
+                        response = await client.PostAsync(url, httpContent, cts.Token);
                     }
                     catch (Exception) when (attempt < retryDelays.Length)
                     {

@@ -67,5 +67,17 @@ namespace RestX.Models.Orders
         {
             TotalAmount = (SubTotal - DiscountAmount) + TaxAmount + ServiceCharge;
         }
+
+        public void ApplyReservationDeposit(decimal depositAmount)
+        {
+            if (depositAmount <= 0)
+            {
+                return;
+            }
+
+            decimal adjustedTotal = TotalAmount - depositAmount;
+            TotalAmount = adjustedTotal < 0 ? 0 : adjustedTotal;
+        }
+
     }
 }

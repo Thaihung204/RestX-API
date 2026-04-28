@@ -264,12 +264,12 @@ namespace RestX.BLL.Services
             if (alreadyPaid)
                 throw new InvalidOperationException("Order is already paid");
 
-            var (gatewayClient, gatewaySettings) = await GetTenantGateway();
-
             var depositPaid = await GetPaidDepositAmount(order.ReservationId);
             var amount = (long)(order.TotalAmount - depositPaid);
             if (amount <= 0)
-                throw new InvalidOperationException("Order total must be greater than zero");
+                return await ConfirmZeroAmountPayment(order, createdBy);
+
+            var (gatewayClient, gatewaySettings) = await GetTenantGateway();
 
             var existingPending = await Repo.GetOneAsync<Payment>(
                 p => p.OrderId == orderId &&
@@ -465,6 +465,71 @@ namespace RestX.BLL.Services
             await Repo.SaveAsync();
         }
 
+        private async Task<CreatePaymentLinkResponse> ConfirmZeroAmountPayment(Order order, string? createdBy)
+        {
+            var employee = await Repo.GetOneAsync<Employee>(e => e.ApplicationUser.Id.ToString() == createdBy);
+
+            var existingPending = await Repo.GetOneAsync<Payment>(
+                p => p.OrderId == order.Id &&
+                     p.Purpose == PaymentPurpose.Order &&
+                     p.Status == PaymentStatus.Pending);
+
+            Payment payment;
+            if (existingPending != null)
+            {
+                existingPending.PaymentMethodId = PaymentConstants.Method.Cash;
+                existingPending.Amount = 0;
+                existingPending.Status = PaymentStatus.Success;
+                existingPending.PaymentDate = DateTime.UtcNow.AddHours(7);
+                existingPending.PayOSOrderCode = null;
+                existingPending.CheckoutUrl = null;
+                existingPending.ProcessedBy = employee?.Id;
+                Repo.Update(existingPending, createdBy);
+                payment = existingPending;
+            }
+            else
+            {
+                payment = new Payment
+                {
+                    OrderId = order.Id,
+                    ReservationId = order.ReservationId,
+                    PaymentMethodId = PaymentConstants.Method.Cash,
+                    Amount = 0,
+                    Status = PaymentStatus.Success,
+                    Purpose = PaymentPurpose.Order,
+                    PaymentDate = DateTime.UtcNow.AddHours(7),
+                    ProcessedBy = employee?.Id
+                };
+                await Repo.CreateAsync(payment, createdBy);
+            }
+
+            await AwardLoyaltyPointsAsync(order);
+            await orderService.UpdateStatus(order.Id, (int)OrderStatus.Completed, createdBy ?? string.Empty);
+
+            order.CompletedAt = DateTime.UtcNow.AddHours(7);
+            Repo.Update(order, createdBy);
+
+            if (order.ReservationId.HasValue)
+                await reservationService.CompleteReservation(order.ReservationId.Value, createdBy);
+
+            List<TableSession> activeSessions = (await Repo.GetAsync<TableSession>(
+                filter: ts => ts.OrderId == order.Id && ts.IsActive
+            )).ToList();
+
+            foreach (Guid tableId in activeSessions.Select(ts => ts.TableId).Distinct())
+                await tableService.CloseTableSession(tableId);
+
+            await Repo.SaveAsync();
+
+            return new CreatePaymentLinkResponse
+            {
+                PaymentId = payment.Id,
+                OrderCode = 0,
+                CheckoutUrl = string.Empty,
+                ZeroAmount = true
+            };
+        }
+
         private async Task<Order> RecalculateOrderAmountForCheckout(Guid orderId, string? modifiedBy = null)
         {
             Order order = await Repo.GetOneAsync<Order>(
@@ -484,6 +549,10 @@ namespace RestX.BLL.Services
             {
                 order.DiscountAmount = order.SubTotal;
             }
+
+            var afterDiscount = order.SubTotal - order.DiscountAmount;
+            order.TaxAmount = Math.Round(afterDiscount * CurrentTenant.TaxRate / 100, 2);
+            order.ServiceCharge = Math.Round(afterDiscount * CurrentTenant.ServiceChargeRate / 100, 2);
 
             order.CalculateTotalAmount();
             Repo.Update(order, modifiedBy);

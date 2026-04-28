@@ -345,7 +345,7 @@ namespace RestX.BLL.Services
             var modelsToTry = _model == "gemini-2.5-flash"
                 ? new[] { "gemini-2.5-flash", "gemini-2.5-flash-lite" }
                 : new[] { _model, "gemini-2.5-flash-lite" };
-            int[] retryDelays = [3000, 8000];
+            int[] retryDelays = [1500, 3000];
 
             foreach (var model in modelsToTry)
             {

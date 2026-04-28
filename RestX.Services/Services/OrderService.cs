@@ -398,7 +398,7 @@ namespace RestX.BLL.Services
 
                 foreach (DataTranferObjects.Orders.Order dtoOrder in result.Orders)
                 {
-                    if (customersDict.TryGetValue(dtoOrder.CustomerId, out Models.Customers.Customer? customer))
+                    if (dtoOrder.CustomerId.HasValue && customersDict.TryGetValue(dtoOrder.CustomerId.Value, out Models.Customers.Customer? customer))
                     {
                         dtoOrder.CustomerName = customer.ApplicationUser?.FullName;
                         dtoOrder.CustomerEmail = customer.ApplicationUser?.Email;
@@ -752,7 +752,7 @@ namespace RestX.BLL.Services
 
                 foreach (DataTranferObjects.Orders.Order dtoOrder in result.Orders)
                 {
-                    if (customersDict.TryGetValue(dtoOrder.CustomerId, out Models.Customers.Customer? customer))
+                    if (dtoOrder.CustomerId.HasValue && customersDict.TryGetValue(dtoOrder.CustomerId.Value, out Models.Customers.Customer? customer))
                     {
                         dtoOrder.CustomerName = customer.ApplicationUser?.FullName;
                         dtoOrder.CustomerEmail = customer.ApplicationUser?.Email;
@@ -872,12 +872,6 @@ namespace RestX.BLL.Services
                 throw new AppException("CustomerId is required.");
             }
 
-            bool customerExists = await Repo.GetExistsAsync<Customer>(c => c.Id == order.CustomerId);
-            if (!customerExists)
-            {
-                throw new AppException("Customer not found.");
-            }
-
             decimal discountAmount = order.DiscountAmount ?? 0m;
             decimal taxAmount = order.TaxAmount ?? 0m;
             decimal serviceCharge = order.ServiceCharge ?? 0m;
@@ -947,7 +941,7 @@ namespace RestX.BLL.Services
                     foreach (var d in order.OrderDetails)
                     {
                         if (!dishesById.ContainsKey(d.DishId))
-                            throw new Exception($"Dish {d.DishId} not found");
+                            throw new AppException($"Dish not found");
 
                         var dish = dishesById[d.DishId];
 

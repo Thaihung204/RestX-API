@@ -357,7 +357,7 @@ namespace RestX.BLL.Services
                     response?.Dispose();
                     try
                     {
-                        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+                        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(13));
                         var httpContent = new StringContent(bodyJson, Encoding.UTF8, "application/json");
                         response = await client.PostAsync(url, httpContent, cts.Token);
                     }

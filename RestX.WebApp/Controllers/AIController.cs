@@ -142,6 +142,9 @@ namespace RestX.WebApp.Controllers
         {
             try
             {
+                if (string.IsNullOrWhiteSpace(request.Prompt))
+                    return BadRequest("Prompt không được để trống.");
+
                 var response = await _aiMenuService.GenerateContent(request);
                 return Ok(response);
             }

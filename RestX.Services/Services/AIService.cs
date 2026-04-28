@@ -124,36 +124,12 @@ namespace RestX.BLL.Services
 
         public async Task<ContentGenerateResponse> GenerateContent(ContentGenerateRequest request)
         {
-            string descType;
-            string entityContext;
+            if (string.IsNullOrWhiteSpace(request.Prompt))
+                throw new AppException("Prompt không được để trống.");
 
-            if (!string.IsNullOrWhiteSpace(request.DishName))
-            {
-                descType = "dish";
-                entityContext = $"Món ăn: {request.DishName}";
-            }
-            else if (!string.IsNullOrWhiteSpace(request.ComboName))
-            {
-                descType = "combo";
-                var dishesStr = request.ComboDishes?.Any() == true
-                    ? string.Join(", ", request.ComboDishes)
-                    : "chưa có món";
-                entityContext = $"Combo: {request.ComboName}\n  Bao gồm: {dishesStr}";
-            }
-            else if (!string.IsNullOrWhiteSpace(request.PromotionName))
-            {
-                descType = "promotion";
-                var discountStr = request.DiscountValue.HasValue ? $"giảm {request.DiscountValue}%" : "";
-                entityContext = $"Khuyến mãi: {request.PromotionName}\n  Ưu đãi: {discountStr}";
-            }
-            else
-            {
-                throw new AppException("Phải truyền vào DishName, ComboName hoặc PromotionName.");
-            }
-
-            var systemPrompt = BuildContentPrompt(descType, entityContext);
-            var rawResponse = await CallGemini(systemPrompt, new List<ChatMessage>(), "Tạo mô tả theo yêu cầu.", maxTokens: 1024);
-            return ParseContentResponse(rawResponse, descType);
+            var systemPrompt = BuildContentPrompt(request.Prompt, CurrentTenant);
+            var rawResponse = await CallGemini(systemPrompt, new List<ChatMessage>(), request.Prompt, maxTokens: 2048);
+            return ParseContentResponse(rawResponse);
         }
 
         #endregion
@@ -777,160 +753,49 @@ JSON OUTPUT (chỉ trả JSON, không thêm text):
             };
         }
 
-        private static string BuildContentPrompt(string descType, string entityContext)
+        private static string BuildContentPrompt(string userPrompt, ActiveTenant? tenant)
         {
-            var taskGuide = descType switch
-            {
-                "dish" => "Viết mô tả món ăn xuất hiện trên menu — gợi thèm ăn, khai thác hương vị, kết cấu, cảm xúc khi thưởng thức.",
-                "combo" => "Viết mô tả combo — nêu bật sự kết hợp hài hòa giữa các món, giá trị tiết kiệm, bối cảnh phù hợp.",
-                _ => "Viết mô tả khuyến mãi — trình bày rõ ưu đãi, tạo FOMO nhẹ nhàng, kết thúc bằng CTA thúc đẩy hành động."
-            };
+            var restaurantName = !string.IsNullOrWhiteSpace(tenant?.BusinessName) ? tenant.BusinessName
+                : !string.IsNullOrWhiteSpace(tenant?.Name) ? tenant.Name
+                : null;
 
-            return $@"Bạn là chuyên gia viết mô tả F&B tại Việt Nam. {taskGuide}
+            var contextLines = new List<string>();
+            if (restaurantName != null) contextLines.Add($"Tên nhà hàng: {restaurantName}");
+            if (!string.IsNullOrWhiteSpace(tenant?.BusinessPrimaryPhone)) contextLines.Add($"Điện thoại: {tenant.BusinessPrimaryPhone}");
+            if (!string.IsNullOrWhiteSpace(tenant?.BusinessEmailAddress)) contextLines.Add($"Email: {tenant.BusinessEmailAddress}");
+            if (!string.IsNullOrWhiteSpace(tenant?.BusinessAddressLine1)) contextLines.Add($"Địa chỉ: {tenant.BusinessAddressLine1}");
 
-THÔNG TIN:
-{entityContext}
+            var tenantContext = contextLines.Any()
+                ? $"\nTHÔNG TIN NHÀ HÀNG (dùng trực tiếp, không dùng placeholder):\n{string.Join("\n", contextLines)}\n"
+                : string.Empty;
 
-YÊU CẦU:
-• 3 phiên bản, mỗi phiên bản khác nhau về góc tiếp cận (giác quan / cảm xúc / câu chuyện).
-• Giọng thân thiện, gần gũi, tiếng Việt tự nhiên.
-• content: tối đa 200 ký tự.
-• headline: 5-10 từ, gợi cảm xúc hoặc điểm nổi bật.
+            return $@"Bạn là chuyên gia viết nội dung F&B tại Việt Nam.
+{tenantContext}
+YÊU CẦU CỦA NGƯỜI DÙNG:
+{userPrompt}
+
+HƯỚNG DẪN:
+• Tạo đúng 3 phiên bản, mỗi phiên bản có góc tiếp cận khác nhau.
+• Giọng thân thiện, tự nhiên, phù hợp với yêu cầu.
+• Dùng tên nhà hàng và thông tin thực tế ở trên, KHÔNG dùng placeholder như [Tên nhà hàng].
+• Mỗi content tối đa 200 ký tự.
 
 Trả về JSON, KHÔNG thêm text ngoài JSON:
 {{
   ""variants"": [
-    {{ ""headline"": ""..."", ""content"": ""..."" }},
-    {{ ""headline"": ""..."", ""content"": ""..."" }},
-    {{ ""headline"": ""..."", ""content"": ""..."" }}
+    {{ ""content"": ""..."" }},
+    {{ ""content"": ""..."" }},
+    {{ ""content"": ""..."" }}
   ]
 }}";
         }
 
-        private static string BuildCampaignPackPrompt(string theme, string tone, string language,
-            string tenantName, string menuSnapshot, string? promotionDetail,
-            string? customContext, string? occasion, string topDishesContext)
-        {
-            var langInstruction = language == "en"
-                ? "Write all output in natural, fluent English."
-                : "Viết toàn bộ output bằng tiếng Việt tự nhiên, trôi chảy.";
-
-            var toneLabel = tone switch
-            {
-                "luxury" => "sang trọng, tinh tế, ngôn từ cao cấp",
-                "funny" => "hài hước, vui tươi, có wordplay và emoji nhẹ",
-                _ => "thân thiện, gần gũi, ấm áp"
-            };
-
-            var occasionSection = !string.IsNullOrEmpty(occasion)
-                ? $"\nDỊP ĐẶC BIỆT HÔM NAY: {occasion} — Lồng ghép tinh tế vào tất cả các kênh."
-                : "";
-
-            var topDishesSection = !string.IsNullOrWhiteSpace(topDishesContext)
-                ? $"\n{topDishesContext}"
-                : "";
-
-            var promoSection = !string.IsNullOrWhiteSpace(promotionDetail)
-                ? $"\nCHI TIẾT KHUYẾN MÃI: {promotionDetail}"
-                : "";
-
-            var customSection = !string.IsNullOrWhiteSpace(customContext)
-                ? $"\nGHI CHÚ THÊM: {customContext}"
-                : "";
-
-            return $@"Bạn là Creative Content Director chuyên F&B marketing cho nhà hàng **{tenantName}**.
-Nhiệm vụ: Tạo CAMPAIGN PACK — bộ content đồng bộ cho 4 kênh truyền thông cùng 1 chiến dịch.
-
-{langInstruction}
-Giọng điệu xuyên suốt: {toneLabel}.
-
-CHỦ ĐỀ CHIẾN DỊCH: ""{theme}""{occasionSection}{topDishesSection}{promoSection}{customSection}
-
-=== MENU HIỆN TẠI ===
-{menuSnapshot}
-=== HẾT MENU ===
-
-YÊU CẦU TỪNG KÊNH — ĐỌC KỸ VÀ THỰC HIỆN ĐẦY ĐỦ:
-
-[FACEBOOK — BẮT BUỘC DÀI VÀ ĐẦY ĐỦ]
-• Độ dài: 200-300 từ. KHÔNG được viết ngắn hơn 200 từ.
-• Cấu trúc bắt buộc:
-  1. Hook (2-3 câu): câu mở đầu phải cực kỳ gây chú ý — câu hỏi khiêu khích, sự thật bất ngờ, hoặc mô tả cảm giác sống động đến mức người đọc phải dừng scroll.
-  2. Story/Emotion (4-6 câu): kể câu chuyện cảm xúc về trải nghiệm ẩm thực — gợi lên hình ảnh, mùi thơm, cảm giác ngồi tại bàn, không khí nhà hàng vào mùa hè. Đề cập 2-3 món cụ thể trong menu với chi tiết gợi cảm giác.
-  3. Offer/Detail (3-4 câu): trình bày ưu đãi/sự kiện rõ ràng, kèm điều kiện nếu có. Dùng bullet hoặc emoji để dễ đọc.
-  4. Social Proof (1-2 câu): nhắc đến sự phổ biến, số lượng có hạn, hoặc phản hồi khách hàng (có thể hư cấu nhẹ phù hợp).
-  5. CTA (2-3 câu): kêu gọi hành động cụ thể — đặt bàn, tag bạn bè, comment, share. Tạo urgency.
-• Hashtags: 10-15 tag, mix brand + category + trending + seasonal.
-• imagePrompt: VIẾT BẰNG TIẾNG ANH — mô tả chi tiết concept ảnh bìa Facebook lý tưởng cho AI image generator (Midjourney/DALL-E). Bao gồm: góc chụp, ánh sáng, màu sắc chủ đạo, các element trong ảnh, phong cách nhiếp ảnh.
-• headline: câu hook đầu tiên (không phải tiêu đề chung chung).
-
-[INSTAGRAM — NGẮN NHƯNG CHẤT]
-• Độ dài: 80-120 từ. Aesthetic, súc tích, mỗi từ phải có giá trị.
-• Cấu trúc: 1 câu hook killer → 3-4 câu gợi cảm xúc/hình ảnh đẹp → 1 câu CTA nhẹ nhàng.
-• Phong cách: poetic hơn FB, thiên về cảm xúc và hình ảnh thay vì thông tin.
-• Hashtags: 12-18 tag (IG reach phụ thuộc nhiều vào hashtag).
-• imagePrompt: VIẾT BẰNG TIẾNG ANH — concept ảnh/Reels thumbnail đẹp cho IG feed, chú trọng tính aesthetic và màu sắc.
-• headline: dòng đầu hiển thị trước ""... more"" — phải đủ mạnh để người đọc nhấn xem thêm.
-
-[EMAIL — CHUYÊN NGHIỆP VÀ ĐẦY ĐỦ]
-• Độ dài content: 180-250 từ (không tính subject line).
-• Cấu trúc bắt buộc trong trường 'content':
-  - Preheader (1 câu, ~90 ký tự): preview text hiển thị sau subject line trong hộp thư.
-  - Lời chào cá nhân hóa (1-2 câu): ấm áp, gần gũi, gọi khách là ""bạn"".
-  - Đoạn 1 — Hook (3-4 câu): giới thiệu câu chuyện/lý do viết email này, kết nối cảm xúc.
-  - Đoạn 2 — Nội dung chính (4-5 câu): mô tả chi tiết menu mới/ưu đãi, đề cập 2-3 món cụ thể với chi tiết hấp dẫn.
-  - Đoạn 3 — Detail & Urgency (3-4 câu): điều kiện ưu đãi, thời hạn, cách thức tham gia.
-  - CTA button text (1 dòng ngắn gọn): ví dụ ""→ Đặt bàn ngay hôm nay"".
-  - Ký tên: ấm áp từ team nhà hàng.
-• Subject line trong 'headline': 40-60 ký tự, tạo tò mò hoặc benefit rõ ràng.
-• hashtags: null (bắt buộc).
-• imagePrompt: VIẾT BẰNG TIẾNG ANH — concept ảnh hero email.
-
-[PROMOTION BANNER — IMPACT NGAY]
-• Nội dung trong 'content': headline lớn + 2-3 dòng subtext + CTA.
-• Tổng: 30-50 từ — cô đọng, đọc trong 3 giây phải hiểu ngay.
-• Headline: bold, to, dùng số/% nếu có ưu đãi cụ thể.
-• Subtext: 1-2 điểm lợi ích cốt lõi.
-• CTA: 3-5 từ, action-oriented (""Đặt ngay"", ""Nhận ưu đãi"", ""Khám phá ngay"").
-• hashtags: null (bắt buộc).
-• imagePrompt: VIẾT BẰNG TIẾNG ANH — concept background/layout banner quảng cáo.
-
-NGUYÊN TẮC ĐỒNG BỘ: Cùng message cốt lõi, cùng tone, nhưng format và độ sâu khác nhau theo từng kênh. TUYỆT ĐỐI không copy-paste giữa các kênh.
-
-LUÔN trả về JSON hợp lệ sau, KHÔNG thêm text nào ngoài JSON:
-{{
-  ""facebook"": {{
-    ""headline"": ""..."",
-    ""content"": ""..."",
-    ""hashtags"": [""#Tag1""],
-    ""imagePrompt"": ""...""
-  }},
-  ""instagram"": {{
-    ""headline"": ""..."",
-    ""content"": ""..."",
-    ""hashtags"": [""#Tag1""],
-    ""imagePrompt"": ""...""
-  }},
-  ""email"": {{
-    ""headline"": ""Subject line..."",
-    ""content"": ""Preheader... \n\n Body... \n\n CTA: Đặt bàn ngay"",
-    ""hashtags"": null,
-    ""imagePrompt"": ""...""
-  }},
-  ""promotionBanner"": {{
-    ""headline"": ""Headline ngắn gọn..."",
-    ""content"": ""Subtext... \n CTA: ..."",
-    ""hashtags"": null,
-    ""imagePrompt"": ""...""
-  }}
-}}";
-        }
 
         #endregion
 
         #region Private: Content Response Parsers
 
-        private static ContentGenerateResponse ParseContentResponse(string rawText, string descType)
+        private static ContentGenerateResponse ParseContentResponse(string rawText)
         {
             try
             {
@@ -938,7 +803,7 @@ LUÔN trả về JSON hợp lệ sau, KHÔNG thêm text nào ngoài JSON:
                 var end = rawText.LastIndexOf('}');
 
                 if (start == -1 || end == -1 || end < start)
-                    return new ContentGenerateResponse();
+                    throw new AppException($"Gemini không trả về JSON hợp lệ. Raw: {rawText[..Math.Min(300, rawText.Length)]}");
 
                 var jsonStr = rawText[start..(end + 1)];
                 using var doc = JsonDocument.Parse(jsonStr);
@@ -950,65 +815,24 @@ LUÔN trả về JSON hợp lệ sau, KHÔNG thêm text nào ngoài JSON:
                     foreach (var v in variantsEl.EnumerateArray())
                         response.Variants.Add(new ContentVariant
                         {
-                            Headline = v.TryGetProperty("headline", out var h) ? h.GetString() ?? "" : "",
                             Content = v.TryGetProperty("content", out var c) ? c.GetString() ?? "" : "",
                         });
 
+                if (!response.Variants.Any())
+                    throw new AppException($"Parse thành công nhưng variants rỗng. JSON: {jsonStr[..Math.Min(500, jsonStr.Length)]}");
+
                 return response;
             }
-            catch
+            catch (AppException)
             {
-                return new ContentGenerateResponse();
+                throw;
+            }
+            catch (Exception ex)
+            {
+                throw new AppException($"Parse lỗi: {ex.Message}. Raw: {rawText[..Math.Min(300, rawText.Length)]}");
             }
         }
 
-        private static CampaignPackResponse ParseCampaignPackResponse(string rawText, string theme, string? occasion)
-        {
-            var response = new CampaignPackResponse { Theme = theme, SpecialOccasion = occasion };
-
-            try
-            {
-                var start = rawText.IndexOf('{');
-                var end = rawText.LastIndexOf('}');
-                if (start == -1 || end == -1 || end < start) return response;
-
-                var jsonStr = rawText[start..(end + 1)];
-                using var doc = JsonDocument.Parse(jsonStr);
-                var root = doc.RootElement;
-
-                response.Facebook = ParseCampaignChannel(root, "facebook", hasHashtags: true);
-                response.Instagram = ParseCampaignChannel(root, "instagram", hasHashtags: true);
-                response.Email = ParseCampaignChannel(root, "email", hasHashtags: false);
-                response.PromotionBanner = ParseCampaignChannel(root, "promotionBanner", hasHashtags: false);
-            }
-            catch { }
-
-            return response;
-        }
-
-        private static CampaignChannel ParseCampaignChannel(JsonElement root, string key, bool hasHashtags)
-        {
-            if (!root.TryGetProperty(key, out var el) || el.ValueKind != JsonValueKind.Object)
-                return new CampaignChannel();
-
-            var channel = new CampaignChannel
-            {
-                Headline = el.TryGetProperty("headline", out var h) ? h.GetString() : null,
-                Content = el.TryGetProperty("content", out var c) ? c.GetString() ?? "" : "",
-                ImagePrompt = el.TryGetProperty("imagePrompt", out var ip) ? ip.GetString() : null,
-            };
-
-            if (hasHashtags && el.TryGetProperty("hashtags", out var tagsEl) && tagsEl.ValueKind == JsonValueKind.Array)
-            {
-                var tags = tagsEl.EnumerateArray()
-                    .Select(t => t.GetString() ?? "")
-                    .Where(t => !string.IsNullOrEmpty(t))
-                    .ToList();
-                channel.Hashtags = tags.Count > 0 ? tags : null;
-            }
-
-            return channel;
-        }
 
         #endregion
 
@@ -1268,27 +1092,9 @@ JSON OUTPUT (chỉ trả về JSON, không thêm text):
 
         private static string GetStr(JsonElement el, string prop)
             => el.TryGetProperty(prop, out var v) ? v.GetString() ?? "" : "";
-
-        private static decimal GetDec(JsonElement el, string prop)
-            => el.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetDecimal() : 0;
-
-        private static int GetInt(JsonElement el, string prop)
-            => el.TryGetProperty(prop, out var v) ? v.GetInt32() : 0;
-
-        private static double GetDbl(JsonElement el, string prop)
-            => el.TryGetProperty(prop, out var v) ? v.GetDouble() : 0;
-
-        private static Guid? GetGuid(JsonElement el, string prop)
-            => el.TryGetProperty(prop, out var v) && Guid.TryParse(v.GetString(), out var g) ? g : null;
-
         private static List<string> StrArray(JsonElement el, string prop)
             => el.TryGetProperty(prop, out var arr) && arr.ValueKind == JsonValueKind.Array
                 ? arr.EnumerateArray().Select(x => x.GetString() ?? "").Where(x => x.Length > 0).ToList()
-                : new();
-
-        private static List<T> ObjArray<T>(JsonElement el, string prop, Func<JsonElement, T> map)
-            => el.TryGetProperty(prop, out var arr) && arr.ValueKind == JsonValueKind.Array
-                ? arr.EnumerateArray().Select(map).ToList()
                 : new();
 
         private static AIAnalyticsResponse ParseAnalyticsResponse(string rawText)

@@ -5,7 +5,7 @@ namespace RestX.BLL.DataTranferObjects.AI
         public string SessionId { get; set; } = string.Empty;
         public string Message { get; set; } = string.Empty;
         public List<AISuggestion> Suggestions { get; set; } = new();
-        public List<AISuggestion> UpsellSuggestions { get; set; } = new();
+        public string UpsellHint { get; set; } = string.Empty;
         public List<string> QuickReplies { get; set; } = new();
         public AIOrderDraft? OrderDraft { get; set; }
         public Guid? CreatedOrderId { get; set; }

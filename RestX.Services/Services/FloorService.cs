@@ -128,7 +128,9 @@ namespace RestX.BLL.Services
                 )).Select(ts => ts.TableId).ToHashSet();
 
                 occupiedTableIds = (await Repo.GetAsync<TableSession>(
-                    filter: ts => ts.IsActive == true && ts.StartedAt <= at.Value
+                    filter: ts => ts.IsActive == true
+                               && ts.StartedAt <= at.Value
+                               && (ts.EndedAt == null || ts.EndedAt > at.Value)
                 )).Select(ts => ts.TableId).ToHashSet();
             }
 

@@ -358,6 +358,12 @@ namespace RestX.BLL.Services
             if (reservation.CheckedInAt.HasValue)
                 throw new InvalidOperationException("Reservation has already been checked in");
 
+            if (VnNow > reservation.Time.AddMinutes(ReservationBufferMinutes))
+            {
+                await CancelReservation(reservation.Id, userId);
+                throw new InvalidOperationException("Check-in window has expired. Reservation has been automatically cancelled.");
+            }
+
             reservation.CheckedInAt = VnNow;
             Repo.Update(reservation, userId);
 

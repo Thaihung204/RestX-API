@@ -386,6 +386,31 @@ namespace RestX.BLL.Services
 
             result.Orders = mapper.Map<List<DataTranferObjects.Orders.Order>>(orders);
 
+            List<Guid> reservationIds = orders
+                .Where(o => o.ReservationId.HasValue)
+                .Select(o => o.ReservationId!.Value)
+                .Distinct()
+                .ToList();
+
+            if (reservationIds.Any())
+            {
+                IEnumerable<Models.Reservations.Reservation> reservations = await Repo.GetAsync<Models.Reservations.Reservation>(
+                    filter: r => reservationIds.Contains(r.Id),
+                    includeProperties: "Customer,Customer.ApplicationUser,TableSessions,TableSessions.Table,ReservationStatus"
+                );
+
+                Dictionary<Guid, Models.Reservations.Reservation> reservationDict = reservations.ToDictionary(r => r.Id, r => r);
+
+                foreach (DataTranferObjects.Orders.Order dtoOrder in result.Orders)
+                {
+                    if (dtoOrder.ReservationId.HasValue
+                        && reservationDict.TryGetValue(dtoOrder.ReservationId.Value, out Models.Reservations.Reservation? reservation))
+                    {
+                        dtoOrder.Reservation = mapper.Map<RestX.BLL.DataTranferObjects.Reservation.ReservationListItem>(reservation);
+                    }
+                }
+            }
+
             List<Guid?> customerIds = orders.Where(o => o.CustomerId != null).Select(o => o.CustomerId).Distinct().ToList();
             if (customerIds.Any())
             {
@@ -398,7 +423,7 @@ namespace RestX.BLL.Services
 
                 foreach (DataTranferObjects.Orders.Order dtoOrder in result.Orders)
                 {
-                    if (customersDict.TryGetValue(dtoOrder.CustomerId, out Models.Customers.Customer? customer))
+                    if (dtoOrder.CustomerId.HasValue && customersDict.TryGetValue(dtoOrder.CustomerId.Value, out Models.Customers.Customer? customer))
                     {
                         dtoOrder.CustomerName = customer.ApplicationUser?.FullName;
                         dtoOrder.CustomerEmail = customer.ApplicationUser?.Email;
@@ -409,6 +434,21 @@ namespace RestX.BLL.Services
             return result;
         }
 
+        private async Task ApplyReservationDepositAsync(Models.Orders.Order order)
+        {
+            if (!order.ReservationId.HasValue)
+            {
+                return;
+            }
+
+            Models.Reservations.Reservation? reservation = await Repo.GetByIdAsync<Models.Reservations.Reservation>(order.ReservationId.Value);
+            if (reservation == null)
+            {
+                return;
+            }
+
+            order.ApplyReservationDeposit(reservation.DepositAmount);
+        }
 
         public async Task<OrderSearchResult> GetAllOrders(OrderSearch model)
         {
@@ -740,6 +780,31 @@ namespace RestX.BLL.Services
 
             result.Orders = mapper.Map<List<DataTranferObjects.Orders.Order>>(orders);
 
+            List<Guid> reservationIds = orders
+                .Where(o => o.ReservationId.HasValue)
+                .Select(o => o.ReservationId!.Value)
+                .Distinct()
+                .ToList();
+
+            if (reservationIds.Any())
+            {
+                IEnumerable<Models.Reservations.Reservation> reservations = await Repo.GetAsync<Models.Reservations.Reservation>(
+                    filter: r => reservationIds.Contains(r.Id),
+                    includeProperties: "Customer,Customer.ApplicationUser,TableSessions,TableSessions.Table,ReservationStatus"
+                );
+
+                Dictionary<Guid, Models.Reservations.Reservation> reservationDict = reservations.ToDictionary(r => r.Id, r => r);
+
+                foreach (DataTranferObjects.Orders.Order dtoOrder in result.Orders)
+                {
+                    if (dtoOrder.ReservationId.HasValue
+                        && reservationDict.TryGetValue(dtoOrder.ReservationId.Value, out Models.Reservations.Reservation? reservation))
+                    {
+                        dtoOrder.Reservation = mapper.Map<RestX.BLL.DataTranferObjects.Reservation.ReservationListItem>(reservation);
+                    }
+                }
+            }
+
             List<Guid?> customerIds = orders.Where(o => o.CustomerId != null).Select(o => o.CustomerId).Distinct().ToList();
             if (customerIds.Any())
             {
@@ -752,7 +817,7 @@ namespace RestX.BLL.Services
 
                 foreach (DataTranferObjects.Orders.Order dtoOrder in result.Orders)
                 {
-                    if (customersDict.TryGetValue(dtoOrder.CustomerId, out Models.Customers.Customer? customer))
+                    if (dtoOrder.CustomerId.HasValue && customersDict.TryGetValue(dtoOrder.CustomerId.Value, out Models.Customers.Customer? customer))
                     {
                         dtoOrder.CustomerName = customer.ApplicationUser?.FullName;
                         dtoOrder.CustomerEmail = customer.ApplicationUser?.Email;
@@ -872,12 +937,6 @@ namespace RestX.BLL.Services
                 throw new AppException("CustomerId is required.");
             }
 
-            bool customerExists = await Repo.GetExistsAsync<Customer>(c => c.Id == order.CustomerId);
-            if (!customerExists)
-            {
-                throw new AppException("Customer not found.");
-            }
-
             decimal discountAmount = order.DiscountAmount ?? 0m;
             decimal taxAmount = order.TaxAmount ?? 0m;
             decimal serviceCharge = order.ServiceCharge ?? 0m;
@@ -947,7 +1006,7 @@ namespace RestX.BLL.Services
                     foreach (var d in order.OrderDetails)
                     {
                         if (!dishesById.ContainsKey(d.DishId))
-                            throw new Exception($"Dish {d.DishId} not found");
+                            throw new AppException($"Dish not found");
 
                         var dish = dishesById[d.DishId];
 
@@ -980,6 +1039,7 @@ namespace RestX.BLL.Services
 
                 orderEntity.SubTotal += additionalSubTotal;
                 orderEntity.CalculateTotalAmount();
+                await ApplyReservationDepositAsync(orderEntity);
 
                 await Repo.CreateAsync(orderEntity, userId);
             }
@@ -1047,6 +1107,7 @@ namespace RestX.BLL.Services
 
                 orderEntity.SubTotal += additionalSubTotal;
                 orderEntity.CalculateTotalAmount();
+                await ApplyReservationDepositAsync(orderEntity);
 
                 Repo.Update(orderEntity, userId);
                 await Repo.SaveAsync();
@@ -1176,6 +1237,7 @@ namespace RestX.BLL.Services
 
             orderEntity.SubTotal = subTotal;
             orderEntity.CalculateTotalAmount();
+            await ApplyReservationDepositAsync(orderEntity);
 
             Repo.Update(orderEntity, userId);
             await Repo.SaveAsync();
@@ -1868,6 +1930,7 @@ namespace RestX.BLL.Services
             response.DiscountAmount = totalDiscount;
             order.DiscountAmount = totalDiscount;
             order.CalculateTotalAmount();
+            await ApplyReservationDepositAsync(order);
             response.TotalAmount = order.TotalAmount;
 
             Repo.Update(order);
@@ -1892,6 +1955,7 @@ namespace RestX.BLL.Services
                 Repo.Delete(old);
             order.DiscountAmount = 0;
             order.CalculateTotalAmount();
+            await ApplyReservationDepositAsync(order);
 
             Repo.Update(order);
             await Repo.SaveAsync();

@@ -1,4 +1,5 @@
 using AutoMapper;
+using Microsoft.Extensions.Logging;
 using PayOS;
 using PayOS.Models.Webhooks;
 using QuestPDF.Fluent;
@@ -27,6 +28,7 @@ namespace RestX.BLL.Services
         private readonly ITableService tableService;
         private readonly IOrderService orderService;
         private readonly IMapper mapper;
+        private readonly ILogger<PaymentService> logger;
 
         public PaymentService(
             IRepository repo,
@@ -36,6 +38,7 @@ namespace RestX.BLL.Services
             ITableService tableService,
             IOrderService orderService,
             IMapper mapper,
+            ILogger<PaymentService> logger,
             IEnumerable<ActiveTenant> tenant = null
         ) : base(repo, redisService, tenant)
         {
@@ -44,6 +47,7 @@ namespace RestX.BLL.Services
             this.tableService = tableService;
             this.orderService = orderService;
             this.mapper = mapper;
+            this.logger = logger;
             QuestPDF.Settings.License = LicenseType.Community;
         }
 
@@ -395,11 +399,17 @@ namespace RestX.BLL.Services
 
         public async Task HandleWebhook(Webhook webhookBody)
         {
+            logger.LogInformation("[Webhook] Received | Code={Code} | Tenant={Tenant}",
+                webhookBody.Code, CurrentTenant?.Hostname ?? "unknown");
+
             var (gatewayClient, _) = await GetTenantGateway();
             var data = await gatewayClient.Webhooks.VerifyAsync(webhookBody);
 
+            logger.LogInformation("[Webhook] Verified | OrderCode={OrderCode}", data.OrderCode);
+
             if (webhookBody.Code != "00")
             {
+                logger.LogWarning("[Webhook] Non-success code={Code} for OrderCode={OrderCode}", webhookBody.Code, data.OrderCode);
                 var cancelledPayment = await Repo.GetOneAsync<Payment>(
                     filter: p => p.PayOSOrderCode == data.OrderCode);
                 if (cancelledPayment != null && cancelledPayment.Status == PaymentStatus.Pending)
@@ -407,6 +417,7 @@ namespace RestX.BLL.Services
                     cancelledPayment.Status = PaymentStatus.Fail;
                     Repo.Update(cancelledPayment);
                     await Repo.SaveAsync();
+                    logger.LogInformation("[Webhook] Payment {PaymentId} marked Fail", cancelledPayment.Id);
                 }
                 return;
             }
@@ -415,27 +426,45 @@ namespace RestX.BLL.Services
                 filter: p => p.PayOSOrderCode == data.OrderCode)
                 ?? throw new KeyNotFoundException($"Payment not found for orderCode {data.OrderCode}");
 
+            logger.LogInformation("[Webhook] Payment found | PaymentId={PaymentId} | Purpose={Purpose} | Status={Status}",
+                payment.Id, payment.Purpose, payment.Status);
+
             if (payment.Status == PaymentStatus.Success)
+            {
+                logger.LogInformation("[Webhook] Payment {PaymentId} already Success, skip", payment.Id);
                 return;
+            }
 
             payment.Status = PaymentStatus.Success;
             payment.TransactionId = data.Reference;
             payment.PaymentDate = DateTime.UtcNow.AddHours(7);
             Repo.Update(payment);
+            await Repo.SaveAsync();
+
+            logger.LogInformation("[Webhook] Payment {PaymentId} saved as Success", payment.Id);
 
             if (payment.Purpose == PaymentPurpose.Deposit && payment.ReservationId.HasValue)
             {
-                var reservation = await Repo.GetOneAsync<Reservation>(
-                    r => r.Id == payment.ReservationId,
-                    includeProperties: "ReservationStatus");
-                if (reservation?.ReservationStatus?.Code == "PENDING")
+                logger.LogInformation("[Webhook] Deposit payment for ReservationId={ReservationId}, calling ConfirmReservation",
+                    payment.ReservationId.Value);
+                try
                 {
                     await reservationService.ConfirmReservation(payment.ReservationId.Value);
+                    logger.LogInformation("[Webhook] Reservation {ReservationId} confirmed successfully", payment.ReservationId.Value);
+
                     await reservationService.SendDepositConfirmedEmailAsync(payment.ReservationId.Value);
+                    logger.LogInformation("[Webhook] Deposit confirmation email sent for Reservation {ReservationId}", payment.ReservationId.Value);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "[Webhook] Failed to confirm reservation {ReservationId} after deposit payment {PaymentId}",
+                        payment.ReservationId.Value, payment.Id);
+                    throw;
                 }
             }
             else if (payment.Purpose == PaymentPurpose.Order && payment.OrderId.HasValue)
             {
+                logger.LogInformation("[Webhook] Order payment for OrderId={OrderId}", payment.OrderId.Value);
                 Order order = await RecalculateOrderAmountForCheckout(payment.OrderId.Value);
                 if (order != null)
                 {
@@ -463,6 +492,7 @@ namespace RestX.BLL.Services
             }
 
             await Repo.SaveAsync();
+            logger.LogInformation("[Webhook] HandleWebhook completed for OrderCode={OrderCode}", data.OrderCode);
         }
 
         private async Task<CreatePaymentLinkResponse> ConfirmZeroAmountPayment(Order order, string? createdBy)

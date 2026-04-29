@@ -73,7 +73,6 @@ namespace RestX.WebApp.Controllers.BaseControllers
                 this.ExceptionHandler = exceptionHandler;
                 this.CurrentTenant = tenant.FirstOrDefault();
             }
-
         }
     }
 

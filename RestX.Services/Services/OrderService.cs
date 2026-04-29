@@ -297,7 +297,11 @@ namespace RestX.BLL.Services
                     od.Quantity,
                     od.UnitPrice,
                     od.Note,
-                    od.ItemStatusId
+                    od.ItemStatusId,
+                    od.ComboId,
+                    od.ComboName,
+                    od.ComboPrice,
+                    od.ComboQuantity
                 FROM dbo.OrderDetails od
                 WHERE od.OrderId IN ({inClause})
                 ORDER BY od.OrderId, od.Id
@@ -691,7 +695,11 @@ namespace RestX.BLL.Services
                     od.Quantity,
                     od.UnitPrice,
                     od.Note,
-                    od.ItemStatusId
+                    od.ItemStatusId,
+                    od.ComboId,
+                    od.ComboName,
+                    od.ComboPrice,
+                    od.ComboQuantity
                 FROM dbo.OrderDetails od
                 WHERE od.OrderId IN ({inClause})
                 ORDER BY od.OrderId, od.Id
@@ -947,9 +955,11 @@ namespace RestX.BLL.Services
             }
 
             List<DataTranferObjects.Orders.OrderDetail> details = order.OrderDetails ?? new List<DataTranferObjects.Orders.OrderDetail>();
-            if (!details.Any())
+            List<DataTranferObjects.Orders.OrderComboItem> comboItems = order.ComboItems ?? new List<DataTranferObjects.Orders.OrderComboItem>();
+
+            if (!details.Any() && !comboItems.Any())
             {
-                throw new AppException("Order must contain at least one order detail.");
+                throw new AppException("Order must contain at least one order detail or combo.");
             }
 
             foreach (DataTranferObjects.Orders.OrderDetail detail in details)
@@ -969,8 +979,20 @@ namespace RestX.BLL.Services
                     throw new AppException("Order detail note cannot exceed 500 characters.");
                 }
             }
-        }
 
+            foreach (DataTranferObjects.Orders.OrderComboItem comboItem in comboItems)
+            {
+                if (comboItem.ComboId == Guid.Empty)
+                {
+                    throw new AppException("ComboId is required.");
+                }
+
+                if (comboItem.Quantity <= 0)
+                {
+                    throw new AppException("Combo quantity must be greater than 0.");
+                }
+            }
+        }
         public async Task<Models.Orders.Order> UpsertOrder(DataTranferObjects.Orders.Order order, string userId)
         {
             await ValidateOrderInput(order);
@@ -1030,6 +1052,16 @@ namespace RestX.BLL.Services
                             dishQuantitiesToDeduct[d.DishId] = d.Quantity;
                         }
                     }
+                }
+                if (order.ComboItems != null && order.ComboItems.Any())
+                {
+                    var comboResult = await BuildComboOrderDetailsAsync(order.ComboItems, itemPreparingStatusId, dishQuantitiesToDeduct);
+
+                    foreach (var detail in comboResult.Details)
+                    {
+                        orderEntity.OrderDetails.Add(detail);
+                    }
+                    additionalSubTotal += comboResult.SubTotal;
                 }
 
                 if (dishQuantitiesToDeduct.Any())
@@ -1098,6 +1130,19 @@ namespace RestX.BLL.Services
                             dishQuantitiesToDeduct[d.DishId] = d.Quantity;
                         }
                     }
+                }
+
+                if (order.ComboItems != null && order.ComboItems.Any())
+                {
+                    var comboResult = await BuildComboOrderDetailsAsync(order.ComboItems, itemPreparingStatusId, dishQuantitiesToDeduct);
+
+                    foreach (Models.Orders.OrderDetail detail in comboResult.Details)
+                    {
+                        detail.OrderId = orderEntity.Id;
+                        await Repo.CreateAsync(detail, userId);
+                    }
+
+                    additionalSubTotal += comboResult.SubTotal;
                 }
 
                 if (dishQuantitiesToDeduct.Any())
@@ -1937,6 +1982,87 @@ namespace RestX.BLL.Services
             await Repo.SaveAsync();
 
             return response;
+        }
+
+        private async Task<(List<Models.Orders.OrderDetail> Details, decimal SubTotal)> BuildComboOrderDetailsAsync(
+            IEnumerable<DataTranferObjects.Orders.OrderComboItem> comboItems,
+            int itemPreparingStatusId,
+            Dictionary<Guid, int> dishQuantitiesToDeduct)
+        {
+            List<Models.Orders.OrderDetail> details = new List<Models.Orders.OrderDetail>();
+            decimal subTotal = 0m;
+
+            List<Guid> comboIds = comboItems.Select(c => c.ComboId).Distinct().ToList();
+
+            IEnumerable<MealCombo> combos = await Repo.GetAsync<MealCombo>(
+                filter: c => comboIds.Contains(c.Id) && c.IsActive,
+                includeProperties: "ComboDetails.Dish"
+            );
+
+            Dictionary<Guid, MealCombo> combosById = combos.ToDictionary(c => c.Id, c => c);
+
+            foreach (DataTranferObjects.Orders.OrderComboItem comboItem in comboItems)
+            {
+                if (comboItem.ComboId == Guid.Empty)
+                {
+                    throw new AppException("ComboId is required.");
+                }
+
+                if (comboItem.Quantity <= 0)
+                {
+                    throw new AppException("Combo quantity must be greater than 0.");
+                }
+
+                if (!combosById.TryGetValue(comboItem.ComboId, out MealCombo? combo))
+                {
+                    throw new AppException("Combo not found.");
+                }
+
+                decimal totalDishPrice = combo.ComboDetails.Sum(cd => (cd.Dish?.Price ?? 0m) * cd.Quantity);
+                int totalUnits = combo.ComboDetails.Sum(cd => cd.Quantity);
+
+                foreach (ComboDetail comboDetail in combo.ComboDetails)
+                {
+                    if (comboDetail.Dish == null)
+                    {
+                        throw new AppException("Combo dish not found.");
+                    }
+
+                    decimal unitPrice = totalDishPrice > 0m
+                        ? combo.Price * (comboDetail.Dish.Price / totalDishPrice)
+                        : totalUnits > 0
+                            ? combo.Price / totalUnits
+                            : 0m;
+
+                    int detailQuantity = comboDetail.Quantity * comboItem.Quantity;
+                    subTotal += unitPrice * detailQuantity;
+
+                    var detail = new Models.Orders.OrderDetail
+                    {
+                        DishId = comboDetail.DishId,
+                        Quantity = detailQuantity,
+                        UnitPrice = unitPrice,
+                        ItemStatusId = itemPreparingStatusId,
+                        ComboId = combo.Id,
+                        ComboName = combo.Name,
+                        ComboPrice = combo.Price,
+                        ComboQuantity = comboItem.Quantity
+                    };
+
+                    details.Add(detail);
+
+                    if (dishQuantitiesToDeduct.ContainsKey(comboDetail.DishId))
+                    {
+                        dishQuantitiesToDeduct[comboDetail.DishId] += detailQuantity;
+                    }
+                    else
+                    {
+                        dishQuantitiesToDeduct[comboDetail.DishId] = detailQuantity;
+                    }
+                }
+            }
+
+            return (details, subTotal);
         }
 
         public async Task RemoveDiscount(Guid orderId)

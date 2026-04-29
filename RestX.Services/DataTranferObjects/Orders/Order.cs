@@ -50,7 +50,6 @@ namespace RestX.BLL.DataTranferObjects.Orders
         public ReservationListItem? Reservation { get; set; }
 
         public List<OrderDetail> OrderDetails { get; set; }
-        public List<OrderComboItem> ComboItems { get; set; } = new();
         public DateTime? CreatedDate { get; set; }
         public string? CreatedBy { get; set; }
         public string? ModifiedBy { get; set; }

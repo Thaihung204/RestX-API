@@ -26,6 +26,7 @@ using RestX.Models.Reservations;
 using RestX.Models.Tables;
 using RestX.Models.Tenants;
 using StackExchange.Redis;
+using System.Collections.Generic;
 using System.Data;
 using System.Security.Cryptography;
 using System.Text;
@@ -294,14 +295,12 @@ namespace RestX.BLL.Services
                     od.Id,
                     od.OrderId,
                     od.DishId,
+                    od.ComboId,
+                    od.IsCombo,
                     od.Quantity,
                     od.UnitPrice,
                     od.Note,
-                    od.ItemStatusId,
-                    od.ComboId,
-                    od.ComboName,
-                    od.ComboPrice,
-                    od.ComboQuantity
+                    od.ItemStatusId
                 FROM dbo.OrderDetails od
                 WHERE od.OrderId IN ({inClause})
                 ORDER BY od.OrderId, od.Id
@@ -329,7 +328,12 @@ namespace RestX.BLL.Services
                 CloneParams(idParams)
             );
 
-            List<Guid> dishIds = orderDetails.Select(d => d.DishId).Distinct().ToList();
+            List<Guid> dishIds = orderDetails
+                .Where(d => d.DishId.HasValue)
+                .Select(d => d.DishId.Value)
+                .Distinct()
+                .ToList();
+            
             List<Models.Menu.Dish> dishes = new List<Models.Menu.Dish>();
             if (dishIds.Any())
             {
@@ -371,7 +375,7 @@ namespace RestX.BLL.Services
                             d.ItemStatus = s;
                         }
 
-                        if (dishesById.TryGetValue(d.DishId, out Models.Menu.Dish? dish))
+                        if (d.DishId.HasValue && dishesById.TryGetValue(d.DishId.Value, out Models.Menu.Dish? dish))
                         {
                             d.Dish = dish;
                         }
@@ -389,6 +393,8 @@ namespace RestX.BLL.Services
             }
 
             result.Orders = mapper.Map<List<DataTranferObjects.Orders.Order>>(orders);
+
+            await ApplyComboInfoAsync(result.Orders);
 
             List<Guid> reservationIds = orders
                 .Where(o => o.ReservationId.HasValue)
@@ -692,14 +698,12 @@ namespace RestX.BLL.Services
                     od.Id,
                     od.OrderId,
                     od.DishId,
+                    od.ComboId,
+                    od.IsCombo,
                     od.Quantity,
                     od.UnitPrice,
                     od.Note,
-                    od.ItemStatusId,
-                    od.ComboId,
-                    od.ComboName,
-                    od.ComboPrice,
-                    od.ComboQuantity
+                    od.ItemStatusId
                 FROM dbo.OrderDetails od
                 WHERE od.OrderId IN ({inClause})
                 ORDER BY od.OrderId, od.Id
@@ -727,7 +731,12 @@ namespace RestX.BLL.Services
                 CloneParams(idParams)
             );
 
-            List<Guid> dishIds = orderDetails.Select(d => d.DishId).Distinct().ToList();
+            List<Guid> dishIds = orderDetails
+                .Where(d => d.DishId.HasValue)
+                .Select(d => d.DishId.Value)
+                .Distinct()
+                .ToList();
+            
             List<Models.Menu.Dish> dishes = new List<Models.Menu.Dish>();
             if (dishIds.Any())
             {
@@ -769,7 +778,7 @@ namespace RestX.BLL.Services
                             d.ItemStatus = s;
                         }
 
-                        if (dishesById.TryGetValue(d.DishId, out Models.Menu.Dish? dish))
+                        if (d.DishId.HasValue && dishesById.TryGetValue(d.DishId.Value, out Models.Menu.Dish? dish))
                         {
                             d.Dish = dish;
                         }
@@ -787,6 +796,8 @@ namespace RestX.BLL.Services
             }
 
             result.Orders = mapper.Map<List<DataTranferObjects.Orders.Order>>(orders);
+
+            await ApplyComboInfoAsync(result.Orders);
 
             List<Guid> reservationIds = orders
                 .Where(o => o.ReservationId.HasValue)
@@ -854,9 +865,10 @@ namespace RestX.BLL.Services
         {
             var order = await Repo.GetOneAsync<Models.Orders.Order>(
                 filter: o => o.Id == id,
-                includeProperties: "OrderDetails,OrderDetails.Dish,OrderDetails.ItemStatus,Payments,Customer,Customer.ApplicationUser,Reservation,TableSessions,TableSessions.Table"
-            ); 
+                includeProperties: "OrderDetails,OrderDetails.Dish,OrderDetails.Combo,OrderDetails.ItemStatus,Payments,Customer,Customer.ApplicationUser,Reservation,TableSessions,TableSessions.Table"
+            );
 
+            if (order == null) return null;
             //order.OrderDetails = GroupOrderDetailsByDish(order.OrderDetails);
 
             var mappedOrder = mapper.Map<DataTranferObjects.Orders.Order>(order);
@@ -876,6 +888,9 @@ namespace RestX.BLL.Services
             mappedOrder.Customer.TotalReservations = await Repo.ExecuteSqlCommandAsync<int>(
                 "SELECT COUNT(*) FROM Reservations WHERE CustomerId = @CustomerId",
                 new SqlParameter("CustomerId", order.CustomerId));
+
+
+            await ApplyComboInfoAsync(new List<DataTranferObjects.Orders.Order> { mappedOrder });
 
             return mappedOrder;
         }
@@ -955,41 +970,37 @@ namespace RestX.BLL.Services
             }
 
             List<DataTranferObjects.Orders.OrderDetail> details = order.OrderDetails ?? new List<DataTranferObjects.Orders.OrderDetail>();
-            List<DataTranferObjects.Orders.OrderComboItem> comboItems = order.ComboItems ?? new List<DataTranferObjects.Orders.OrderComboItem>();
 
-            if (!details.Any() && !comboItems.Any())
+            if (!details.Any())
             {
-                throw new AppException("Order must contain at least one order detail or combo.");
+                throw new AppException("Order must contain at least one order detail.");
             }
 
             foreach (DataTranferObjects.Orders.OrderDetail detail in details)
             {
-                if (detail.DishId == Guid.Empty)
+                bool hasDishId = detail.DishId.HasValue && detail.DishId.Value != Guid.Empty;
+                bool hasComboId = detail.ComboId.HasValue && detail.ComboId.Value != Guid.Empty;
+
+                if (detail.IsCombo && !hasComboId)
+                {
+                    throw new AppException("ComboId is required.");
+                }
+
+                if (!detail.IsCombo && !hasDishId)
                 {
                     throw new AppException("DishId is required.");
                 }
 
                 if (detail.Quantity <= 0)
                 {
-                    throw new AppException("Quantity must be greater than 0.");
+                    throw new AppException(detail.IsCombo
+                        ? "Combo quantity must be greater than 0."
+                        : "Quantity must be greater than 0.");
                 }
 
                 if (!string.IsNullOrWhiteSpace(detail.Note) && detail.Note.Trim().Length > 500)
                 {
                     throw new AppException("Order detail note cannot exceed 500 characters.");
-                }
-            }
-
-            foreach (DataTranferObjects.Orders.OrderComboItem comboItem in comboItems)
-            {
-                if (comboItem.ComboId == Guid.Empty)
-                {
-                    throw new AppException("ComboId is required.");
-                }
-
-                if (comboItem.Quantity <= 0)
-                {
-                    throw new AppException("Combo quantity must be greater than 0.");
                 }
             }
         }
@@ -998,7 +1009,15 @@ namespace RestX.BLL.Services
             await ValidateOrderInput(order);
             Models.Orders.Order orderEntity;
 
-            // CREATE
+            List<DataTranferObjects.Orders.OrderDetail> requestDetails =
+                order.OrderDetails ?? new List<DataTranferObjects.Orders.OrderDetail>();
+
+            List <DataTranferObjects.Orders.OrderDetail> dishDetails =
+                requestDetails.Where(d => !d.IsCombo).ToList();
+
+            List<DataTranferObjects.Orders.OrderDetail> comboDetails =
+                requestDetails.Where(d => d.IsCombo).ToList();
+
             if (order.Id == null)
             {
                 orderEntity = new Models.Orders.Order
@@ -1009,13 +1028,18 @@ namespace RestX.BLL.Services
                     OrderDetails = new List<Models.Orders.OrderDetail>(),
                     SubTotal = 0
                 };
-                var dishIds = (order.OrderDetails ?? new List<DataTranferObjects.Orders.OrderDetail>())
-                    .Select(x => x.DishId)
+
+                List<Guid> dishIds = dishDetails
+                    .Where(x => x.DishId.HasValue)
+                    .Select(x => x.DishId!.Value)
                     .Distinct()
                     .ToList();
 
-                var dishes = (await Repo.GetAsync<Models.Menu.Dish>(d => dishIds.Contains(d.Id))).ToList();
-                var dishesById = dishes.ToDictionary(d => d.Id, d => d);
+                List<Models.Menu.Dish> dishes = dishIds.Any()
+                    ? (await Repo.GetAsync<Models.Menu.Dish>(d => dishIds.Contains(d.Id))).ToList()
+                    : new List<Models.Menu.Dish>();
+
+                Dictionary<Guid, Models.Menu.Dish> dishesById = dishes.ToDictionary(d => d.Id, d => d);
 
                 decimal additionalSubTotal = 0;
 
@@ -1023,44 +1047,46 @@ namespace RestX.BLL.Services
 
                 Dictionary<Guid, int> dishQuantitiesToDeduct = new Dictionary<Guid, int>();
 
-                if (order.OrderDetails != null && order.OrderDetails.Any())
+                if (dishDetails.Any())
                 {
-                    foreach (var d in order.OrderDetails)
+                    foreach (DataTranferObjects.Orders.OrderDetail d in dishDetails)
                     {
-                        if (!dishesById.ContainsKey(d.DishId))
-                            throw new AppException($"Dish not found");
+                        if (!d.DishId.HasValue || !dishesById.ContainsKey(d.DishId.Value))
+                            throw new AppException("Dish not found");
 
-                        var dish = dishesById[d.DishId];
-
-                        additionalSubTotal += d.Quantity * dish.Price;
+                        Models.Menu.Dish dish = dishesById[d.DishId.Value];
 
                         orderEntity.OrderDetails.Add(new Models.Orders.OrderDetail
                         {
-                            DishId = d.DishId,
+                            DishId = d.DishId.Value,
+                            ComboId = null,
+                            IsCombo = false,
                             Quantity = d.Quantity,
                             UnitPrice = dish.Price,
                             Note = d.Note,
                             ItemStatusId = itemPreparingStatusId
                         });
 
-                        if (dishQuantitiesToDeduct.ContainsKey(d.DishId))
+                        if (dishQuantitiesToDeduct.ContainsKey(d.DishId.Value))
                         {
-                            dishQuantitiesToDeduct[d.DishId] += d.Quantity;
+                            dishQuantitiesToDeduct[d.DishId.Value] += d.Quantity;
                         }
                         else
                         {
-                            dishQuantitiesToDeduct[d.DishId] = d.Quantity;
+                            dishQuantitiesToDeduct[d.DishId.Value] = d.Quantity;
                         }
                     }
                 }
-                if (order.ComboItems != null && order.ComboItems.Any())
-                {
-                    var comboResult = await BuildComboOrderDetailsAsync(order.ComboItems, itemPreparingStatusId, dishQuantitiesToDeduct);
 
-                    foreach (var detail in comboResult.Details)
+                if (comboDetails.Any())
+                {
+                    var comboResult = await BuildComboOrderDetailsAsync(comboDetails, itemPreparingStatusId, dishQuantitiesToDeduct);
+
+                    foreach (Models.Orders.OrderDetail detail in comboResult.Details)
                     {
                         orderEntity.OrderDetails.Add(detail);
                     }
+
                     additionalSubTotal += comboResult.SubTotal;
                 }
 
@@ -1084,13 +1110,17 @@ namespace RestX.BLL.Services
                 if (orderEntity == null)
                     throw new Exception("Order not found");
 
-                var dishIds = (order.OrderDetails ?? new List<DataTranferObjects.Orders.OrderDetail>())
-                    .Select(x => x.DishId)
+                List<Guid> dishIds = dishDetails
+                    .Where(x => x.DishId.HasValue)
+                    .Select(x => x.DishId!.Value)
                     .Distinct()
                     .ToList();
 
-                var dishes = (await Repo.GetAsync<Models.Menu.Dish>(d => dishIds.Contains(d.Id))).ToList();
-                var dishesById = dishes.ToDictionary(d => d.Id, d => d);
+                List<Models.Menu.Dish> dishes = dishIds.Any()
+                    ? (await Repo.GetAsync<Models.Menu.Dish>(d => dishIds.Contains(d.Id))).ToList()
+                    : new List<Models.Menu.Dish>();
+
+                Dictionary<Guid, Models.Menu.Dish> dishesById = dishes.ToDictionary(d => d.Id, d => d);
 
                 decimal additionalSubTotal = 0;
 
@@ -1098,19 +1128,21 @@ namespace RestX.BLL.Services
 
                 Dictionary<Guid, int> dishQuantitiesToDeduct = new Dictionary<Guid, int>();
 
-                if (order.OrderDetails != null && order.OrderDetails.Any())
+                if (dishDetails.Any())
                 {
-                    foreach (DataTranferObjects.Orders.OrderDetail d in order.OrderDetails)
+                    foreach (DataTranferObjects.Orders.OrderDetail d in dishDetails)
                     {
-                        if (!dishesById.ContainsKey(d.DishId))
-                            throw new AppException("Dish is not exist");
+                        if (!d.DishId.HasValue || !dishesById.ContainsKey(d.DishId.Value))
+                            throw new AppException("Dish not found");
 
-                        Dish dish = dishesById[d.DishId];
+                        Models.Menu.Dish dish = dishesById[d.DishId.Value];
 
                         Models.Orders.OrderDetail newDetail = new Models.Orders.OrderDetail
                         {
                             OrderId = orderEntity.Id,
-                            DishId = d.DishId,
+                            DishId = d.DishId.Value,
+                            ComboId = null,
+                            IsCombo = false,
                             Quantity = d.Quantity,
                             UnitPrice = dish.Price,
                             Note = d.Note,
@@ -1121,20 +1153,20 @@ namespace RestX.BLL.Services
 
                         await Repo.CreateAsync(newDetail, userId);
 
-                        if (dishQuantitiesToDeduct.ContainsKey(d.DishId))
+                        if (dishQuantitiesToDeduct.ContainsKey(d.DishId.Value))
                         {
-                            dishQuantitiesToDeduct[d.DishId] += d.Quantity;
+                            dishQuantitiesToDeduct[d.DishId.Value] += d.Quantity;
                         }
                         else
                         {
-                            dishQuantitiesToDeduct[d.DishId] = d.Quantity;
+                            dishQuantitiesToDeduct[d.DishId.Value] = d.Quantity;
                         }
                     }
                 }
 
-                if (order.ComboItems != null && order.ComboItems.Any())
+                if (comboDetails.Any())
                 {
-                    var comboResult = await BuildComboOrderDetailsAsync(order.ComboItems, itemPreparingStatusId, dishQuantitiesToDeduct);
+                    var comboResult = await BuildComboOrderDetailsAsync(comboDetails, itemPreparingStatusId, dishQuantitiesToDeduct);
 
                     foreach (Models.Orders.OrderDetail detail in comboResult.Details)
                     {
@@ -1160,7 +1192,6 @@ namespace RestX.BLL.Services
 
             return orderEntity;
         }
-
         public async Task<Guid> UpdateOrder(Guid id, DataTranferObjects.Orders.Order order, string userId)
         {
             await ValidateOrderInput(order);
@@ -1175,12 +1206,25 @@ namespace RestX.BLL.Services
                 return Guid.Empty;
             }
 
-            List<Guid> requestDishIds = (order.OrderDetails ?? new List<DataTranferObjects.Orders.OrderDetail>())
-                .Select(x => x.DishId)
+            List<DataTranferObjects.Orders.OrderDetail> requestDetails =
+                order.OrderDetails ?? new List<DataTranferObjects.Orders.OrderDetail>();
+
+            List<DataTranferObjects.Orders.OrderDetail> dishDetails =
+                requestDetails.Where(d => !d.IsCombo).ToList();
+
+            List<DataTranferObjects.Orders.OrderDetail> comboDetails =
+                requestDetails.Where(d => d.IsCombo).ToList();
+
+            List<Guid> requestDishIds = dishDetails
+                .Where(x => x.DishId.HasValue)
+                .Select(x => x.DishId!.Value)
                 .Distinct()
                 .ToList();
 
-            List<Dish> requestDishes = (await Repo.GetAsync<Dish>(filter: d => requestDishIds.Contains(d.Id))).ToList();
+            List<Dish> requestDishes = requestDishIds.Any()
+                ? (await Repo.GetAsync<Dish>(filter: d => requestDishIds.Contains(d.Id))).ToList()
+                : new List<Dish>();
+
             Dictionary<Guid, Dish> requestDishesById = requestDishes.ToDictionary(d => d.Id, d => d);
 
             int itemPreparingStatusId = await GetPreparingOrderDetailStatusId();
@@ -1202,13 +1246,13 @@ namespace RestX.BLL.Services
             if (orderEntity.OrderDetails?.Any() == true)
             {
                 List<Models.Orders.OrderDetail> oldPreparingDetails = orderEntity.OrderDetails
-                    .Where(x => x.ItemStatusId == itemPreparingStatusId)
+                    .Where(x => !x.IsCombo && x.DishId.HasValue && x.ItemStatusId == itemPreparingStatusId)
                     .ToList();
 
                 if (oldPreparingDetails.Any())
                 {
                     Dictionary<Guid, int> oldQtyByDishId = oldPreparingDetails
-                        .GroupBy(x => x.DishId)
+                        .GroupBy(x => x.DishId!.Value)
                         .ToDictionary(g => g.Key, g => g.Sum(x => x.Quantity));
 
                     List<Guid> oldDishIds = oldQtyByDishId.Keys.ToList();
@@ -1244,21 +1288,24 @@ namespace RestX.BLL.Services
             }
 
             decimal subTotal = 0m;
+            Dictionary<Guid, int> dishQuantitiesToDeduct = new Dictionary<Guid, int>();
 
-            if (order.OrderDetails?.Any() == true)
+            if (dishDetails.Any())
             {
-                foreach (DataTranferObjects.Orders.OrderDetail d in order.OrderDetails)
+                foreach (DataTranferObjects.Orders.OrderDetail d in dishDetails)
                 {
-                    if (!requestDishesById.ContainsKey(d.DishId))
+                    if (!requestDishesById.ContainsKey(d.DishId.Value))
                         throw new Exception($"Dish {d.DishId} not found");
 
-                    Dish dish = requestDishesById[d.DishId];
+                    Dish dish = requestDishesById[d.DishId.Value];
                     subTotal += d.Quantity * dish.Price;
 
                     Models.Orders.OrderDetail newDetail = new Models.Orders.OrderDetail
                     {
                         OrderId = orderEntity.Id,
-                        DishId = d.DishId,
+                        DishId = d.DishId!.Value,
+                        ComboId = null,
+                        IsCombo = false,
                         Quantity = d.Quantity,
                         UnitPrice = dish.Price,
                         Note = d.Note,
@@ -1266,18 +1313,36 @@ namespace RestX.BLL.Services
                     };
 
                     orderEntity.OrderDetails.Add(newDetail);
-
                     await Repo.CreateAsync(newDetail, userId);
+
+                    if (dishQuantitiesToDeduct.ContainsKey(d.DishId.Value))
+                    {
+                        dishQuantitiesToDeduct[d.DishId.Value] += d.Quantity;
+                    }
+                    else
+                    {
+                        dishQuantitiesToDeduct[d.DishId.Value] = d.Quantity;
+                    }
                 }
             }
 
-            if (order.OrderDetails?.Any() == true)
+            if (comboDetails.Any())
             {
-                Dictionary<Guid, int> newQtyByDishId = order.OrderDetails
-                    .GroupBy(x => x.DishId)
-                    .ToDictionary(g => g.Key, g => g.Sum(x => x.Quantity));
+                var comboResult = await BuildComboOrderDetailsAsync(comboDetails, itemPreparingStatusId, dishQuantitiesToDeduct);
 
-                await ingredientService.DeductFromRecipes(newQtyByDishId);
+                foreach (Models.Orders.OrderDetail detail in comboResult.Details)
+                {
+                    detail.OrderId = orderEntity.Id;
+                    orderEntity.OrderDetails.Add(detail);
+                    await Repo.CreateAsync(detail, userId);
+                }
+
+                subTotal += comboResult.SubTotal;
+            }
+
+            if (dishQuantitiesToDeduct.Any())
+            {
+                await ingredientService.DeductFromRecipes(dishQuantitiesToDeduct);
             }
 
             orderEntity.SubTotal = subTotal;
@@ -1289,7 +1354,6 @@ namespace RestX.BLL.Services
 
             return orderEntity.Id;
         }
-
         public async Task DeleteOrder(Guid id)
         {
             var order = await Repo.GetByIdAsync<Models.Orders.Order>(id);
@@ -1344,13 +1408,13 @@ namespace RestX.BLL.Services
                 if (preparingStatus != null && cancelledStatus != null && order.OrderDetails?.Any() == true)
                 {
                     List<Models.Orders.OrderDetail> preparingOrderDetails = order.OrderDetails
-                        .Where(od => od.ItemStatusId == preparingStatus.Id)
+                        .Where(od => !od.IsCombo && od.DishId.HasValue && od.ItemStatusId == preparingStatus.Id)
                         .ToList();
 
                     if (preparingOrderDetails.Any())
                     {
                         Dictionary<Guid, int> qtyByDishId = preparingOrderDetails
-                            .GroupBy(x => x.DishId)
+                            .GroupBy(x => x.DishId!.Value)
                             .ToDictionary(g => g.Key, g => g.Sum(x => x.Quantity));
 
                         List<Guid> dishIds = qtyByDishId.Keys.ToList();
@@ -1402,7 +1466,7 @@ namespace RestX.BLL.Services
         {
             Models.Orders.OrderDetail? orderDetail = await Repo.GetOneAsync<Models.Orders.OrderDetail>(
                 filter: od => od.Id == orderDetailId,
-                includeProperties: "Dish,Order");
+                includeProperties: "Dish,Combo,Order");
 
             if (orderDetail == null)
             {
@@ -1426,12 +1490,14 @@ namespace RestX.BLL.Services
                 string.Equals(x.Code, "CANCELLED", StringComparison.OrdinalIgnoreCase));
 
             if (preparingStatus != null
-                && oldStatusId != preparingStatus.Id
-                && statusId == preparingStatus.Id)
+                 && oldStatusId != preparingStatus.Id
+                 && statusId == preparingStatus.Id
+                 && !orderDetail.IsCombo
+                 && orderDetail.DishId.HasValue)
             {
                 Dictionary<Guid, int> dishQtyToDeduct = new Dictionary<Guid, int>
                 {
-                    [orderDetail.DishId] = orderDetail.Quantity
+                    [orderDetail.DishId.Value] = orderDetail.Quantity
                 };
 
                 await ingredientService.DeductFromRecipes(dishQtyToDeduct);
@@ -1439,10 +1505,12 @@ namespace RestX.BLL.Services
             else if (preparingStatus != null
                 && cancelledStatus != null
                 && oldStatusId == preparingStatus.Id
-                && statusId == cancelledStatus.Id)
+                && statusId == cancelledStatus.Id
+                && !orderDetail.IsCombo
+                && orderDetail.DishId.HasValue)
             {
                 List<DishRecipe> recipes = (await Repo.GetAsync<DishRecipe>(
-                    filter: r => r.DishId == orderDetail.DishId,
+                    filter: r => r.DishId == orderDetail.DishId.Value,
                     includeProperties: "Ingredient,Ingredient.InventoryStock"
                 )).ToList();
 
@@ -1516,7 +1584,7 @@ namespace RestX.BLL.Services
                                       ts.StartedAt <= now
                               ),
                 orderBy: query => query.OrderBy(od => od.CreatedDate),
-                includeProperties: "ItemStatus,Dish,Order,Order.TableSessions,Order.TableSessions.Table"
+                includeProperties: "ItemStatus,Dish,Combo,Order,Order.TableSessions,Order.TableSessions.Table"
             )).ToList();
 
             var mappedDetails = mapper.Map<List<DataTranferObjects.Orders.OrderDetail>>(orderDetails);
@@ -1539,7 +1607,49 @@ namespace RestX.BLL.Services
                 }
             }
 
+            await ApplyComboInfoAsync(mappedDetails);
+
             return mappedDetails;
+        }
+
+        private async Task ApplyComboInfoAsync(List<DataTranferObjects.Orders.Order> orders)
+        {
+            List<DataTranferObjects.Orders.OrderDetail> details = orders
+                .SelectMany(o => o.OrderDetails ?? new List<DataTranferObjects.Orders.OrderDetail>())
+                .ToList();
+
+            await ApplyComboInfoAsync(details);
+        }
+
+        private async Task ApplyComboInfoAsync(List<DataTranferObjects.Orders.OrderDetail> details)
+        {
+            List<Guid> comboIds = details
+                .Where(d => d.IsCombo && d.ComboId.HasValue)
+                .Select(d => d.ComboId!.Value)
+                .Distinct()
+                .ToList();
+
+            if (!comboIds.Any())
+            {
+                return;
+            }
+
+            List<MealCombo> combos = (await Repo.GetAsync<MealCombo>(c => comboIds.Contains(c.Id))).ToList();
+            Dictionary<Guid, MealCombo> combosById = combos.ToDictionary(c => c.Id, c => c);
+
+            foreach (DataTranferObjects.Orders.OrderDetail detail in details)
+            {
+                if (!detail.IsCombo || !detail.ComboId.HasValue)
+                {
+                    continue;
+                }
+
+                if (combosById.TryGetValue(detail.ComboId.Value, out MealCombo? combo))
+                {
+                    detail.DishName = combo.Name;
+                    detail.DishPrice = combo.Price;
+                }
+            }
         }
         private async Task<string> GetNextOrderReference()
         {
@@ -1881,7 +1991,7 @@ namespace RestX.BLL.Services
                             applicableSubTotal = orderDetails.Sum(od =>
                             {
                                 if (od.Dish == null) return 0m;
-                                bool matches = applicableDishIds.Contains(od.DishId)
+                                bool matches = applicableDishIds.Contains(od.DishId.Value)
                                     || applicableCategoryIds.Contains(od.Dish.CategoryId);
                                 return matches ? od.Quantity * od.Dish.Price : 0m;
                             });
@@ -1985,14 +2095,18 @@ namespace RestX.BLL.Services
         }
 
         private async Task<(List<Models.Orders.OrderDetail> Details, decimal SubTotal)> BuildComboOrderDetailsAsync(
-            IEnumerable<DataTranferObjects.Orders.OrderComboItem> comboItems,
+            IEnumerable<DataTranferObjects.Orders.OrderDetail> comboDetails,
             int itemPreparingStatusId,
             Dictionary<Guid, int> dishQuantitiesToDeduct)
         {
             List<Models.Orders.OrderDetail> details = new List<Models.Orders.OrderDetail>();
             decimal subTotal = 0m;
 
-            List<Guid> comboIds = comboItems.Select(c => c.ComboId).Distinct().ToList();
+            List<Guid> comboIds = comboDetails
+                .Where(c => c.ComboId.HasValue)
+                .Select(c => c.ComboId!.Value)
+                .Distinct()
+                .ToList();
 
             IEnumerable<MealCombo> combos = await Repo.GetAsync<MealCombo>(
                 filter: c => comboIds.Contains(c.Id) && c.IsActive,
@@ -2001,9 +2115,9 @@ namespace RestX.BLL.Services
 
             Dictionary<Guid, MealCombo> combosById = combos.ToDictionary(c => c.Id, c => c);
 
-            foreach (DataTranferObjects.Orders.OrderComboItem comboItem in comboItems)
+            foreach (DataTranferObjects.Orders.OrderDetail comboItem in comboDetails)
             {
-                if (comboItem.ComboId == Guid.Empty)
+                if (!comboItem.ComboId.HasValue || comboItem.ComboId.Value == Guid.Empty)
                 {
                     throw new AppException("ComboId is required.");
                 }
@@ -2013,39 +2127,29 @@ namespace RestX.BLL.Services
                     throw new AppException("Combo quantity must be greater than 0.");
                 }
 
-                if (!combosById.TryGetValue(comboItem.ComboId, out MealCombo? combo))
+                if (!combosById.TryGetValue(comboItem.ComboId.Value, out MealCombo? combo))
                 {
                     throw new AppException("Combo not found.");
                 }
 
-                decimal totalDishPrice = combo.ComboDetails.Sum(cd => (cd.Dish?.Price ?? 0m) * cd.Quantity);
-                int totalUnits = combo.ComboDetails.Sum(cd => cd.Quantity);
+                subTotal += combo.Price * comboItem.Quantity;
+
+                var detail = new Models.Orders.OrderDetail
+                {
+                    DishId = null,
+                    ComboId = combo.Id,
+                    IsCombo = true,
+                    Quantity = comboItem.Quantity,
+                    UnitPrice = combo.Price,
+                    Note = comboItem.Note,
+                    ItemStatusId = itemPreparingStatusId
+                };
+
+                details.Add(detail);
 
                 foreach (ComboDetail comboDetail in combo.ComboDetails)
                 {
-                    if (comboDetail.Dish == null)
-                    {
-                        throw new AppException("Combo dish not found.");
-                    }
-
-                    decimal unitPrice = totalDishPrice > 0m
-                        ? combo.Price * (comboDetail.Dish.Price / totalDishPrice)
-                        : totalUnits > 0
-                            ? combo.Price / totalUnits
-                            : 0m;
-
                     int detailQuantity = comboDetail.Quantity * comboItem.Quantity;
-                    subTotal += unitPrice * detailQuantity;
-
-                    var detail = new Models.Orders.OrderDetail
-                    {
-                        DishId = comboDetail.DishId,
-                        Quantity = detailQuantity,
-                        UnitPrice = unitPrice,
-                        ItemStatusId = itemPreparingStatusId
-                    };
-
-                    details.Add(detail);
 
                     if (dishQuantitiesToDeduct.ContainsKey(comboDetail.DishId))
                     {
@@ -2060,7 +2164,6 @@ namespace RestX.BLL.Services
 
             return (details, subTotal);
         }
-
         public async Task RemoveDiscount(Guid orderId)
         {
             var order = await Repo.GetOneAsync<Models.Orders.Order>(

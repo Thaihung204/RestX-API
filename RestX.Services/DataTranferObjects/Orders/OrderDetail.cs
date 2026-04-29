@@ -7,8 +7,8 @@ namespace RestX.BLL.DataTranferObjects.Orders
     {
         public Guid? Id { get; set; }
 
-        [Required]
-        public Guid DishId { get; set; }
+        public Guid? DishId { get; set; }
+        public Guid? ComboId { get; set; }
         public string? DishName { get; set; }
         public decimal? DishPrice { get; set; }
 

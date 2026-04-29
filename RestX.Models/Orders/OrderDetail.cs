@@ -3,14 +3,14 @@ using RestX.Models.BaseModel;
 using RestX.Models.Common;
 using RestX.Models.Menu;
 using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
 
 namespace RestX.Models.Orders
 {
     public partial class OrderDetail : Entity<Guid>
     {
         public Guid OrderId { get; set; }
-        public Guid DishId { get; set; }
+        public Guid? DishId { get; set; }
+        public Guid? ComboId { get; set; }
 
         public bool IsCombo { get; set; }
 
@@ -27,7 +27,8 @@ namespace RestX.Models.Orders
         public int ItemStatusId { get; set; }
 
         public virtual Order Order { get; set; } = null!;
-        public virtual Dish Dish { get; set; } = null!;
-        public virtual StatusValue ItemStatus { get; set; }
+        public virtual Dish? Dish { get; set; }
+        public virtual MealCombo? Combo { get; set; }
+        public virtual StatusValue ItemStatus { get; set; } = null!;
     }
 }

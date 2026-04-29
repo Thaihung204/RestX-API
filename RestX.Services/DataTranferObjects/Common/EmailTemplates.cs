@@ -124,10 +124,7 @@ namespace RestX.BLL.DataTranferObjects.Common
                     </table>";
             }
             // Trường hợp chưa thanh toán — email gửi lúc tạo reservation
-            else if (depositAmount.HasValue && depositAmount > 0
-                     && paymentDeadline.HasValue
-                     && !string.IsNullOrWhiteSpace(hostname)
-                     && reservationId.HasValue)
+            else if (depositAmount.HasValue && depositAmount > 0 && paymentDeadline.HasValue)
             {
                 depositSection = $@"
                     <table width='100%' cellpadding='16' cellspacing='0' border='0'
@@ -138,30 +135,15 @@ namespace RestX.BLL.DataTranferObjects.Common
                           <div style='font-size:15px;font-weight:700;color:#b91c1c;margin-bottom:10px'>
                             &#9888; Deposit Required
                           </div>
-                          <table width='100%' cellpadding='0' cellspacing='0' border='0'>
-                            <tr>
-                              <td style='font-size:14px;color:#374151;padding-bottom:4px'>
-                                <strong>Amount:</strong> {depositAmount:N0} VND
-                              </td>
-                            </tr>
-                            <tr>
-                              <td style='font-size:14px;color:#374151;padding-bottom:12px'>
-                                <strong>Deadline:</strong> {paymentDeadline:dd/MM/yyyy HH:mm}
-                              </td>
-                            </tr>
-                          </table>
-                          <table width='100%' cellpadding='0' cellspacing='0' border='0'>
-                            <tr>
-                              <td style='text-align:center'>
-                                <a href='https://{hostname}/your-reservation/{reservationId}'
-                                   style='display:inline-block;background:#dc2626;color:#ffffff;
-                                          text-decoration:none;padding:12px 28px;
-                                          border-radius:8px;font-size:15px;font-weight:600'>
-                                  Pay Now
-                                </a>
-                              </td>
-                            </tr>
-                          </table>
+                          <div style='font-size:14px;color:#374151;margin-bottom:4px'>
+                            <strong>Amount:</strong> {depositAmount:N0} VND
+                          </div>
+                          <div style='font-size:14px;color:#374151;margin-bottom:12px'>
+                            <strong>Deadline:</strong> {paymentDeadline:dd/MM/yyyy HH:mm}
+                          </div>
+                          <div style='font-size:13px;color:#6b7280'>
+                            Please click <strong>View Reservation Details</strong> below to complete your deposit payment before the deadline.
+                          </div>
                         </td>
                       </tr>
                     </table>";
@@ -299,9 +281,9 @@ namespace RestX.BLL.DataTranferObjects.Common
 
                                 {specialRequestsSection}
 
-                                {viewDetailSection}
-
                                 {depositSection}
+
+                                {viewDetailSection}
 
                                 {restaurantInfoSection}
 

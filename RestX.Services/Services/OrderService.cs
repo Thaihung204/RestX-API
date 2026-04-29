@@ -296,6 +296,7 @@ namespace RestX.BLL.Services
                     od.OrderId,
                     od.DishId,
                     od.ComboId,
+                    od.ParentId,
                     od.Quantity,
                     od.UnitPrice,
                     od.Note,
@@ -304,7 +305,6 @@ namespace RestX.BLL.Services
                 WHERE od.OrderId IN ({inClause})
                 ORDER BY od.OrderId, od.Id
             ";
-
             string itemStatusesQuery = $@"
                 SELECT
                     sv.Id,
@@ -1003,7 +1003,7 @@ namespace RestX.BLL.Services
             List<DataTranferObjects.Orders.OrderDetail> requestDetails =
                 order.OrderDetails ?? new List<DataTranferObjects.Orders.OrderDetail>();
 
-            List <DataTranferObjects.Orders.OrderDetail> dishDetails =
+            List<DataTranferObjects.Orders.OrderDetail> dishDetails =
                 requestDetails.Where(d => !d.ComboId.HasValue).ToList();
 
             List<DataTranferObjects.Orders.OrderDetail> comboDetails =
@@ -1051,6 +1051,7 @@ namespace RestX.BLL.Services
                         {
                             DishId = d.DishId.Value,
                             ComboId = null,
+                            ParentId = null,
                             Quantity = d.Quantity,
                             UnitPrice = dish.Price,
                             Note = d.Note,
@@ -1133,6 +1134,7 @@ namespace RestX.BLL.Services
                         {
                             DishId = d.DishId.Value,
                             ComboId = null,
+                            ParentId = null,
                             Quantity = d.Quantity,
                             UnitPrice = dish.Price,
                             Note = d.Note,
@@ -1290,6 +1292,7 @@ namespace RestX.BLL.Services
                         OrderId = orderEntity.Id,
                         DishId = d.DishId!.Value,
                         ComboId = null,
+                        ParentId = null,
                         Quantity = d.Quantity,
                         UnitPrice = dish.Price,
                         Note = d.Note,
@@ -2116,21 +2119,36 @@ namespace RestX.BLL.Services
 
                 subTotal += combo.Price * comboItem.Quantity;
 
-                var detail = new Models.Orders.OrderDetail
+                Guid comboOrderDetailId = Guid.NewGuid();
+
+                var parentDetail = new Models.Orders.OrderDetail
                 {
+                    Id = comboOrderDetailId,
                     DishId = null,
                     ComboId = combo.Id,
+                    ParentId = null,
                     Quantity = comboItem.Quantity,
                     UnitPrice = combo.Price,
                     Note = comboItem.Note,
                     ItemStatusId = itemPreparingStatusId
                 };
 
-                details.Add(detail);
+                details.Add(parentDetail);
 
                 foreach (ComboDetail comboDetail in combo.ComboDetails)
                 {
                     int detailQuantity = comboDetail.Quantity * comboItem.Quantity;
+
+                    details.Add(new Models.Orders.OrderDetail
+                    {
+                        DishId = comboDetail.DishId,
+                        ComboId = null,
+                        ParentId = comboOrderDetailId,
+                        Quantity = detailQuantity,
+                        UnitPrice = comboDetail.Dish?.Price ?? 0m,
+                        Note = null,
+                        ItemStatusId = itemPreparingStatusId
+                    });
 
                     if (dishQuantitiesToDeduct.ContainsKey(comboDetail.DishId))
                     {

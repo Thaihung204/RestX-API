@@ -12,8 +12,6 @@ namespace RestX.BLL.DataTranferObjects.Orders
         public string? DishName { get; set; }
         public decimal? DishPrice { get; set; }
 
-        public bool IsCombo { get; set; }
-
         [Range(1, 1000)]
         public int Quantity { get; set; } = 1;
 

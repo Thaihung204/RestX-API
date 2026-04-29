@@ -12,8 +12,6 @@ namespace RestX.Models.Orders
         public Guid? DishId { get; set; }
         public Guid? ComboId { get; set; }
 
-        public bool IsCombo { get; set; }
-
         [Range(1, 1000)]
         public int Quantity { get; set; } = 1;
 

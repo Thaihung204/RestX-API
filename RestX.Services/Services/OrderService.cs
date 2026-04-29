@@ -2042,11 +2042,7 @@ namespace RestX.BLL.Services
                         DishId = comboDetail.DishId,
                         Quantity = detailQuantity,
                         UnitPrice = unitPrice,
-                        ItemStatusId = itemPreparingStatusId,
-                        ComboId = combo.Id,
-                        ComboName = combo.Name,
-                        ComboPrice = combo.Price,
-                        ComboQuantity = comboItem.Quantity
+                        ItemStatusId = itemPreparingStatusId
                     };
 
                     details.Add(detail);

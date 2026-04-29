@@ -18,6 +18,11 @@ namespace RestX.BLL.DataTranferObjects.Orders
         [Range(0, 999999999.99)]
         public decimal UnitPrice { get; set; }
 
+        public Guid? ComboId { get; set; }
+        public string? ComboName { get; set; }
+        public decimal? ComboPrice { get; set; }
+        public int? ComboQuantity { get; set; }
+
         [MaxLength(500)]
         public string? Note { get; set; }
 

@@ -485,6 +485,10 @@ namespace RestX.BLL.Services
                 };
             }).ToList();
 
+            var categoryOrders = dishes
+                .GroupBy(d => d.CategoryId)
+                .ToDictionary(g => g.Key, g => g.First().Category?.DisplayOrder ?? 0);
+
             var menu = menuItems
                 .GroupBy(x => new { x.CategoryId, x.CategoryName })
                 .Select(g => new MenuCategory
@@ -493,14 +497,14 @@ namespace RestX.BLL.Services
                     CategoryName = g.Key.CategoryName,
                     Items = g.ToList()
                 })
-                .OrderBy(c => c.CategoryName)
+                .OrderBy(c => categoryOrders.ContainsKey(c.CategoryId) ? categoryOrders[c.CategoryId] : int.MaxValue)
+                .ThenBy(c => c.CategoryName)
                 .ToList();
 
             await RedisService.SetAsync(cacheKey, menu);
 
             return menu;
         }
-
         // Recipe methods
         public async Task<List<DishRecipeItem>> GetRecipesByDishId(Guid dishId)
         {

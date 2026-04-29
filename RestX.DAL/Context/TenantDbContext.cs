@@ -656,8 +656,12 @@ namespace RestX.DAL.Context
                     .WithMany()
                     .HasForeignKey(e => e.ItemStatusId)
                     .OnDelete(DeleteBehavior.Restrict);
-            });
 
+                entity.HasOne<OrderDetail>(e => e.Parent)
+                    .WithMany(e => e.Children)
+                    .HasForeignKey(e => e.ParentId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
         }
 
         private void ConfigurePayments(ModelBuilder modelBuilder)

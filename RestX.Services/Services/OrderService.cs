@@ -880,12 +880,16 @@ namespace RestX.BLL.Services
                     mappedOrder.PaymentStatus = Models.Enum.PaymentStatus.Fail;
             }
 
-            mappedOrder.Customer.TotalOrders = await Repo.ExecuteSqlCommandAsync<int>(
-                            "SELECT COUNT(*) FROM Orders WHERE CustomerId = @CustomerId",
-                            new SqlParameter("CustomerId", order.CustomerId));
-            mappedOrder.Customer.TotalReservations = await Repo.ExecuteSqlCommandAsync<int>(
-                "SELECT COUNT(*) FROM Reservations WHERE CustomerId = @CustomerId",
-                new SqlParameter("CustomerId", order.CustomerId));
+            if (mappedOrder.Customer != null)
+            {
+                mappedOrder.Customer.TotalOrders = await Repo.ExecuteSqlCommandAsync<int>(
+                    "SELECT COUNT(*) FROM Orders WHERE CustomerId = @CustomerId",
+                    new SqlParameter("CustomerId", order.CustomerId.Value));
+
+                mappedOrder.Customer.TotalReservations = await Repo.ExecuteSqlCommandAsync<int>(
+                    "SELECT COUNT(*) FROM Reservations WHERE CustomerId = @CustomerId",
+                    new SqlParameter("CustomerId", order.CustomerId.Value));
+            }
 
 
             await ApplyComboInfoAsync(new List<DataTranferObjects.Orders.Order> { mappedOrder });
@@ -1046,6 +1050,8 @@ namespace RestX.BLL.Services
                             throw new AppException("Dish not found");
 
                         Models.Menu.Dish dish = dishesById[d.DishId.Value];
+
+                        additionalSubTotal += d.Quantity * dish.Price;
 
                         orderEntity.OrderDetails.Add(new Models.Orders.OrderDetail
                         {

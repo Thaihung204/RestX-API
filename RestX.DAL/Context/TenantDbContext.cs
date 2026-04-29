@@ -635,6 +635,7 @@ namespace RestX.DAL.Context
                 entity.HasKey(e => e.Id);
 
                 entity.Property(e => e.Note).HasMaxLength(500);
+                entity.Property(e => e.UnitPrice).HasColumnType("decimal(18,2)");
 
                 entity.HasOne<Order>(e => e.Order)
                     .WithMany(o => o.OrderDetails)
@@ -644,6 +645,11 @@ namespace RestX.DAL.Context
                 entity.HasOne<Dish>(e => e.Dish)
                     .WithMany(d => d.OrderDetails)
                     .HasForeignKey(e => e.DishId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne<MealCombo>(e => e.Combo)
+                    .WithMany()
+                    .HasForeignKey(e => e.ComboId)
                     .OnDelete(DeleteBehavior.Restrict);
 
                 entity.HasOne<StatusValue>(e => e.ItemStatus)

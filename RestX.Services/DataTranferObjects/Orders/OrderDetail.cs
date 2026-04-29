@@ -12,16 +12,13 @@ namespace RestX.BLL.DataTranferObjects.Orders
         public string? DishName { get; set; }
         public decimal? DishPrice { get; set; }
 
+        public bool IsCombo { get; set; }
+
         [Range(1, 1000)]
         public int Quantity { get; set; } = 1;
 
         [Range(0, 999999999.99)]
         public decimal UnitPrice { get; set; }
-
-        public Guid? ComboId { get; set; }
-        public string? ComboName { get; set; }
-        public decimal? ComboPrice { get; set; }
-        public int? ComboQuantity { get; set; }
 
         [MaxLength(500)]
         public string? Note { get; set; }
@@ -30,6 +27,5 @@ namespace RestX.BLL.DataTranferObjects.Orders
         public Guid? OrderId { get; set; }
         public DateTime? CreatedDate { get; set; }
         public List<string>? TableCode { get; set; }
-
     }
 }

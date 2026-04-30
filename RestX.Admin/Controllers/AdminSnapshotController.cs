@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using RestX.Admin.Controllers.BaseControllers;
 using RestX.BLL.DataTranferObjects.Admin;
@@ -35,7 +34,7 @@ public class AdminSnapshotController : BaseController
     }
 
     [HttpGet]
-    public async Task<ActionResult<TenantSnapshotAggregateDto>> GetSnapshots(
+    public async Task<ActionResult> GetSnapshots(
         [FromQuery] string periodType = "daily",
         [FromQuery] DateOnly? fromDate = null,
         [FromQuery] DateOnly? toDate = null,
@@ -43,8 +42,13 @@ public class AdminSnapshotController : BaseController
     {
         try
         {
-            var snapshots = await _snapshotService.GetSnapshotsAsync(periodType, fromDate, toDate, tenantId);
+            if (tenantId.HasValue)
+            {
+                var detail = await _snapshotService.GetTenantDetailAsync(tenantId.Value, periodType, fromDate, toDate);
+                return Ok(detail);
+            }
 
+            var snapshots = await _snapshotService.GetSnapshotsAsync(periodType, fromDate, toDate);
             var aggregate = new TenantSnapshotAggregateDto
             {
                 PeriodStart = fromDate ?? DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7)),
@@ -59,7 +63,6 @@ public class AdminSnapshotController : BaseController
                 NewReservations = snapshots.Sum(s => s.NewReservations),
                 Tenants = snapshots
             };
-
             return Ok(aggregate);
         }
         catch (Exception ex)

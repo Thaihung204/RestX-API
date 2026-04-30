@@ -1,6 +1,7 @@
 ﻿using AutoMapper;
 using Newtonsoft.Json;
 using RestX.BLL.DataTranferObjects;
+using RestX.BLL.DataTranferObjects.Admin;
 using RestX.BLL.DataTranferObjects.Authentication;
 using RestX.BLL.DataTranferObjects.Category;
 using RestX.BLL.DataTranferObjects.Combo;
@@ -14,6 +15,7 @@ using RestX.BLL.DataTranferObjects.Reservation;
 using RestX.BLL.DataTranferObjects.Status;
 using RestX.BLL.DataTranferObjects.Table;
 using RestX.BLL.DataTranferObjects.Tenants;
+using RestX.Models.Admin;
 using RestX.Models.Common;
 using RestX.Models.Customers;
 using RestX.Models.Enum;
@@ -217,6 +219,10 @@ namespace RestX.BLL.Helpers
             CreateMap<Notification, RestaurantNotification>().ReverseMap();
             CreateMap<Feedback, FeedbackItem>().ReverseMap();
             CreateMap<Customer, FeedbackCustomerInfo>().ReverseMap();
+
+            CreateMap<TenantSnapshot, TenantSnapshotDto>();
+            CreateMap<TenantSnapshot, SnapshotBreakdownItem>()
+                .ForMember(dest => dest.Date, opt => opt.MapFrom(src => src.PeriodStart));
         }
     }
 }

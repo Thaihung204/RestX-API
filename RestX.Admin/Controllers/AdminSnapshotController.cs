@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using RestX.Admin.Controllers.BaseControllers;
 using RestX.BLL.DataTranferObjects.Admin;
@@ -7,7 +8,7 @@ namespace RestX.Admin.Controllers;
 
 [Route("api/snapshots")]
 [ApiController]
-//[Authorize]
+[Authorize]
 public class AdminSnapshotController : BaseController
 {
     private readonly IAdminSnapshotService _snapshotService;

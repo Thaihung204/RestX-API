@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using RestX.AdminDAL.Context;
 
@@ -11,9 +12,11 @@ using RestX.AdminDAL.Context;
 namespace RestX.AdminDAL.Migrations
 {
     [DbContext(typeof(RestxAdminContext))]
-    partial class RestxAdminContextModelSnapshot : ModelSnapshot
+    [Migration("20260429163334_AddTenantSnapshot")]
+    partial class AddTenantSnapshot
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -295,6 +298,9 @@ namespace RestX.AdminDAL.Migrations
                         .HasColumnType("int");
 
                     b.Property<int>("NewReservations")
+                        .HasColumnType("int");
+
+                    b.Property<int>("NoShows")
                         .HasColumnType("int");
 
                     b.Property<DateOnly>("PeriodStart")

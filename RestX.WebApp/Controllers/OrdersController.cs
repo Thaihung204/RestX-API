@@ -25,8 +25,10 @@ namespace RestX.WebApp.Controllers
         private readonly IOrderService orderService;
         private readonly IHubContext<SignalrServer> hubContext;
         private readonly IFeedbackService feedbackService;
+        private readonly ILogger<OrdersController> _logger;
 
         public OrdersController(
+            ILogger<OrdersController> logger,
             IOrderService orderService,
             IHubContext<SignalrServer> hubContext,
             IFeedbackService feedbackService,
@@ -34,11 +36,13 @@ namespace RestX.WebApp.Controllers
             UserManager<ApplicationUser> userManager,
             IExceptionHandler exceptionHandler,
             IEnumerable<ActiveTenant> tenant
+
         ) : base(mapper, userManager, exceptionHandler, tenant)
         {
             this.orderService = orderService;
             this.hubContext = hubContext;
             this.feedbackService = feedbackService;
+            _logger = logger;
         }
 
         [HttpGet("export/csv")]

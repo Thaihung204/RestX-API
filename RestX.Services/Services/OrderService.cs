@@ -1136,8 +1136,9 @@ namespace RestX.BLL.Services
 
                         additionalSubTotal += d.Quantity * dish.Price;
 
-                        orderEntity.OrderDetails.Add(new Models.Orders.OrderDetail
+                        Models.Orders.OrderDetail newDetail = new Models.Orders.OrderDetail
                         {
+                            OrderId = orderEntity.Id,
                             DishId = d.DishId.Value,
                             ComboId = null,
                             ParentId = null,
@@ -1145,7 +1146,10 @@ namespace RestX.BLL.Services
                             UnitPrice = dish.Price,
                             Note = d.Note,
                             ItemStatusId = itemPreparingStatusId
-                        });
+                        };
+
+                        await Repo.CreateAsync(newDetail, userId);
+                        orderEntity.OrderDetails.Add(newDetail);
 
                         if (dishQuantitiesToDeduct.ContainsKey(d.DishId.Value))
                         {
@@ -1159,17 +1163,86 @@ namespace RestX.BLL.Services
                 }
                 if (comboDetails.Any())
                 {
-                    var comboResult = await BuildComboOrderDetailsAsync(comboDetails, itemPreparingStatusId, dishQuantitiesToDeduct);
+                    List<Guid> comboIds = comboDetails
+                        .Where(c => c.ComboId.HasValue)
+                        .Select(c => c.ComboId!.Value)
+                        .Distinct()
+                        .ToList();
 
-                    foreach (Models.Orders.OrderDetail detail in comboResult.Details)
+                    IEnumerable<MealCombo> combos = await Repo.GetAsync<MealCombo>(
+                        filter: c => comboIds.Contains(c.Id) && c.IsActive,
+                        includeProperties: "ComboDetails.Dish"
+                    );
+
+                    Dictionary<Guid, MealCombo> combosById = combos.ToDictionary(c => c.Id, c => c);
+
+                    foreach (DataTranferObjects.Orders.OrderDetail comboItem in comboDetails)
                     {
-                        detail.OrderId = orderEntity.Id;
-                        await Repo.CreateAsync(detail, userId);
+                        if (!comboItem.ComboId.HasValue || comboItem.ComboId.Value == Guid.Empty)
+                        {
+                            throw new AppException("ComboId is required.");
+                        }
+
+                        if (comboItem.Quantity <= 0)
+                        {
+                            throw new AppException("Combo quantity must be greater than 0.");
+                        }
+
+                        if (!combosById.TryGetValue(comboItem.ComboId.Value, out MealCombo? combo))
+                        {
+                            throw new AppException("Combo not found.");
+                        }
+
+                        additionalSubTotal += combo.Price * comboItem.Quantity;
+
+                        Guid comboOrderDetailId = Guid.NewGuid();
+
+                        Models.Orders.OrderDetail parentDetail = new Models.Orders.OrderDetail
+                        {
+                            Id = comboOrderDetailId,
+                            OrderId = orderEntity.Id,
+                            DishId = null,
+                            ComboId = combo.Id,
+                            ParentId = null,
+                            Quantity = comboItem.Quantity,
+                            UnitPrice = combo.Price,
+                            Note = comboItem.Note,
+                            ItemStatusId = itemPreparingStatusId
+                        };
+
+                        await Repo.CreateAsync(parentDetail, userId);
+                        orderEntity.OrderDetails.Add(parentDetail);
+
+                        foreach (ComboDetail comboDetail in combo.ComboDetails)
+                        {
+                            int detailQuantity = comboDetail.Quantity * comboItem.Quantity;
+
+                            Models.Orders.OrderDetail childDetail = new Models.Orders.OrderDetail
+                            {
+                                OrderId = orderEntity.Id,
+                                DishId = comboDetail.DishId,
+                                ComboId = null,
+                                ParentId = comboOrderDetailId,
+                                Quantity = detailQuantity,
+                                UnitPrice = comboDetail.Dish?.Price ?? 0m,
+                                Note = null,
+                                ItemStatusId = itemPreparingStatusId
+                            };
+
+                            await Repo.CreateAsync(childDetail, userId);
+                            orderEntity.OrderDetails.Add(childDetail);
+
+                            if (dishQuantitiesToDeduct.ContainsKey(comboDetail.DishId))
+                            {
+                                dishQuantitiesToDeduct[comboDetail.DishId] += detailQuantity;
+                            }
+                            else
+                            {
+                                dishQuantitiesToDeduct[comboDetail.DishId] = detailQuantity;
+                            }
+                        }
                     }
-
-                    additionalSubTotal += comboResult.SubTotal;
                 }
-
                 if (dishQuantitiesToDeduct.Any())
                 {
                     await ingredientService.DeductFromRecipes(dishQuantitiesToDeduct);

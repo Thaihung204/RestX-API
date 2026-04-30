@@ -296,6 +296,7 @@ namespace RestX.BLL.Services
                     od.OrderId,
                     od.DishId,
                     od.ComboId,
+                    od.ParentId,
                     od.Quantity,
                     od.UnitPrice,
                     od.Note,
@@ -304,7 +305,6 @@ namespace RestX.BLL.Services
                 WHERE od.OrderId IN ({inClause})
                 ORDER BY od.OrderId, od.Id
             ";
-
             string itemStatusesQuery = $@"
                 SELECT
                     sv.Id,
@@ -880,12 +880,16 @@ namespace RestX.BLL.Services
                     mappedOrder.PaymentStatus = Models.Enum.PaymentStatus.Fail;
             }
 
-            mappedOrder.Customer.TotalOrders = await Repo.ExecuteSqlCommandAsync<int>(
-                            "SELECT COUNT(*) FROM Orders WHERE CustomerId = @CustomerId",
-                            new SqlParameter("CustomerId", order.CustomerId));
-            mappedOrder.Customer.TotalReservations = await Repo.ExecuteSqlCommandAsync<int>(
-                "SELECT COUNT(*) FROM Reservations WHERE CustomerId = @CustomerId",
-                new SqlParameter("CustomerId", order.CustomerId));
+            if (mappedOrder.Customer != null)
+            {
+                mappedOrder.Customer.TotalOrders = await Repo.ExecuteSqlCommandAsync<int>(
+                    "SELECT COUNT(*) FROM Orders WHERE CustomerId = @CustomerId",
+                    new SqlParameter("CustomerId", order.CustomerId.Value));
+
+                mappedOrder.Customer.TotalReservations = await Repo.ExecuteSqlCommandAsync<int>(
+                    "SELECT COUNT(*) FROM Reservations WHERE CustomerId = @CustomerId",
+                    new SqlParameter("CustomerId", order.CustomerId.Value));
+            }
 
 
             await ApplyComboInfoAsync(new List<DataTranferObjects.Orders.Order> { mappedOrder });
@@ -1003,7 +1007,7 @@ namespace RestX.BLL.Services
             List<DataTranferObjects.Orders.OrderDetail> requestDetails =
                 order.OrderDetails ?? new List<DataTranferObjects.Orders.OrderDetail>();
 
-            List <DataTranferObjects.Orders.OrderDetail> dishDetails =
+            List<DataTranferObjects.Orders.OrderDetail> dishDetails =
                 requestDetails.Where(d => !d.ComboId.HasValue).ToList();
 
             List<DataTranferObjects.Orders.OrderDetail> comboDetails =
@@ -1047,10 +1051,13 @@ namespace RestX.BLL.Services
 
                         Models.Menu.Dish dish = dishesById[d.DishId.Value];
 
+                        additionalSubTotal += d.Quantity * dish.Price;
+
                         orderEntity.OrderDetails.Add(new Models.Orders.OrderDetail
                         {
                             DishId = d.DishId.Value,
                             ComboId = null,
+                            ParentId = null,
                             Quantity = d.Quantity,
                             UnitPrice = dish.Price,
                             Note = d.Note,
@@ -1129,15 +1136,20 @@ namespace RestX.BLL.Services
 
                         additionalSubTotal += d.Quantity * dish.Price;
 
-                        orderEntity.OrderDetails.Add(new Models.Orders.OrderDetail
+                        Models.Orders.OrderDetail newDetail = new Models.Orders.OrderDetail
                         {
+                            OrderId = orderEntity.Id,
                             DishId = d.DishId.Value,
                             ComboId = null,
+                            ParentId = null,
                             Quantity = d.Quantity,
                             UnitPrice = dish.Price,
                             Note = d.Note,
                             ItemStatusId = itemPreparingStatusId
-                        });
+                        };
+
+                        await Repo.CreateAsync(newDetail, userId);
+                        orderEntity.OrderDetails.Add(newDetail);
 
                         if (dishQuantitiesToDeduct.ContainsKey(d.DishId.Value))
                         {
@@ -1151,17 +1163,86 @@ namespace RestX.BLL.Services
                 }
                 if (comboDetails.Any())
                 {
-                    var comboResult = await BuildComboOrderDetailsAsync(comboDetails, itemPreparingStatusId, dishQuantitiesToDeduct);
+                    List<Guid> comboIds = comboDetails
+                        .Where(c => c.ComboId.HasValue)
+                        .Select(c => c.ComboId!.Value)
+                        .Distinct()
+                        .ToList();
 
-                    foreach (Models.Orders.OrderDetail detail in comboResult.Details)
+                    IEnumerable<MealCombo> combos = await Repo.GetAsync<MealCombo>(
+                        filter: c => comboIds.Contains(c.Id) && c.IsActive,
+                        includeProperties: "ComboDetails.Dish"
+                    );
+
+                    Dictionary<Guid, MealCombo> combosById = combos.ToDictionary(c => c.Id, c => c);
+
+                    foreach (DataTranferObjects.Orders.OrderDetail comboItem in comboDetails)
                     {
-                        detail.OrderId = orderEntity.Id;
-                        await Repo.CreateAsync(detail, userId);
+                        if (!comboItem.ComboId.HasValue || comboItem.ComboId.Value == Guid.Empty)
+                        {
+                            throw new AppException("ComboId is required.");
+                        }
+
+                        if (comboItem.Quantity <= 0)
+                        {
+                            throw new AppException("Combo quantity must be greater than 0.");
+                        }
+
+                        if (!combosById.TryGetValue(comboItem.ComboId.Value, out MealCombo? combo))
+                        {
+                            throw new AppException("Combo not found.");
+                        }
+
+                        additionalSubTotal += combo.Price * comboItem.Quantity;
+
+                        Guid comboOrderDetailId = Guid.NewGuid();
+
+                        Models.Orders.OrderDetail parentDetail = new Models.Orders.OrderDetail
+                        {
+                            Id = comboOrderDetailId,
+                            OrderId = orderEntity.Id,
+                            DishId = null,
+                            ComboId = combo.Id,
+                            ParentId = null,
+                            Quantity = comboItem.Quantity,
+                            UnitPrice = combo.Price,
+                            Note = comboItem.Note,
+                            ItemStatusId = itemPreparingStatusId
+                        };
+
+                        await Repo.CreateAsync(parentDetail, userId);
+                        orderEntity.OrderDetails.Add(parentDetail);
+
+                        foreach (ComboDetail comboDetail in combo.ComboDetails)
+                        {
+                            int detailQuantity = comboDetail.Quantity * comboItem.Quantity;
+
+                            Models.Orders.OrderDetail childDetail = new Models.Orders.OrderDetail
+                            {
+                                OrderId = orderEntity.Id,
+                                DishId = comboDetail.DishId,
+                                ComboId = null,
+                                ParentId = comboOrderDetailId,
+                                Quantity = detailQuantity,
+                                UnitPrice = comboDetail.Dish?.Price ?? 0m,
+                                Note = null,
+                                ItemStatusId = itemPreparingStatusId
+                            };
+
+                            await Repo.CreateAsync(childDetail, userId);
+                            orderEntity.OrderDetails.Add(childDetail);
+
+                            if (dishQuantitiesToDeduct.ContainsKey(comboDetail.DishId))
+                            {
+                                dishQuantitiesToDeduct[comboDetail.DishId] += detailQuantity;
+                            }
+                            else
+                            {
+                                dishQuantitiesToDeduct[comboDetail.DishId] = detailQuantity;
+                            }
+                        }
                     }
-
-                    additionalSubTotal += comboResult.SubTotal;
                 }
-
                 if (dishQuantitiesToDeduct.Any())
                 {
                     await ingredientService.DeductFromRecipes(dishQuantitiesToDeduct);
@@ -1290,6 +1371,7 @@ namespace RestX.BLL.Services
                         OrderId = orderEntity.Id,
                         DishId = d.DishId!.Value,
                         ComboId = null,
+                        ParentId = null,
                         Quantity = d.Quantity,
                         UnitPrice = dish.Price,
                         Note = d.Note,
@@ -2116,21 +2198,36 @@ namespace RestX.BLL.Services
 
                 subTotal += combo.Price * comboItem.Quantity;
 
-                var detail = new Models.Orders.OrderDetail
+                Guid comboOrderDetailId = Guid.NewGuid();
+
+                var parentDetail = new Models.Orders.OrderDetail
                 {
+                    Id = comboOrderDetailId,
                     DishId = null,
                     ComboId = combo.Id,
+                    ParentId = null,
                     Quantity = comboItem.Quantity,
                     UnitPrice = combo.Price,
                     Note = comboItem.Note,
                     ItemStatusId = itemPreparingStatusId
                 };
 
-                details.Add(detail);
+                details.Add(parentDetail);
 
                 foreach (ComboDetail comboDetail in combo.ComboDetails)
                 {
                     int detailQuantity = comboDetail.Quantity * comboItem.Quantity;
+
+                    details.Add(new Models.Orders.OrderDetail
+                    {
+                        DishId = comboDetail.DishId,
+                        ComboId = null,
+                        ParentId = comboOrderDetailId,
+                        Quantity = detailQuantity,
+                        UnitPrice = comboDetail.Dish?.Price ?? 0m,
+                        Note = null,
+                        ItemStatusId = itemPreparingStatusId
+                    });
 
                     if (dishQuantitiesToDeduct.ContainsKey(comboDetail.DishId))
                     {

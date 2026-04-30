@@ -259,7 +259,7 @@ namespace RestX.BLL.Services
             };
         }
 
-        public async Task<CreatePaymentLinkResponse> CreatePaymentLink(Guid orderId, string? createdBy = null)
+        public async Task<CreatePaymentLinkResponse> CreatePaymentLink(Guid orderId, string? createdBy = null, bool isCustomer = false)
         {
             Order order = await RecalculateOrderAmountForCheckout(orderId, createdBy);
 
@@ -327,8 +327,12 @@ namespace RestX.BLL.Services
                 Amount = amount,
                 Description = description,
                 Items = items,
-                ReturnUrl = $"https://{CurrentTenant.Hostname}/staff/orders?payos=success",
-                CancelUrl = $"https://{CurrentTenant.Hostname}/staff/orders?payos=cancel"
+                ReturnUrl = isCustomer
+                    ? $"https://{CurrentTenant.Hostname}/menu/{order.TableSessions.FirstOrDefault()?.TableId}?payos=success"
+                    : $"https://{CurrentTenant.Hostname}/staff/orders?payos=success",
+                CancelUrl = isCustomer
+                    ? $"https://{CurrentTenant.Hostname}/menu/{order.TableSessions.FirstOrDefault()?.TableId}?payos=cancel"
+                    : $"https://{CurrentTenant.Hostname}/staff/orders?payos=cancel"
             };
 
             var link = await gatewayClient.PaymentRequests.CreateAsync(linkRequest);
@@ -564,7 +568,7 @@ namespace RestX.BLL.Services
         {
             Order order = await Repo.GetOneAsync<Order>(
                 filter: o => o.Id == orderId,
-                includeProperties: "OrderDetails.Dish,OrderDetails.ItemStatus,OrderDetails.Combo")
+                includeProperties: "OrderDetails.Dish,OrderDetails.ItemStatus,OrderDetails.Combo,TableSessions")
                 ?? throw new KeyNotFoundException("Order not found");
 
             decimal subTotal = order.OrderDetails

@@ -534,14 +534,17 @@ namespace RestX.BLL.Services
         {
             Order order = await Repo.GetOneAsync<Order>(
                 filter: o => o.Id == orderId,
-                includeProperties: "OrderDetails.Dish,OrderDetails.ItemStatus")
+                includeProperties: "OrderDetails.Dish,OrderDetails.ItemStatus,OrderDetails.Combo")
                 ?? throw new KeyNotFoundException("Order not found");
 
             decimal subTotal = order.OrderDetails
                 .Where(d =>
-                    d.Dish != null
+                    d.ParentId == null
                     && !string.Equals(d.ItemStatus?.Code, "CANCELLED", StringComparison.OrdinalIgnoreCase))
-                .Sum(d => d.Quantity * d.Dish.Price);
+                .Sum(d =>
+                    d.ComboId.HasValue
+                        ? (d.Combo?.Price ?? d.UnitPrice) * d.Quantity
+                        : (d.Dish?.Price ?? d.UnitPrice) * d.Quantity);
 
             order.SubTotal = subTotal;
 
@@ -560,7 +563,6 @@ namespace RestX.BLL.Services
 
             return order;
         }
-
         private async Task<(PayOSClient client, PaymentGatewaySettings settings)> GetTenantGateway()
         {
             var settings = await paymentSettingService.GetPaymentSettingByTenantId(CurrentTenant.Id)

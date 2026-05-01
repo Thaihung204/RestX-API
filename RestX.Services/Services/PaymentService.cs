@@ -243,9 +243,14 @@ namespace RestX.BLL.Services
                 filter: ts => ts.OrderId == orderId && ts.IsActive
             )).ToList();
 
-            foreach (Guid tableId in activeSessions.Select(ts => ts.TableId).Distinct())
+            List<Guid> tableIds = activeSessions
+                .Select(ts => ts.TableId)
+                .Distinct()
+                .ToList();
+
+            if (tableIds.Any())
             {
-                await tableService.CloseTableSession(tableId);
+                await tableService.CloseTableSession(tableIds);
             }
 
             await Repo.SaveAsync();
@@ -484,9 +489,14 @@ namespace RestX.BLL.Services
                         filter: ts => ts.OrderId == order.Id && ts.IsActive
                     )).ToList();
 
-                    foreach (Guid tableId in activeSessions.Select(ts => ts.TableId).Distinct())
+                    List<Guid> tableIds = activeSessions
+                        .Select(ts => ts.TableId)
+                        .Distinct()
+                        .ToList();
+
+                    if (tableIds.Any())
                     {
-                        await tableService.CloseTableSession(tableId);
+                        await tableService.CloseTableSession(tableIds);
                     }
                 }
             }
@@ -546,8 +556,15 @@ namespace RestX.BLL.Services
                 filter: ts => ts.OrderId == order.Id && ts.IsActive
             )).ToList();
 
-            foreach (Guid tableId in activeSessions.Select(ts => ts.TableId).Distinct())
-                await tableService.CloseTableSession(tableId);
+            List<Guid> tableIds = activeSessions
+                .Select(ts => ts.TableId)
+                .Distinct()
+                .ToList();
+
+            if (tableIds.Any())
+            {
+                await tableService.CloseTableSession(tableIds);
+            }
 
             await Repo.SaveAsync();
 

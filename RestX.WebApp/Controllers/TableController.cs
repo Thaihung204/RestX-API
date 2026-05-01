@@ -221,17 +221,17 @@ namespace RestX.WebApp.Controllers
             }
         }
 
-        [HttpPut("{tableId:guid}/sessions/close")]
+        [HttpPut("sessions/close")]
         [Authorize(Roles = "System Admin,Admin,Staff")]
-        public async Task<ActionResult<object>> CloseTableSession([Required] Guid tableId)
+        public async Task<ActionResult<object>> CloseTableSession([FromBody] List<Guid> tableIds)
         {
             try
             {
-                await tableService.CloseTableSession(tableId);
+                await tableService.CloseTableSession(tableIds);
 
                 await hub.BroadcastToTenant(CurrentTenant.Id, SignalrServer.TableSessionClosed, new
                 {
-                    tableId,
+                    tableIds,
                     closedAt = DateTime.UtcNow.AddHours(7)
                 });
 
@@ -282,5 +282,37 @@ namespace RestX.WebApp.Controllers
                 return BadRequest("An internal error occurred");
             }
         }
+
+        //[HttpPost("split")]
+        //[Authorize(Roles = "System Admin,Admin,Staff")]
+        //public async Task<ActionResult<SplitTableResponse>> SplitTable([FromBody] SplitTableRequest request)
+        //{
+        //    try
+        //    {
+        //        SplitTableResponse result = await tableService.SplitTable(request);
+
+        //        if (result.RequiresManualResolution)
+        //            return Conflict(result);
+
+        //        await hub.BroadcastToTenant(CurrentTenant.Id, SignalrServer.TableSessionCreated, new
+        //        {
+        //            tableIds = request.TableIds,
+        //            orderId = result.OrderId,
+        //            message = result.Message,
+        //            sessions = result.Sessions
+        //        });
+
+        //        return Ok(result);
+        //    }
+        //    catch (AppException ex)
+        //    {
+        //        return this.BadRequest(ex.Message);
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        this.ExceptionHandler.RaiseException(ex);
+        //        return BadRequest("An internal error occurred");
+        //    }
+        //}
     }
 }

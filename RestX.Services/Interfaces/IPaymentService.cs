@@ -9,7 +9,7 @@ namespace RestX.BLL.Interfaces
         Task<IEnumerable<PaymentDetail>> GetPaymentsByOrder(Guid orderId);
         Task<PaymentDetail?> GetPaymentById(Guid id);
         Task<CashPaymentResponse> PayByCash(Guid orderId, CashPaymentRequest request, string? createdBy = null);
-        Task<CreatePaymentLinkResponse> CreatePaymentLink(Guid orderId, string? createdBy = null);
+        Task<CreatePaymentLinkResponse> CreatePaymentLink(Guid orderId, string? createdBy = null, bool isCustomer = false);
         Task CancelPaymentLink(Guid paymentId, string? reason, string? modifiedBy = null);
         Task HandleWebhook(Webhook webhookBody);
         Task<byte[]> GenerateReceiptAsync(Guid paymentId);

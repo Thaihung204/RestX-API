@@ -127,13 +127,14 @@ namespace RestX.WebApp.Controllers
         }
 
         [HttpPost("orders/{orderId:guid}")]
-        [Authorize(Roles = "Admin,System Admin,Staff")]
+        [Authorize(Roles = "Admin,System Admin,Staff,Customer")]
         public async Task<IActionResult> CreatePaymentLink([FromRoute] Guid orderId)
         {
             try
             {
                 var user = await GetCurrentUserAsync();
-                var result = await paymentService.CreatePaymentLink(orderId, user?.Id.ToString());
+                var isCustomer = User.IsInRole("Customer");
+                var result = await paymentService.CreatePaymentLink(orderId, user?.Id.ToString(), isCustomer);
                 return Ok(result);
             }
             catch (AppException ex)

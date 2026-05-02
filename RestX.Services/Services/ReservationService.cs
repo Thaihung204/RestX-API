@@ -147,7 +147,6 @@ namespace RestX.BLL.Services
 
                 var paymentLink = await CreateDepositPaymentLink(reservation.Id);
                 detail.CheckoutUrl = paymentLink;
-                await SendConfirmationEmail(request.Email, request.Name, detail, tables);
                 var paymentDeadlineUtc = paymentDeadline!.Value.Subtract(VietnamOffset);
                 BackgroundJob.Schedule<IReservationService>(
                     s => s.AutoCancelDepositReservation(reservation.Id),
@@ -169,13 +168,7 @@ namespace RestX.BLL.Services
             var totalCount = await Repo.GetCountAsync(predicate);
             var items = (await Repo.GetAsync<Reservation>(
                 filter: predicate,
-                orderBy: filter.SortDescending
-                    ? q => q.OrderByDescending(r => r.Time)
-                    : q => q.OrderBy(r =>
-                                r.ReservationStatus.Code == CancelledCode ? 2 :
-                                r.Time >= VnNow ? 0 : 1)
-                            .ThenBy(r => r.Time)
-                            .ThenBy(r => r.ReservationStatus.Code == ConfirmedCode ? 0 : r.ReservationStatus.Code == PendingCode ? 1 : 2),
+                orderBy: q => q.OrderByDescending(r => r.CreatedDate),
                 includeProperties: ReservationIncludes,
                 skip: (filter.PageNumber - 1) * filter.PageSize,
                 take: filter.PageSize

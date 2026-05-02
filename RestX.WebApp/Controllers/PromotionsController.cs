@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using RestX.BLL.Exceptionhandling;
 using RestX.BLL.Interfaces;
+using RestX.BLL.Services;
 using RestX.Models.Identity;
 using RestX.Models.Tenants;
 using RestX.WebApp.Controllers.BaseControllers;
@@ -17,15 +18,18 @@ namespace RestX.WebApp.Controllers
     public class PromotionsController : BaseController
     {
         private readonly IPromotionService promotionService;
+        private readonly IOrderService orderService;
 
         public PromotionsController(
             IPromotionService promotionService,
+            IOrderService orderService,
             IMapper mapper,
             UserManager<ApplicationUser> userManager,
             IExceptionHandler exceptionHandler,
             IEnumerable<ActiveTenant> tenant) : base(mapper, userManager, exceptionHandler, tenant)
         {
             this.promotionService = promotionService;
+            this.orderService = orderService;
         }
 
         [HttpGet]
@@ -70,11 +74,26 @@ namespace RestX.WebApp.Controllers
 
         [HttpGet("active")]
         [AllowAnonymous]
-        public async Task<ActionResult> GetActivePromotions()
+        public async Task<ActionResult> GetActivePromotions([FromQuery] Guid? orderId = null)
         {
             try
             {
-                List<BLL.DataTranferObjects.Promotion.Promotion> promotions = await promotionService.GetActivePromotions();
+                Guid? userId = (await GetCurrentUserAsync())?.Id;
+
+                if (orderId.HasValue && orderId.Value != Guid.Empty)
+                {
+                    var order = await orderService.GetOrderById(orderId.Value);
+                    if (order == null)
+                    {
+                        return NotFound(new { success = false, message = "Order not found" });
+                    }
+
+                    userId = order.Customer?.UserId;
+                }
+
+                List<BLL.DataTranferObjects.Promotion.Promotion> promotions =
+                    await promotionService.GetActivePromotions(userId);
+
                 return Ok(promotions);
             }
             catch (Exception ex)

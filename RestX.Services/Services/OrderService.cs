@@ -1540,6 +1540,19 @@ namespace RestX.BLL.Services
                 return false;
             }
 
+            if (orderDetail.ParentId != null)
+            {
+                throw new AppException("Không cho phép cập nhật orderDetail con của combo.");
+            }
+
+            bool isComboParent = orderDetail.ComboId.HasValue && orderDetail.ParentId == null;
+            bool isSingleDish = orderDetail.DishId.HasValue && !orderDetail.ComboId.HasValue;
+
+            if (!isComboParent && !isSingleDish)
+            {
+                throw new AppException("OrderDetail không hợp lệ để cập nhật trạng thái.");
+            }
+
             List<RestX.BLL.DataTranferObjects.Status.StatusValues> orderDetailStatuses =
                 (await statusValueService.GetStatuses("order-detail")).ToList();
 
@@ -1567,8 +1580,6 @@ namespace RestX.BLL.Services
             bool isLeavingCancelled = cancelledStatus != null
                 && oldStatusId == cancelledStatus.Id
                 && statusId != cancelledStatus.Id;
-
-            bool isComboParent = orderDetail.ComboId.HasValue && orderDetail.ParentId == null;
 
             List<Models.Orders.OrderDetail> comboChildren = new List<Models.Orders.OrderDetail>();
             if (isComboParent)
@@ -1605,11 +1616,11 @@ namespace RestX.BLL.Services
 
             DateTime now = DateTime.UtcNow.AddHours(7);
 
-            if (isMovingToPreparing && dishQuantities.Any())
+            if ((isMovingToPreparing || isLeavingCancelled) && dishQuantities.Any())
             {
                 await ingredientService.DeductFromRecipes(dishQuantities);
             }
-            else if (isMovingToCancelled && preparingStatus != null && oldStatusId == preparingStatus.Id && dishQuantities.Any())
+            else if (isMovingToCancelled && dishQuantities.Any())
             {
                 List<Guid> dishIds = dishQuantities.Keys.ToList();
                 List<DishRecipe> recipes = (await Repo.GetAsync<DishRecipe>(
@@ -1664,26 +1675,6 @@ namespace RestX.BLL.Services
                 }
             }
 
-            if (orderDetail.Order != null && cancelledStatus != null && orderDetail.ParentId == null)
-            {
-                decimal lineAmount = orderDetail.Quantity * orderDetail.UnitPrice;
-
-                if (isMovingToCancelled)
-                {
-                    orderDetail.Order.SubTotal -= lineAmount;
-                    if (orderDetail.Order.SubTotal < 0)
-                    {
-                        orderDetail.Order.SubTotal = 0;
-                    }
-                }
-                else if (isLeavingCancelled)
-                {
-                    orderDetail.Order.SubTotal += lineAmount;
-                }
-
-                orderDetail.Order.CalculateTotalAmount();
-            }
-
             orderDetail.ItemStatusId = statusId;
             Repo.Update(orderDetail, userId);
 
@@ -1696,16 +1687,10 @@ namespace RestX.BLL.Services
                 }
             }
 
-            if (orderDetail.Order != null)
-            {
-                Repo.Update(orderDetail.Order, userId);
-            }
-
             await Repo.SaveAsync();
 
             return true;
         }
-
         public async Task<IEnumerable<DataTranferObjects.Orders.OrderDetail>> GetAllOrderDetails()
         {
             var orderDetailStatuses = await statusValueService.GetStatuses("order-detail");

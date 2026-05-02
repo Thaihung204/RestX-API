@@ -13,5 +13,6 @@ namespace RestX.BLL.Interfaces
         Task CancelPaymentLink(Guid paymentId, string? reason, string? modifiedBy = null);
         Task HandleWebhook(Webhook webhookBody);
         Task<byte[]> GenerateReceiptAsync(Guid paymentId);
+        Task<RestX.Models.Orders.Order> RecalculateOrderAmountForCheckout(Guid orderId, string? modifiedBy = null);
     }
 }

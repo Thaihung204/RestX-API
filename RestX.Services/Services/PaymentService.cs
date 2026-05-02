@@ -581,7 +581,7 @@ namespace RestX.BLL.Services
             };
         }
 
-        private async Task<Order> RecalculateOrderAmountForCheckout(Guid orderId, string? modifiedBy = null)
+        public async Task<Order> RecalculateOrderAmountForCheckout(Guid orderId, string? modifiedBy = null)
         {
             Order order = await Repo.GetOneAsync<Order>(
                 filter: o => o.Id == orderId,

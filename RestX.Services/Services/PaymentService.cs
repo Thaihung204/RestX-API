@@ -406,7 +406,7 @@ namespace RestX.BLL.Services
             await Repo.SaveAsync();
         }
 
-        public async Task HandleWebhook(Webhook webhookBody)
+        public async Task<WebhookResult> HandleWebhook(Webhook webhookBody)
         {
             logger.LogInformation("[Webhook] Received | Code={Code} | Tenant={Tenant}",
                 webhookBody.Code, CurrentTenant?.Hostname ?? "unknown");
@@ -427,8 +427,9 @@ namespace RestX.BLL.Services
                     Repo.Update(cancelledPayment);
                     await Repo.SaveAsync();
                     logger.LogInformation("[Webhook] Payment {PaymentId} marked Fail", cancelledPayment.Id);
+                    return new WebhookResult { Success = false, PaymentId = cancelledPayment.Id, OrderId = cancelledPayment.OrderId, ReservationId = cancelledPayment.ReservationId, Amount = cancelledPayment.Amount, IsDeposit = cancelledPayment.Purpose == PaymentPurpose.Deposit };
                 }
-                return;
+                return new WebhookResult { Success = false };
             }
 
             var payment = await Repo.GetOneAsync<Payment>(
@@ -441,7 +442,7 @@ namespace RestX.BLL.Services
             if (payment.Status == PaymentStatus.Success)
             {
                 logger.LogInformation("[Webhook] Payment {PaymentId} already Success, skip", payment.Id);
-                return;
+                return new WebhookResult { Success = true, PaymentId = payment.Id, OrderId = payment.OrderId, ReservationId = payment.ReservationId, Amount = payment.Amount, IsDeposit = payment.Purpose == PaymentPurpose.Deposit };
             }
 
             payment.Status = PaymentStatus.Success;
@@ -507,6 +508,16 @@ namespace RestX.BLL.Services
 
             await Repo.SaveAsync();
             logger.LogInformation("[Webhook] HandleWebhook completed for OrderCode={OrderCode}", data.OrderCode);
+
+            return new WebhookResult
+            {
+                Success = true,
+                PaymentId = payment.Id,
+                OrderId = payment.OrderId,
+                ReservationId = payment.ReservationId,
+                Amount = payment.Amount,
+                IsDeposit = payment.Purpose == PaymentPurpose.Deposit
+            };
         }
 
         private async Task<CreatePaymentLinkResponse> ConfirmZeroAmountPayment(Order order, string? createdBy)

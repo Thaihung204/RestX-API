@@ -694,6 +694,8 @@ namespace RestX.BLL.Services
                 : dateTime;
             if (localDateTime <= VnNow)
                 throw new ArgumentException("Reservation date and time must be in the future");
+            if (localDateTime <= VnNow.AddMinutes(30))
+                throw new ArgumentException("Reservation must be made at least 30 minutes in advance");
             if (localDateTime > VnNow.AddMonths(1))
                 throw new ArgumentException("Reservation can only be made up to 1 month in advance");
         }

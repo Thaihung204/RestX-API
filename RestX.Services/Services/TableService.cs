@@ -303,7 +303,7 @@ namespace RestX.BLL.Services
 
             if (at.HasValue)
             {
-                targetTime = at.Value.AddMinutes(-1);
+                targetTime = at.Value;
 
                 sessions = (await Repo.GetAsync<TableSession>(
                     filter: ts => ts.StartedAt <= targetTime

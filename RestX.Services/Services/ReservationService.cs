@@ -419,7 +419,7 @@ namespace RestX.BLL.Services
             if (!reservation.CheckedInAt.HasValue)
                 throw new InvalidOperationException("Cannot complete a reservation that has not been checked in");
 
-            await FreeTablesAndSessions(reservation, CancelledCode, userId);
+            await FreeTablesAndSessions(reservation, ConfirmedCode, userId);
             await Repo.SaveAsync();
         }
 

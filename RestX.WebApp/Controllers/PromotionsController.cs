@@ -74,7 +74,12 @@ namespace RestX.WebApp.Controllers
         {
             try
             {
-                List<BLL.DataTranferObjects.Promotion.Promotion> promotions = await promotionService.GetActivePromotions();
+                var user = await GetCurrentUserAsync();
+                Guid? userId = user?.Id;
+
+                List<BLL.DataTranferObjects.Promotion.Promotion> promotions =
+                    await promotionService.GetActivePromotions(userId);
+
                 return Ok(promotions);
             }
             catch (Exception ex)

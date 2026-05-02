@@ -4,6 +4,10 @@ using RestX.BLL.DataTranferObjects.Promotion;
 using RestX.BLL.Exceptionhandling;
 using RestX.BLL.Extensions;
 using RestX.BLL.Interfaces;
+using RestX.Models.Customers;
+using RestX.Models.Loyalty;
+using RestX.Models.Orders;
+using RestX.Models.Promotions;
 using RestX.Models.Tenants;
 
 namespace RestX.BLL.Services
@@ -34,7 +38,7 @@ namespace RestX.BLL.Services
             return result;
         }
 
-        public async Task<List<DataTranferObjects.Promotion.Promotion>> GetActivePromotions()
+        public async Task<List<DataTranferObjects.Promotion.Promotion>> GetActivePromotions(Guid? userId = null)
         {
             DateTime now = DateTime.UtcNow.AddHours(7);
 
@@ -43,11 +47,68 @@ namespace RestX.BLL.Services
                 includeProperties: "PromotionApplicableItems"
             )).OrderByDescending(x => x.CreatedDate).ToList();
 
-            List<DataTranferObjects.Promotion.Promotion> result = promotions.Select(MapToPromotionItem).ToList();
+            if (userId.HasValue)
+            {
+                Customer? customer = await Repo.GetOneAsync<Customer>(c => c.ApplicationUserId == userId.Value);
 
-            return result;
+                if (customer != null)
+                {
+                    List<Guid> promotionIds = promotions.Select(p => p.Id).ToList();
+                    List<Guid> orderIds = (await Repo.GetAsync<Order>(o => o.CustomerId == customer.Id))
+                        .Select(o => o.Id)
+                        .ToList();
+
+                    if (orderIds.Any() && promotionIds.Any())
+                    {
+                        List<PromotionHistory> histories = (await Repo.GetAsync<PromotionHistory>(
+                            ph => promotionIds.Contains(ph.PromotionId) && orderIds.Contains(ph.OrderId)
+                        )).ToList();
+
+                        Dictionary<Guid, int> usageByPromotionId = histories
+                            .GroupBy(h => h.PromotionId)
+                            .ToDictionary(g => g.Key, g => g.Count());
+
+                        promotions = promotions
+                            .Where(p =>
+                                p.UsagePerCustomer <= 0
+                                || !usageByPromotionId.TryGetValue(p.Id, out int used)
+                                || used < p.UsagePerCustomer)
+                            .ToList();
+                    }
+
+                    LoyaltyPointBand? band = await Repo.GetOneAsync<LoyaltyPointBand>(
+                        b => b.IsActive && b.Name == customer.MembershipLevel);
+
+                    List<DataTranferObjects.Promotion.Promotion> resultWithRank = promotions
+                        .Select(MapToPromotionItem)
+                        .ToList();
+
+                    if (band != null && band.DiscountPercentage > 0)
+                    {
+                        resultWithRank.Add(new DataTranferObjects.Promotion.Promotion
+                        {
+                            Id = null,
+                            Code = $"MEMBERSHIP_{band.Name}",
+                            Name = $"Ưu đãi thành viên {band.Name}",
+                            DiscountValue = band.DiscountPercentage,
+                            DiscountType = "PERCENTAGE",
+                            MaxDiscountAmount = 0,
+                            MinOrderAmount = 0,
+                            UsageLimit = 0,
+                            UsagePerCustomer = 0,
+                            ValidFrom = now,
+                            ValidTo = now.AddYears(10),
+                            IsActive = true,
+                            ApplicableItems = new List<DataTranferObjects.Promotion.PromotionApplicableItem>()
+                        });
+                    }
+
+                    return resultWithRank;
+                }
+            }
+
+            return promotions.Select(MapToPromotionItem).ToList();
         }
-
         public async Task<DataTranferObjects.Promotion.Promotion> GetPromotionById(Guid id)
         {
             Models.Promotions.Promotion promotion = await Repo.GetOneAsync<Models.Promotions.Promotion>(

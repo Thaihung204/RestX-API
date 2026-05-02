@@ -3,9 +3,11 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using PayOS.Models.Webhooks;
+using RestX.BLL.DataTranferObjects.Orders;
 using RestX.BLL.DataTranferObjects.Payments;
 using RestX.BLL.Exceptionhandling;
 using RestX.BLL.Interfaces;
+using RestX.BLL.Services;
 using RestX.Models.Identity;
 using RestX.Models.Tenants;
 using RestX.WebApp.Controllers.BaseControllers;
@@ -18,9 +20,11 @@ namespace RestX.WebApp.Controllers
     public class PaymentsController : BaseController
     {
         private readonly IPaymentService paymentService;
+        private readonly IOrderService orderService;
 
         public PaymentsController(
             IPaymentService paymentService,
+            IOrderService orderService,
             IMapper mapper,
             UserManager<ApplicationUser> userManager,
             IExceptionHandler exceptionHandler,
@@ -28,6 +32,7 @@ namespace RestX.WebApp.Controllers
         ) : base(mapper, userManager, exceptionHandler, tenant)
         {
             this.paymentService = paymentService;
+            this.orderService = orderService;
         }
 
         [HttpGet]
@@ -103,7 +108,17 @@ namespace RestX.WebApp.Controllers
         {
             try
             {
+                var discountRequest = new ApplyDiscountRequest
+                {
+                    PromotionCode = request.PromotionCode,
+                    ApplyMembership = request.ApplyMembership
+                };
+
+                await orderService.ApplyDiscount(orderId, discountRequest);
+
                 var user = await GetCurrentUserAsync();
+                await paymentService.RecalculateOrderAmountForCheckout(orderId, user?.Id.ToString());
+
                 var result = await paymentService.PayByCash(orderId, request, user?.Id.ToString());
                 return Ok(result);
             }
@@ -128,11 +143,15 @@ namespace RestX.WebApp.Controllers
 
         [HttpPost("orders/{orderId:guid}")]
         [Authorize(Roles = "Admin,System Admin,Staff,Customer")]
-        public async Task<IActionResult> CreatePaymentLink([FromRoute] Guid orderId)
+        public async Task<IActionResult> CreatePaymentLink([FromRoute] Guid orderId, [FromBody] ApplyDiscountRequest request)
         {
             try
             {
+                await orderService.ApplyDiscount(orderId, request);
+
                 var user = await GetCurrentUserAsync();
+                await paymentService.RecalculateOrderAmountForCheckout(orderId, user?.Id.ToString());
+
                 var isCustomer = User.IsInRole("Customer");
                 var result = await paymentService.CreatePaymentLink(orderId, user?.Id.ToString(), isCustomer);
                 return Ok(result);
@@ -155,7 +174,6 @@ namespace RestX.WebApp.Controllers
                 return BadRequest("An internal error occurred");
             }
         }
-
         [HttpDelete("{id:guid}")]
         [Authorize(Roles = "Admin,System Admin,Staff")]
         public async Task<IActionResult> CancelPaymentLink([FromRoute] Guid id, [FromQuery] string? reason)

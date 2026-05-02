@@ -28,6 +28,8 @@ public partial class RestxAdminContext : IdentityDbContext<Admin>
 
     public virtual DbSet<TenantBusinessHour> TenantBusinessHours { get; set; }
 
+    public virtual DbSet<TenantSnapshot> TenantSnapshots { get; set; }
+
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
 #warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
         => optionsBuilder.UseSqlServer("Server=restx-sqlserver,1433;Database=restx_admin;User Id=sa;Password=Passw0r1!;Encrypt=False;TrustServerCertificate=True;");
@@ -65,6 +67,15 @@ public partial class RestxAdminContext : IdentityDbContext<Admin>
                   .HasForeignKey(bh => bh.TenantId)
                   .OnDelete(DeleteBehavior.Cascade);
             entity.HasIndex(bh => new { bh.TenantId, bh.DayOfWeek }).IsUnique();
+        });
+
+        modelBuilder.Entity<TenantSnapshot>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Revenue).HasColumnType("decimal(18,2)");
+            entity.Property(e => e.DiscountAmount).HasColumnType("decimal(18,2)");
+            entity.Property(e => e.PeriodType).HasMaxLength(10);
+            entity.HasIndex(e => new { e.TenantId, e.PeriodType, e.PeriodStart });
         });
 
         base.OnModelCreating(modelBuilder);

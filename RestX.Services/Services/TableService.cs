@@ -313,7 +313,7 @@ namespace RestX.BLL.Services
             sessions = (await Repo.GetAsync<TableSession>(
                 filter: ts => ts.IsActive
                            && ts.StartedAt <= targetTime,
-                includeProperties: "Table,Order,Reservation,Reservation.Customer,Reservation.Customer.ApplicationUser"
+                includeProperties: "Table,Order,Order.Customer,Order.Customer.ApplicationUser,Reservation,Reservation.Customer,Reservation.Customer.ApplicationUser"
             )).OrderBy(ts => ts.Table?.Code, NaturalTableCodeComparer.Instance)
                 .ToList(); 
 

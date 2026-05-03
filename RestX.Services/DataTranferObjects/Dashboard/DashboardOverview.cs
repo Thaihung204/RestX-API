@@ -9,5 +9,6 @@ namespace RestX.BLL.DataTranferObjects.Dashboard
         public TableStatus TableStatus { get; set; }
         public CustomerStats CustomerStats { get; set; }
         public PromotionStats PromotionStats { get; set; }
+        public RecentFeedbacks RecentFeedbacks { get; set; }
     }
 }

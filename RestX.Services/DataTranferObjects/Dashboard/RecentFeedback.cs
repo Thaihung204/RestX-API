@@ -7,6 +7,7 @@ namespace RestX.BLL.DataTranferObjects.Dashboard
         public string? Comment { get; set; }
         public bool IsAnonymous { get; set; }
         public string? CustomerName { get; set; }
+        public string? AvatarUrl { get; set; }
         public DateTime CreatedDate { get; set; }
     }
 

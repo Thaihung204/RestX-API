@@ -661,7 +661,8 @@ namespace RestX.BLL.Services
                 Rating = f.Rating,
                 Comment = f.Comment,
                 IsAnonymous = f.IsAnonymous,
-                CustomerName = f.IsAnonymous ? null : f.Customer?.ApplicationUser?.UserName,
+                CustomerName = f.IsAnonymous ? null : f.Customer?.ApplicationUser?.FullName,
+                AvatarUrl = f.IsAnonymous ? null : f.Customer?.ApplicationUser?.AvatarUrl,
                 CreatedDate = f.CreatedDate
             }).ToList();
 

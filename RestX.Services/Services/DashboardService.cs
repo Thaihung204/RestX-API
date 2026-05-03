@@ -25,6 +25,7 @@ namespace RestX.BLL.Services
             var tableStatus = await GetTableStatusAsync();
             var customerStats = await GetCustomerStatsAsync(request);
             var promotionStats = await GetPromotionStatsAsync(request);
+            var recentFeedbacks = await GetRecentFeedbacksAsync();
 
             return new DashboardOverview
             {
@@ -34,7 +35,8 @@ namespace RestX.BLL.Services
                 TopDishes = topDishes,
                 TableStatus = tableStatus,
                 CustomerStats = customerStats,
-                PromotionStats = promotionStats
+                PromotionStats = promotionStats,
+                RecentFeedbacks = recentFeedbacks
             };
         }
 
@@ -642,6 +644,32 @@ namespace RestX.BLL.Services
                     DayOfWeek = dayNames[Math.Clamp(r.DayIndex, 0, 6)],
                     Count = r.Count
                 }).ToList()
+            };
+        }
+
+        public async Task<RecentFeedbacks> GetRecentFeedbacksAsync(int top = 10)
+        {
+            var feedbacks = await Repo.GetAsync<RestX.Models.Feedbacks.Feedback>(
+                filter: null,
+                orderBy: q => q.OrderByDescending(f => f.CreatedDate),
+                includeProperties: "Customer,Customer.ApplicationUser",
+                take: top);
+
+            var list = feedbacks.Select(f => new RecentFeedbackItem
+            {
+                Id = f.Id,
+                Rating = f.Rating,
+                Comment = f.Comment,
+                IsAnonymous = f.IsAnonymous,
+                CustomerName = f.IsAnonymous ? null : f.Customer?.ApplicationUser?.UserName,
+                CreatedDate = f.CreatedDate
+            }).ToList();
+
+            return new RecentFeedbacks
+            {
+                Items = list,
+                TotalCount = list.Count,
+                AverageRating = list.Count > 0 ? Math.Round(list.Average(f => f.Rating), 1) : 0
             };
         }
 

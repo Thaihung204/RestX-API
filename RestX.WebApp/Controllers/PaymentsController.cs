@@ -2,6 +2,7 @@ using AutoMapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using PayOS.Models.Webhooks;
 using RestX.BLL.DataTranferObjects.Orders;
 using RestX.BLL.DataTranferObjects.Payments;
@@ -11,6 +12,7 @@ using RestX.BLL.Services;
 using RestX.Models.Identity;
 using RestX.Models.Tenants;
 using RestX.WebApp.Controllers.BaseControllers;
+using RestX.WebApp.Helpers;
 
 namespace RestX.WebApp.Controllers
 {
@@ -21,10 +23,12 @@ namespace RestX.WebApp.Controllers
     {
         private readonly IPaymentService paymentService;
         private readonly IOrderService orderService;
+        private readonly IHubContext<SignalrServer> hub;
 
         public PaymentsController(
             IPaymentService paymentService,
             IOrderService orderService,
+            IHubContext<SignalrServer> hub,
             IMapper mapper,
             UserManager<ApplicationUser> userManager,
             IExceptionHandler exceptionHandler,
@@ -33,6 +37,7 @@ namespace RestX.WebApp.Controllers
         {
             this.paymentService = paymentService;
             this.orderService = orderService;
+            this.hub = hub;
         }
 
         [HttpGet]
@@ -120,6 +125,13 @@ namespace RestX.WebApp.Controllers
                 await paymentService.RecalculateOrderAmountForCheckout(orderId, user?.Id.ToString());
 
                 var result = await paymentService.PayByCash(orderId, request, user?.Id.ToString());
+                await hub.BroadcastToTenant(CurrentTenant.Id, SignalrServer.PaymentCompleted, new
+                {
+                    paymentId = result.PaymentId,
+                    orderId,
+                    amount = result.Amount,
+                    method = "Cash"
+                });
                 return Ok(result);
             }
             catch (AppException ex)
@@ -182,6 +194,11 @@ namespace RestX.WebApp.Controllers
             {
                 var user = await GetCurrentUserAsync();
                 await paymentService.CancelPaymentLink(id, reason, user?.Id.ToString());
+                await hub.BroadcastToTenant(CurrentTenant.Id, SignalrServer.PaymentCancelled, new
+                {
+                    paymentId = id,
+                    reason
+                });
                 return Ok(new { success = true });
             }
             catch (AppException ex)
@@ -233,7 +250,30 @@ namespace RestX.WebApp.Controllers
         {
             try
             {
-                await paymentService.HandleWebhook(webhookBody);
+                var result = await paymentService.HandleWebhook(webhookBody);
+
+                if (result.PaymentId != Guid.Empty)
+                {
+                    var eventName = result.Success ? SignalrServer.PaymentCompleted : SignalrServer.PaymentFailed;
+                    await hub.BroadcastToTenant(CurrentTenant.Id, eventName, new
+                    {
+                        paymentId = result.PaymentId,
+                        orderId = result.OrderId,
+                        reservationId = result.ReservationId,
+                        amount = result.Amount,
+                        isDeposit = result.IsDeposit,
+                        method = "PayOS"
+                    });
+
+                    if (result.Success && result.IsDeposit && result.ReservationId.HasValue)
+                        await hub.BroadcastToTenant(CurrentTenant.Id, SignalrServer.DepositConfirmed, new
+                        {
+                            reservationId = result.ReservationId,
+                            paymentId = result.PaymentId,
+                            amount = result.Amount
+                        });
+                }
+
                 return Ok(new { success = true });
             }
             catch (AppException ex)

@@ -175,7 +175,8 @@ namespace RestX.BLL.Services
 
             if (session == null) return null;
 
-            var items = session.Messages.OrderBy(m => m.CreatedDate).Select(m =>
+            var today = DateTime.UtcNow.Date;
+            var items = session.Messages.Where(m => m.CreatedDate.Date == today).OrderBy(m => m.CreatedDate).Select(m =>
             {
                 var item = new ChatHistoryItem
                 {
@@ -541,7 +542,9 @@ namespace RestX.BLL.Services
             var session = await Repo.GetOneAsync<AIChatSession>(s => s.SessionId == sessionId, "Messages");
             if (session == null) return new List<ChatMessage>();
 
+            var today = DateTime.UtcNow.Date;
             return session.Messages
+                .Where(m => m.CreatedDate.Date == today)
                 .OrderBy(m => m.CreatedDate)
                 .Select(m => new ChatMessage { Role = m.Role, Content = m.Content })
                 .ToList();

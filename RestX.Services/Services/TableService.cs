@@ -304,27 +304,18 @@ namespace RestX.BLL.Services
             if (at.HasValue)
             {
                 targetTime = at.Value;
-
-                sessions = (await Repo.GetAsync<TableSession>(
-                    filter: ts => ts.StartedAt <= targetTime
-                               && (ts.EndedAt == null || ts.EndedAt >= targetTime),
-                    includeProperties: "Table,Order,Reservation,Reservation.Customer,Reservation.Customer.ApplicationUser"
-                )).ToList();
             }
             else
             {
                 targetTime = DateTime.UtcNow.AddHours(7);
-
-                sessions = (await Repo.GetAsync<TableSession>(
-                    filter: ts => ts.IsActive
-                               && ts.StartedAt <= targetTime,
-                    includeProperties: "Table,Order,Reservation,Reservation.Customer,Reservation.Customer.ApplicationUser"
-                )).ToList();
             }
 
-            sessions = sessions
-                .OrderBy(ts => ts.Table?.Code, NaturalTableCodeComparer.Instance)
-                .ToList();
+            sessions = (await Repo.GetAsync<TableSession>(
+                filter: ts => ts.IsActive
+                           && ts.StartedAt <= targetTime,
+                includeProperties: "Table,Order,Reservation,Reservation.Customer,Reservation.Customer.ApplicationUser"
+            )).OrderBy(ts => ts.Table?.Code, NaturalTableCodeComparer.Instance)
+                .ToList(); 
 
             return mapper.Map<List<TableSessionInfo>>(sessions);
         }

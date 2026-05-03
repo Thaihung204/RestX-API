@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using RestX.BLL.DataTranferObjects.AI;
+using RestX.BLL.DataTranferObjects.Combo;
 using QuestPDF.Fluent;
 using RestX.BLL.Services.Reports;
 using RestX.BLL.DataTranferObjects.Dashboard;
@@ -106,14 +107,14 @@ namespace RestX.BLL.Services
             var sessionId = request.SessionId ?? Guid.NewGuid().ToString();
             var customerId = await GetCustomerId(request.UserId);
 
-            var (history, menu, orderHistory) = await LoadContext(sessionId, customerId);
-            var systemPrompt = BuildChatSystemPrompt(menu, request.TableId, orderHistory);
+            var (history, menu, orderHistory, combos) = await LoadContext(sessionId, customerId);
+            var systemPrompt = BuildChatSystemPrompt(menu, combos, request.TableId, orderHistory);
 
             var rawResponse = await CallGemini(systemPrompt, history, request.Message, maxTokens: 3000);
             var session = await SaveHistory(sessionId, request.Message, rawResponse, customerId, request.TableId);
 
             var tableId = request.TableId ?? session.TableId;
-            var (aiResponse, _) = ParseAIResponse(rawResponse, sessionId, menu, tableId);
+            var (aiResponse, _) = ParseAIResponse(rawResponse, sessionId, menu, combos, tableId);
 
             return aiResponse;
         }
@@ -218,6 +219,17 @@ namespace RestX.BLL.Services
                                         Reason = s.TryGetProperty("reason", out var rs) ? rs.GetString() ?? "" : "",
                                         Category = s.TryGetProperty("category", out var cat) ? cat.GetString() ?? "" : "",
                                         Actions = BuildActions(dishId)
+                                    });
+                                }
+
+                            if (root.TryGetProperty("combos", out var combosEl2) && combosEl2.ValueKind == JsonValueKind.Array)
+                                foreach (var c in combosEl2.EnumerateArray())
+                                {
+                                    if (!c.TryGetProperty("comboId", out var cid) || !Guid.TryParse(cid.GetString(), out var comboId)) continue;
+                                    parsed.Combos.Add(new AIComboSuggestion
+                                    {
+                                        ComboId = comboId,
+                                        Reason = c.TryGetProperty("reason", out var rs2) ? rs2.GetString() ?? "" : ""
                                     });
                                 }
 
@@ -392,7 +404,7 @@ namespace RestX.BLL.Services
 
         #region Private: Chat Prompt & Context
 
-        private string BuildChatSystemPrompt(List<MenuCategory> menu, Guid? tableId, List<string> orderHistory = null)
+        private string BuildChatSystemPrompt(List<MenuCategory> menu, List<ComboSummary> combos, Guid? tableId, List<string> orderHistory = null)
         {
             var tenantName = CurrentTenant?.Name ?? "nhà hàng";
             var now = DateTime.UtcNow.AddHours(7);
@@ -415,6 +427,19 @@ namespace RestX.BLL.Services
                 }
             }
 
+            var comboText = new StringBuilder();
+            if (combos != null && combos.Count > 0)
+            {
+                comboText.AppendLine("\n=== COMBO CỦA NHÀ HÀNG ===");
+                foreach (var c in combos)
+                {
+                    comboText.AppendLine($"- ID: {c.Id} | {c.Name} | {c.Price:N0}đ | {c.Description}");
+                    foreach (var d in c.Details)
+                        comboText.AppendLine($"  + {d.DishName} x{d.Quantity}");
+                }
+                comboText.AppendLine("=== HẾT COMBO ===");
+            }
+
             var tableContext = tableId.HasValue
                 ? $"\nKhách đang ngồi tại bàn ID: {tableId}. Khi tạo orderDraft, hãy điền tableId này vào trường tableId."
                 : "";
@@ -430,7 +455,7 @@ namespace RestX.BLL.Services
 
                     === MENU ===
                     {menuText}=== HẾT MENU ===
-
+                    {comboText}
                     QUY TẮC QUANTITY (bắt buộc):
                     - Món ăn chung (lẩu, nướng, đĩa chia sẻ): quantity = 1
                     - Đồ uống / món cá nhân (cơm, bún, phở...): quantity = số người cho MỖI món được gợi ý
@@ -461,12 +486,21 @@ namespace RestX.BLL.Services
                     - Sửa/hủy draft → tạo orderDraft mới; hủy hoàn toàn → orderDraft: null
 
                     ORDERDRAFT: Gợi ý → orderDraft:null. Đặt cụ thể (có SL + động từ đặt) → orderDraft có items, suggestions:[]. Không tạo cả 2. price=giá 1 đơn vị. Mỗi lần đặt thêm: draft MỚI chỉ chứa món vừa yêu cầu. Có draft → tóm tắt+nhắc xác nhận.
+
+                    QUY TẮC COMBO (bắt buộc):
+                    - CHỈ gợi ý combo từ danh sách COMBO CỦA NHÀ HÀNG ở trên. KHÔNG tự tạo combo mới không có trong danh sách.
+                    - Nếu không có danh sách combo hoặc không có combo phù hợp → combos: []
+                    - Trả combos khi: khách hỏi ""combo"", ""set"", ""gọi cả bữa"", ""ăn cả nhóm"", hoặc hỏi gợi ý cho số người ≥ 2
+                    - Chỉ trả comboId (UUID từ danh sách) và reason giải thích tại sao combo đó phù hợp
+                    - Nếu có combos → suggestions: []
+
                     QUAN TRỌNG: message tối đa 100 từ — ngắn gọn, súc tích. KHÔNG liệt kê giá từng món trong message.
 
                     JSON OUTPUT (chỉ trả JSON, không thêm text):
                     {{
                       ""message"": ""Nội dung tự nhiên, có cảm xúc"",
                       ""suggestions"": [{{""dishId"": ""uuid"", ""dishName"": ""Tên"", ""price"": 45000, ""quantity"": 1, ""reason"": ""Lý do hấp dẫn"", ""category"": ""Danh mục""}}],
+                      ""combos"": [{{""comboId"": ""uuid-từ-danh-sách"", ""reason"": ""Lý do phù hợp với yêu cầu khách""}}],
                       ""upsellHint"": ""1 câu gợi ý thêm món phù hợp — luôn có, không bao giờ null"",
                       ""quickReplies"": [""Câu như khách đang nói 1"", ""Câu 2"", ""Câu 3""],
                       ""orderDraft"": {{""tableId"": null, ""items"": [{{""dishId"": ""uuid"", ""dishName"": ""Tên"", ""quantity"": 2, ""price"": 45000}}]}},
@@ -474,15 +508,14 @@ namespace RestX.BLL.Services
                     }}";
                 }
 
-        private async Task<(List<ChatMessage> history, List<MenuCategory> menu, List<string> orderHistory)> LoadContext(string sessionId, Guid? customerId = null)
+        private async Task<(List<ChatMessage> history, List<MenuCategory> menu, List<string> orderHistory, List<ComboSummary> combos)> LoadContext(string sessionId, Guid? customerId = null)
         {
-            var historyTask = LoadHistory(sessionId);
-            var menuTask = _dishService.GetMenu();
-            var orderHistoryTask = LoadOrderHistory(customerId);
+            var history = await LoadHistory(sessionId);
+            var orderHistory = await LoadOrderHistory(customerId);
+            var menu = await _dishService.GetMenu();
+            var combos = await _dishService.GetActiveCombos();
 
-            await Task.WhenAll(historyTask, menuTask, orderHistoryTask);
-
-            return (await historyTask, await menuTask, await orderHistoryTask);
+            return (history, menu, orderHistory, combos);
         }
 
         private async Task<List<string>> LoadOrderHistory(Guid? customerId)
@@ -567,7 +600,7 @@ namespace RestX.BLL.Services
 
         #region Private: Chat Response Parser
 
-        private (AIChatResponse response, string? orderAction) ParseAIResponse(string rawText, string sessionId, List<MenuCategory> menu, Guid? tableId)
+        private (AIChatResponse response, string? orderAction) ParseAIResponse(string rawText, string sessionId, List<MenuCategory> menu, List<ComboSummary> combos, Guid? tableId)
         {
             try
             {
@@ -588,6 +621,7 @@ namespace RestX.BLL.Services
                 };
 
                 var menuLookup = menu.SelectMany(c => c.Items).ToDictionary(i => i.Id);
+                var comboLookup = combos?.ToDictionary(c => c.Id) ?? new Dictionary<Guid, ComboSummary>();
 
                 if (root.TryGetProperty("suggestions", out var suggestionsEl) && suggestionsEl.ValueKind == JsonValueKind.Array)
                     foreach (var s in suggestionsEl.EnumerateArray())
@@ -610,6 +644,34 @@ namespace RestX.BLL.Services
 
                         suggestion.Actions = BuildActions(dishId);
                         response.Suggestions.Add(suggestion);
+                    }
+
+                if (root.TryGetProperty("combos", out var combosEl) && combosEl.ValueKind == JsonValueKind.Array)
+                    foreach (var c in combosEl.EnumerateArray())
+                    {
+                        if (!c.TryGetProperty("comboId", out var comboIdEl)) continue;
+                        if (!Guid.TryParse(comboIdEl.GetString(), out var comboId)) continue;
+                        if (!comboLookup.TryGetValue(comboId, out var dbCombo)) continue;
+
+                        var reason = c.TryGetProperty("reason", out var reasonEl) ? reasonEl.GetString() ?? "" : "";
+                        var combo = new AIComboSuggestion
+                        {
+                            ComboId = comboId,
+                            ComboName = dbCombo.Name,
+                            Description = dbCombo.Description,
+                            ImageUrl = dbCombo.ImageUrl,
+                            Price = dbCombo.Price,
+                            Reason = reason,
+                            Items = dbCombo.Details.Select(d => new AISuggestion
+                            {
+                                DishId = d.DishId,
+                                DishName = d.DishName,
+                                Price = d.DishPrice ?? 0,
+                                Quantity = d.Quantity,
+                                Actions = BuildActions(d.DishId)
+                            }).ToList()
+                        };
+                        response.Combos.Add(combo);
                     }
 
                 if (root.TryGetProperty("quickReplies", out var quickRepliesEl) && quickRepliesEl.ValueKind == JsonValueKind.Array)

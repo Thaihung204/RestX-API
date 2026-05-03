@@ -5,10 +5,23 @@ namespace RestX.BLL.DataTranferObjects.AI
         public string SessionId { get; set; } = string.Empty;
         public string Message { get; set; } = string.Empty;
         public List<AISuggestion> Suggestions { get; set; } = new();
+        public List<AIComboSuggestion> Combos { get; set; } = new();
         public string UpsellHint { get; set; } = string.Empty;
         public List<string> QuickReplies { get; set; } = new();
         public AIOrderDraft? OrderDraft { get; set; }
         public Guid? CreatedOrderId { get; set; }
+    }
+
+    public class AIComboSuggestion
+    {
+        public Guid ComboId { get; set; }
+        public string ComboName { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        public string? ImageUrl { get; set; }
+        public decimal Price { get; set; }
+        public string Reason { get; set; } = string.Empty;
+        public List<AISuggestion> Items { get; set; } = new();
+        public decimal TotalPrice => Price > 0 ? Price : Items.Sum(i => i.TotalPrice);
     }
 
     public class AISuggestion

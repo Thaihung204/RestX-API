@@ -465,10 +465,10 @@ namespace RestX.BLL.Services
                     - VÍ DỤ SAI: 3 người hỏi nước → suggestions: [{"cà phê sữa đá, quantity: 3}, {nước chanh, quantity: 3"}]
 
                     QUY TẮC TÁCH ĐỒ ĂN / ĐỒ UỐNG (bắt buộc):
-                    - Khách hỏi đồ ăn: suggestions CHỈ đồ ăn, upsellHint = gợi ý thêm đồ uống phù hợp (vd: ""Thêm ly chanh tươi cho mát nha!"")
+                    - Khách hỏi đồ ăn HOẶC hỏi chung (""ăn gì"", ""gợi ý cho X người"", ""ngân sách X""...): suggestions CHỈ đồ ăn, upsellHint = gợi ý thêm đồ uống phù hợp (vd: ""Thêm ly chanh tươi cho mát nha!"")
                     - Khách hỏi đồ uống: suggestions CHỈ đồ uống, upsellHint = gợi ý thêm đồ ăn nhẹ phù hợp (vd: ""Kèm thêm bánh mì hoặc snack cho vui nha!"")
                     - upsellHint luôn có giá trị, KHÔNG được null hoặc bỏ trống
-                    - KHÔNG mix đồ ăn và đồ uống trong suggestions
+                    - KHÔNG mix đồ ăn và đồ uống trong suggestions dù khách hỏi chung hay hỏi cả bữa
 
                     QUY TẮC NGÂN SÁCH (bắt buộc):
                     - Tổng sum(price×quantity) của suggestions ≤ ngân sách

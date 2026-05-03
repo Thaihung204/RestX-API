@@ -438,9 +438,7 @@ namespace RestX.BLL.Services
             if (dish == null)
                 return false;
 
-            dish.IsActive = false;
-
-            Repo.Update(dish);
+            Repo.Delete<Dish>(id);
             await Repo.SaveAsync();
 
             await RedisService.RemoveAsync($"{CurrentTenant.Hostname}:Menu");

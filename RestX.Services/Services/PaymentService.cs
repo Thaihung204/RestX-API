@@ -620,6 +620,8 @@ namespace RestX.BLL.Services
             order.ServiceCharge = Math.Round(afterDiscount * CurrentTenant.ServiceChargeRate / 100, 2);
 
             order.CalculateTotalAmount();
+            Models.Reservations.Reservation? reservation = await Repo.GetByIdAsync<Models.Reservations.Reservation>(order.ReservationId.Value);       
+            order.ApplyReservationDeposit(reservation.DepositAmount);
             Repo.Update(order, modifiedBy);
             await Repo.SaveAsync();
 

@@ -13,6 +13,7 @@ using RestX.BLL.Helpers;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Inventory;
 using RestX.BLL.Interfaces.Status;
+using RestX.BLL.Interfaces.Reservations;
 using RestX.BLL.Interfaces.Tables;
 using RestX.Models.Common;
 using RestX.Models.Customers;
@@ -41,11 +42,13 @@ namespace RestX.BLL.Services
         private readonly IStatusValueService statusValueService;
         private readonly ITableService tableService;
         private readonly IIngredientService ingredientService;
+        private readonly IReservationService reservationService;
 
         public OrderService(
             IIngredientService ingredientService,
             IStatusValueService statusValueService,
             ITableService tableService,
+            IReservationService reservationService,
             IMapper mapper,
             IRepository repo,
             IRedisService redisService,
@@ -55,6 +58,7 @@ namespace RestX.BLL.Services
             this.ingredientService = ingredientService;
             this.statusValueService = statusValueService;
             this.tableService = tableService;
+            this.reservationService = reservationService;
             this.mapper = mapper;
         }
 
@@ -936,6 +940,16 @@ namespace RestX.BLL.Services
                     }
 
                     await Repo.SaveAsync();
+
+                    if (activeSession.ReservationId.HasValue)
+                    {
+                        var reservation = await Repo.GetOneAsync<Models.Reservations.Reservation>(r => r.Id == activeSession.ReservationId.Value);
+                        if (reservation != null && !reservation.CheckedInAt.HasValue)
+                        {
+                            try { await reservationService.CheckIn(reservation.ConfirmationCode, userId); }
+                            catch { }
+                        }
+                    }
                 }
 
                 return mapper.Map<DataTranferObjects.Orders.Order>(updatedOrder);

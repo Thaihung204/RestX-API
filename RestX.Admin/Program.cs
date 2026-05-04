@@ -52,10 +52,22 @@ builder.Services.AddCors(options =>
         policy
             .SetIsOriginAllowed(origin =>
             {
-                if (Uri.TryCreate(origin, UriKind.Absolute, out var uri))
+                if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri))
+                    return false;
+
+                var host = uri.Host.ToLowerInvariant();
+
+                if (host == "restx.food" || host.EndsWith(".restx.food"))
+                    return true;
+
+                var allowedCustomDomains = new[]
                 {
-                    return uri.Host == "restx.food" || uri.Host.EndsWith(".restx.food");
-                }
+                    "lebon.io.vn"
+                };
+
+                if (allowedCustomDomains.Contains(host))
+                    return true;
+
                 return false;
             })
             .AllowAnyHeader()

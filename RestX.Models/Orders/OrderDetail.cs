@@ -9,7 +9,9 @@ namespace RestX.Models.Orders
     public partial class OrderDetail : Entity<Guid>
     {
         public Guid OrderId { get; set; }
-        public Guid DishId { get; set; }
+        public Guid? DishId { get; set; }
+        public Guid? ComboId { get; set; }
+        public Guid? ParentId { get; set; }
 
         [Range(1, 1000)]
         public int Quantity { get; set; } = 1;
@@ -19,11 +21,16 @@ namespace RestX.Models.Orders
 
         [MaxLength(500)]
         public string? Note { get; set; }
+
         [TriggerProperty(DisplayName = "Status")]
         public int ItemStatusId { get; set; }
 
         public virtual Order Order { get; set; } = null!;
-        public virtual Dish Dish { get; set; } = null!;
-        public virtual StatusValue ItemStatus { get; set; }
+        public virtual Dish? Dish { get; set; }
+        public virtual MealCombo? Combo { get; set; }
+        public virtual StatusValue ItemStatus { get; set; } = null!;
+
+        public virtual OrderDetail? Parent { get; set; }
+        public virtual ICollection<OrderDetail> Children { get; set; } = new List<OrderDetail>();
     }
 }

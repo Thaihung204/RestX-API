@@ -147,7 +147,6 @@ namespace RestX.BLL.Services
 
                 var paymentLink = await CreateDepositPaymentLink(reservation.Id);
                 detail.CheckoutUrl = paymentLink;
-                await SendConfirmationEmail(request.Email, request.Name, detail, tables);
                 var paymentDeadlineUtc = paymentDeadline!.Value.Subtract(VietnamOffset);
                 BackgroundJob.Schedule<IReservationService>(
                     s => s.AutoCancelDepositReservation(reservation.Id),
@@ -169,13 +168,7 @@ namespace RestX.BLL.Services
             var totalCount = await Repo.GetCountAsync(predicate);
             var items = (await Repo.GetAsync<Reservation>(
                 filter: predicate,
-                orderBy: filter.SortDescending
-                    ? q => q.OrderByDescending(r => r.Time)
-                    : q => q.OrderBy(r =>
-                                r.ReservationStatus.Code == CancelledCode ? 2 :
-                                r.Time >= VnNow ? 0 : 1)
-                            .ThenBy(r => r.Time)
-                            .ThenBy(r => r.ReservationStatus.Code == ConfirmedCode ? 0 : r.ReservationStatus.Code == PendingCode ? 1 : 2),
+                orderBy: q => q.OrderByDescending(r => r.CreatedDate),
                 includeProperties: ReservationIncludes,
                 skip: (filter.PageNumber - 1) * filter.PageSize,
                 take: filter.PageSize
@@ -358,6 +351,12 @@ namespace RestX.BLL.Services
             if (reservation.CheckedInAt.HasValue)
                 throw new InvalidOperationException("Reservation has already been checked in");
 
+            if (VnNow > reservation.Time.AddMinutes(ReservationBufferMinutes))
+            {
+                await CancelReservation(reservation.Id, userId);
+                throw new InvalidOperationException("Check-in window has expired. Reservation has been automatically cancelled.");
+            }
+
             reservation.CheckedInAt = VnNow;
             Repo.Update(reservation, userId);
 
@@ -420,7 +419,7 @@ namespace RestX.BLL.Services
             if (!reservation.CheckedInAt.HasValue)
                 throw new InvalidOperationException("Cannot complete a reservation that has not been checked in");
 
-            await FreeTablesAndSessions(reservation, CancelledCode, userId);
+            await FreeTablesAndSessions(reservation, ConfirmedCode, userId);
             await Repo.SaveAsync();
         }
 
@@ -577,6 +576,18 @@ namespace RestX.BLL.Services
             try
             {
                 var tableList = string.Join(", ", tables.Select(t => t.Code));
+                var addressParts = new[]
+                {
+                    CurrentTenant?.BusinessAddressLine1,
+                    CurrentTenant?.BusinessAddressLine2,
+                    CurrentTenant?.BusinessAddressLine3,
+                    CurrentTenant?.BusinessAddressLine4,
+                    CurrentTenant?.BusinessCounty,
+                    CurrentTenant?.BusinessPostCode,
+                    CurrentTenant?.BusinessCountry,
+                }.Where(p => !string.IsNullOrWhiteSpace(p));
+                var restaurantAddress = string.Join(", ", addressParts);
+
                 var body = EmailTemplates.ReservationConfirmation(
                     name,
                     detail.ConfirmationCode,
@@ -589,7 +600,10 @@ namespace RestX.BLL.Services
                     paymentLink,
                     CurrentTenant?.Hostname,
                     detail.Id,
-                    depositPaid);
+                    depositPaid,
+                    restaurantName: CurrentTenant?.BusinessName ?? CurrentTenant?.Name,
+                    restaurantAddress: string.IsNullOrWhiteSpace(restaurantAddress) ? null : restaurantAddress,
+                    restaurantPhone: CurrentTenant?.BusinessPrimaryPhone);
 
                 var subject = depositPaid
                     ? "Deposit Confirmed – " + detail.ConfirmationCode
@@ -680,6 +694,8 @@ namespace RestX.BLL.Services
                 : dateTime;
             if (localDateTime <= VnNow)
                 throw new ArgumentException("Reservation date and time must be in the future");
+            if (localDateTime <= VnNow.AddMinutes(30))
+                throw new ArgumentException("Reservation must be made at least 30 minutes in advance");
             if (localDateTime > VnNow.AddMonths(1))
                 throw new ArgumentException("Reservation can only be made up to 1 month in advance");
         }
@@ -858,8 +874,8 @@ namespace RestX.BLL.Services
                 {
                     new() { Name = "Tien coc dat ban", Quantity = 1, Price = (long)reservation.DepositAmount }
                 },
-                ReturnUrl = $"https://{CurrentTenant.Hostname}/your-reservation/{reservationId}",
-                CancelUrl = $"https://{CurrentTenant.Hostname}/deposit/cancel"
+                ReturnUrl = $"https://{CurrentTenant.Hostname}/your-reservation/{reservationId}?payos=success",
+                CancelUrl = $"https://{CurrentTenant.Hostname}/your-reservation/{reservationId}?payos=cancel"
             };
 
             var link = await client.PaymentRequests.CreateAsync(linkRequest);

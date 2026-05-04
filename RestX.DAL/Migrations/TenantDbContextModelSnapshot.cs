@@ -1511,6 +1511,9 @@ namespace RestX.DAL.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid?>("ComboId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("CreatedBy")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
@@ -1518,7 +1521,7 @@ namespace RestX.DAL.Migrations
                     b.Property<DateTime>("CreatedDate")
                         .HasColumnType("datetime2");
 
-                    b.Property<Guid>("DishId")
+                    b.Property<Guid?>("DishId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<int>("ItemStatusId")
@@ -1538,6 +1541,9 @@ namespace RestX.DAL.Migrations
                     b.Property<Guid>("OrderId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid?>("ParentId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("PropertiesJson")
                         .HasColumnType("nvarchar(max)");
 
@@ -1549,11 +1555,15 @@ namespace RestX.DAL.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ComboId");
+
                     b.HasIndex("DishId");
 
                     b.HasIndex("ItemStatusId");
 
                     b.HasIndex("OrderId");
+
+                    b.HasIndex("ParentId");
 
                     b.ToTable("OrderDetails", (string)null);
                 });
@@ -2666,11 +2676,15 @@ namespace RestX.DAL.Migrations
 
             modelBuilder.Entity("RestX.Models.Orders.OrderDetail", b =>
                 {
+                    b.HasOne("RestX.Models.Menu.MealCombo", "Combo")
+                        .WithMany()
+                        .HasForeignKey("ComboId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("RestX.Models.Menu.Dish", "Dish")
                         .WithMany("OrderDetails")
                         .HasForeignKey("DishId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("RestX.Models.Common.StatusValue", "ItemStatus")
                         .WithMany()
@@ -2684,11 +2698,20 @@ namespace RestX.DAL.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("RestX.Models.Orders.OrderDetail", "Parent")
+                        .WithMany("Children")
+                        .HasForeignKey("ParentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Combo");
+
                     b.Navigation("Dish");
 
                     b.Navigation("ItemStatus");
 
                     b.Navigation("Order");
+
+                    b.Navigation("Parent");
                 });
 
             modelBuilder.Entity("RestX.Models.Orders.Payment", b =>
@@ -2968,6 +2991,11 @@ namespace RestX.DAL.Migrations
                     b.Navigation("PromotionHistories");
 
                     b.Navigation("TableSessions");
+                });
+
+            modelBuilder.Entity("RestX.Models.Orders.OrderDetail", b =>
+                {
+                    b.Navigation("Children");
                 });
 
             modelBuilder.Entity("RestX.Models.Promotions.Promotion", b =>

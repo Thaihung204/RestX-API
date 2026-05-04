@@ -1,4 +1,6 @@
-﻿using RestX.BLL.DataTranferObjects.Reservation;
+﻿using RestX.BLL.DataTranferObjects.Customer;
+using RestX.BLL.DataTranferObjects.Orders;
+using RestX.BLL.DataTranferObjects.Reservation;
 using System;
 
 namespace RestX.BLL.DataTranferObjects.Table
@@ -8,7 +10,8 @@ namespace RestX.BLL.DataTranferObjects.Table
         public Guid Id { get; set; }
         public Guid TableId { get; set; }
         public string TableCode { get; set; }
-        public Guid? OrderId { get; set; } 
+        public Guid? OrderId { get; set; }
+        public CustomerResponse Customer { get; set; }
         public Guid? ReservationId { get; set; }
         public ReservationDetail Reservation { get; set; }
         public DateTime StartedAt { get; set; }

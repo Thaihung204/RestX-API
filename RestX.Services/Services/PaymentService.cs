@@ -1,4 +1,5 @@
 using AutoMapper;
+using Microsoft.Extensions.Logging;
 using PayOS;
 using PayOS.Models.Webhooks;
 using QuestPDF.Fluent;
@@ -27,6 +28,7 @@ namespace RestX.BLL.Services
         private readonly ITableService tableService;
         private readonly IOrderService orderService;
         private readonly IMapper mapper;
+        private readonly ILogger<PaymentService> logger;
 
         public PaymentService(
             IRepository repo,
@@ -36,6 +38,7 @@ namespace RestX.BLL.Services
             ITableService tableService,
             IOrderService orderService,
             IMapper mapper,
+            ILogger<PaymentService> logger,
             IEnumerable<ActiveTenant> tenant = null
         ) : base(repo, redisService, tenant)
         {
@@ -44,6 +47,7 @@ namespace RestX.BLL.Services
             this.tableService = tableService;
             this.orderService = orderService;
             this.mapper = mapper;
+            this.logger = logger;
             QuestPDF.Settings.License = LicenseType.Community;
         }
 
@@ -239,9 +243,14 @@ namespace RestX.BLL.Services
                 filter: ts => ts.OrderId == orderId && ts.IsActive
             )).ToList();
 
-            foreach (Guid tableId in activeSessions.Select(ts => ts.TableId).Distinct())
+            List<Guid> tableIds = activeSessions
+                .Select(ts => ts.TableId)
+                .Distinct()
+                .ToList();
+
+            if (tableIds.Any())
             {
-                await tableService.CloseTableSession(tableId);
+                await tableService.CloseTableSession(tableIds);
             }
 
             await Repo.SaveAsync();
@@ -255,7 +264,7 @@ namespace RestX.BLL.Services
             };
         }
 
-        public async Task<CreatePaymentLinkResponse> CreatePaymentLink(Guid orderId, string? createdBy = null)
+        public async Task<CreatePaymentLinkResponse> CreatePaymentLink(Guid orderId, string? createdBy = null, bool isCustomer = false)
         {
             Order order = await RecalculateOrderAmountForCheckout(orderId, createdBy);
 
@@ -264,12 +273,12 @@ namespace RestX.BLL.Services
             if (alreadyPaid)
                 throw new InvalidOperationException("Order is already paid");
 
-            var (gatewayClient, gatewaySettings) = await GetTenantGateway();
-
             var depositPaid = await GetPaidDepositAmount(order.ReservationId);
             var amount = (long)(order.TotalAmount - depositPaid);
             if (amount <= 0)
-                throw new InvalidOperationException("Order total must be greater than zero");
+                return await ConfirmZeroAmountPayment(order, createdBy);
+
+            var (gatewayClient, gatewaySettings) = await GetTenantGateway();
 
             var existingPending = await Repo.GetOneAsync<Payment>(
                 p => p.OrderId == orderId &&
@@ -323,8 +332,12 @@ namespace RestX.BLL.Services
                 Amount = amount,
                 Description = description,
                 Items = items,
-                ReturnUrl = $"https://{CurrentTenant.Hostname}/staff/orders?payos=success",
-                CancelUrl = $"https://{CurrentTenant.Hostname}/staff/orders?payos=cancel"
+                ReturnUrl = isCustomer
+                    ? $"https://{CurrentTenant.Hostname}/menu/{order.TableSessions.FirstOrDefault()?.TableId}?payos=success"
+                    : $"https://{CurrentTenant.Hostname}/staff/orders?payos=success",
+                CancelUrl = isCustomer
+                    ? $"https://{CurrentTenant.Hostname}/menu/{order.TableSessions.FirstOrDefault()?.TableId}?payos=cancel"
+                    : $"https://{CurrentTenant.Hostname}/staff/orders?payos=cancel"
             };
 
             var link = await gatewayClient.PaymentRequests.CreateAsync(linkRequest);
@@ -393,13 +406,19 @@ namespace RestX.BLL.Services
             await Repo.SaveAsync();
         }
 
-        public async Task HandleWebhook(Webhook webhookBody)
+        public async Task<WebhookResult> HandleWebhook(Webhook webhookBody)
         {
+            logger.LogInformation("[Webhook] Received | Code={Code} | Tenant={Tenant}",
+                webhookBody.Code, CurrentTenant?.Hostname ?? "unknown");
+
             var (gatewayClient, _) = await GetTenantGateway();
             var data = await gatewayClient.Webhooks.VerifyAsync(webhookBody);
 
+            logger.LogInformation("[Webhook] Verified | OrderCode={OrderCode}", data.OrderCode);
+
             if (webhookBody.Code != "00")
             {
+                logger.LogWarning("[Webhook] Non-success code={Code} for OrderCode={OrderCode}", webhookBody.Code, data.OrderCode);
                 var cancelledPayment = await Repo.GetOneAsync<Payment>(
                     filter: p => p.PayOSOrderCode == data.OrderCode);
                 if (cancelledPayment != null && cancelledPayment.Status == PaymentStatus.Pending)
@@ -407,35 +426,55 @@ namespace RestX.BLL.Services
                     cancelledPayment.Status = PaymentStatus.Fail;
                     Repo.Update(cancelledPayment);
                     await Repo.SaveAsync();
+                    logger.LogInformation("[Webhook] Payment {PaymentId} marked Fail", cancelledPayment.Id);
+                    return new WebhookResult { Success = false, PaymentId = cancelledPayment.Id, OrderId = cancelledPayment.OrderId, ReservationId = cancelledPayment.ReservationId, Amount = cancelledPayment.Amount, IsDeposit = cancelledPayment.Purpose == PaymentPurpose.Deposit };
                 }
-                return;
+                return new WebhookResult { Success = false };
             }
 
             var payment = await Repo.GetOneAsync<Payment>(
                 filter: p => p.PayOSOrderCode == data.OrderCode)
                 ?? throw new KeyNotFoundException($"Payment not found for orderCode {data.OrderCode}");
 
+            logger.LogInformation("[Webhook] Payment found | PaymentId={PaymentId} | Purpose={Purpose} | Status={Status}",
+                payment.Id, payment.Purpose, payment.Status);
+
             if (payment.Status == PaymentStatus.Success)
-                return;
+            {
+                logger.LogInformation("[Webhook] Payment {PaymentId} already Success, skip", payment.Id);
+                return new WebhookResult { Success = true, PaymentId = payment.Id, OrderId = payment.OrderId, ReservationId = payment.ReservationId, Amount = payment.Amount, IsDeposit = payment.Purpose == PaymentPurpose.Deposit };
+            }
 
             payment.Status = PaymentStatus.Success;
             payment.TransactionId = data.Reference;
             payment.PaymentDate = DateTime.UtcNow.AddHours(7);
             Repo.Update(payment);
+            await Repo.SaveAsync();
+
+            logger.LogInformation("[Webhook] Payment {PaymentId} saved as Success", payment.Id);
 
             if (payment.Purpose == PaymentPurpose.Deposit && payment.ReservationId.HasValue)
             {
-                var reservation = await Repo.GetOneAsync<Reservation>(
-                    r => r.Id == payment.ReservationId,
-                    includeProperties: "ReservationStatus");
-                if (reservation?.ReservationStatus?.Code == "PENDING")
+                logger.LogInformation("[Webhook] Deposit payment for ReservationId={ReservationId}, calling ConfirmReservation",
+                    payment.ReservationId.Value);
+                try
                 {
                     await reservationService.ConfirmReservation(payment.ReservationId.Value);
+                    logger.LogInformation("[Webhook] Reservation {ReservationId} confirmed successfully", payment.ReservationId.Value);
+
                     await reservationService.SendDepositConfirmedEmailAsync(payment.ReservationId.Value);
+                    logger.LogInformation("[Webhook] Deposit confirmation email sent for Reservation {ReservationId}", payment.ReservationId.Value);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "[Webhook] Failed to confirm reservation {ReservationId} after deposit payment {PaymentId}",
+                        payment.ReservationId.Value, payment.Id);
+                    throw;
                 }
             }
             else if (payment.Purpose == PaymentPurpose.Order && payment.OrderId.HasValue)
             {
+                logger.LogInformation("[Webhook] Order payment for OrderId={OrderId}", payment.OrderId.Value);
                 Order order = await RecalculateOrderAmountForCheckout(payment.OrderId.Value);
                 if (order != null)
                 {
@@ -455,28 +494,119 @@ namespace RestX.BLL.Services
                         filter: ts => ts.OrderId == order.Id && ts.IsActive
                     )).ToList();
 
-                    foreach (Guid tableId in activeSessions.Select(ts => ts.TableId).Distinct())
+                    List<Guid> tableIds = activeSessions
+                        .Select(ts => ts.TableId)
+                        .Distinct()
+                        .ToList();
+
+                    if (tableIds.Any())
                     {
-                        await tableService.CloseTableSession(tableId);
+                        await tableService.CloseTableSession(tableIds);
                     }
                 }
             }
 
             await Repo.SaveAsync();
+            logger.LogInformation("[Webhook] HandleWebhook completed for OrderCode={OrderCode}", data.OrderCode);
+
+            return new WebhookResult
+            {
+                Success = true,
+                PaymentId = payment.Id,
+                OrderId = payment.OrderId,
+                ReservationId = payment.ReservationId,
+                Amount = payment.Amount,
+                IsDeposit = payment.Purpose == PaymentPurpose.Deposit
+            };
         }
 
-        private async Task<Order> RecalculateOrderAmountForCheckout(Guid orderId, string? modifiedBy = null)
+        private async Task<CreatePaymentLinkResponse> ConfirmZeroAmountPayment(Order order, string? createdBy)
+        {
+            var employee = await Repo.GetOneAsync<Employee>(e => e.ApplicationUser.Id.ToString() == createdBy);
+
+            var existingPending = await Repo.GetOneAsync<Payment>(
+                p => p.OrderId == order.Id &&
+                     p.Purpose == PaymentPurpose.Order &&
+                     p.Status == PaymentStatus.Pending);
+
+            Payment payment;
+            if (existingPending != null)
+            {
+                existingPending.PaymentMethodId = PaymentConstants.Method.Cash;
+                existingPending.Amount = 0;
+                existingPending.Status = PaymentStatus.Success;
+                existingPending.PaymentDate = DateTime.UtcNow.AddHours(7);
+                existingPending.PayOSOrderCode = null;
+                existingPending.CheckoutUrl = null;
+                existingPending.ProcessedBy = employee?.Id;
+                Repo.Update(existingPending, createdBy);
+                payment = existingPending;
+            }
+            else
+            {
+                payment = new Payment
+                {
+                    OrderId = order.Id,
+                    ReservationId = order.ReservationId,
+                    PaymentMethodId = PaymentConstants.Method.Cash,
+                    Amount = 0,
+                    Status = PaymentStatus.Success,
+                    Purpose = PaymentPurpose.Order,
+                    PaymentDate = DateTime.UtcNow.AddHours(7),
+                    ProcessedBy = employee?.Id
+                };
+                await Repo.CreateAsync(payment, createdBy);
+            }
+
+            await AwardLoyaltyPointsAsync(order);
+            await orderService.UpdateStatus(order.Id, (int)OrderStatus.Completed, createdBy ?? string.Empty);
+
+            order.CompletedAt = DateTime.UtcNow.AddHours(7);
+            Repo.Update(order, createdBy);
+
+            if (order.ReservationId.HasValue)
+                await reservationService.CompleteReservation(order.ReservationId.Value, createdBy);
+
+            List<TableSession> activeSessions = (await Repo.GetAsync<TableSession>(
+                filter: ts => ts.OrderId == order.Id && ts.IsActive
+            )).ToList();
+
+            List<Guid> tableIds = activeSessions
+                .Select(ts => ts.TableId)
+                .Distinct()
+                .ToList();
+
+            if (tableIds.Any())
+            {
+                await tableService.CloseTableSession(tableIds);
+            }
+
+            await Repo.SaveAsync();
+
+            return new CreatePaymentLinkResponse
+            {
+                PaymentId = payment.Id,
+                OrderCode = 0,
+                CheckoutUrl = string.Empty,
+                ZeroAmount = true
+            };
+        }
+
+        public async Task<Order> RecalculateOrderAmountForCheckout(Guid orderId, string? modifiedBy = null)
         {
             Order order = await Repo.GetOneAsync<Order>(
                 filter: o => o.Id == orderId,
-                includeProperties: "OrderDetails.Dish,OrderDetails.ItemStatus")
+                includeProperties: "OrderDetails.Dish,OrderDetails.ItemStatus,OrderDetails.Combo,TableSessions")
                 ?? throw new KeyNotFoundException("Order not found");
 
             decimal subTotal = order.OrderDetails
                 .Where(d =>
-                    d.Dish != null
+                    d.ParentId == null
                     && !string.Equals(d.ItemStatus?.Code, "CANCELLED", StringComparison.OrdinalIgnoreCase))
-                .Sum(d => d.Quantity * d.Dish.Price);
+                .Sum(d =>
+                    d.ComboId.HasValue
+                        ? (d.Combo?.Price ?? d.UnitPrice) * d.Quantity
+                        : (d.Dish?.Price ?? d.UnitPrice) * d.Quantity);
 
             order.SubTotal = subTotal;
 
@@ -485,13 +615,16 @@ namespace RestX.BLL.Services
                 order.DiscountAmount = order.SubTotal;
             }
 
+            var afterDiscount = order.SubTotal - order.DiscountAmount;
+            order.TaxAmount = Math.Round(afterDiscount * CurrentTenant.TaxRate / 100, 2);
+            order.ServiceCharge = Math.Round(afterDiscount * CurrentTenant.ServiceChargeRate / 100, 2);
+
             order.CalculateTotalAmount();
             Repo.Update(order, modifiedBy);
             await Repo.SaveAsync();
 
             return order;
         }
-
         private async Task<(PayOSClient client, PaymentGatewaySettings settings)> GetTenantGateway()
         {
             var settings = await paymentSettingService.GetPaymentSettingByTenantId(CurrentTenant.Id)

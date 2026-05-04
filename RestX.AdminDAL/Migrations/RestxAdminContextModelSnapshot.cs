@@ -267,6 +267,62 @@ namespace RestX.AdminDAL.Migrations
                     b.ToTable("DepositConfigs");
                 });
 
+            modelBuilder.Entity("RestX.Models.Admin.TenantSnapshot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("CancelledOrders")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CompletedOrders")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("DiscountAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsSuccess")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("NewCustomers")
+                        .HasColumnType("int");
+
+                    b.Property<int>("NewReservations")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly>("PeriodStart")
+                        .HasColumnType("date");
+
+                    b.Property<string>("PeriodType")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<decimal>("Revenue")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("TotalCustomers")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TotalOrders")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "PeriodType", "PeriodStart");
+
+                    b.ToTable("TenantSnapshots");
+                });
+
             modelBuilder.Entity("RestX.Models.Tenants.Tenant", b =>
                 {
                     b.Property<Guid>("Id")

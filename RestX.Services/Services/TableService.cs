@@ -233,15 +233,61 @@ namespace RestX.BLL.Services
             return session;
         }
 
-        public async Task CloseTableSession(Guid tableId)
+        public async Task CloseTableSession(List<Guid> tableIds)
         {
+            List<Guid> normalizedTableIds = (tableIds ?? new List<Guid>())
+                .Where(x => x != Guid.Empty)
+                .Distinct()
+                .ToList();
+
+            if (!normalizedTableIds.Any())
+                throw new AppException("TableIds is required");
+
             DateTime now = DateTime.UtcNow.AddHours(7);
 
-            List<TableSession> activeSessions = (await Repo.GetAsync<TableSession>(
-                filter: ts => ts.TableId == tableId && ts.IsActive
+            List<TableSession> targetSessions = (await Repo.GetAsync<TableSession>(
+                filter: ts => normalizedTableIds.Contains(ts.TableId) && ts.IsActive
             )).ToList();
 
-            foreach (TableSession session in activeSessions)
+            List<Guid> orderIds = targetSessions
+                .Where(ts => ts.OrderId.HasValue)
+                .Select(ts => ts.OrderId!.Value)
+                .Distinct()
+                .ToList();
+
+            List<TableSession> allOrderSessions = new();
+
+            if (orderIds.Any())
+            {
+                allOrderSessions = (await Repo.GetAsync<TableSession>(
+                    filter: ts => ts.OrderId.HasValue && orderIds.Contains(ts.OrderId.Value) && ts.IsActive
+                )).ToList();
+            }
+
+            foreach (Guid orderId in orderIds)
+            {
+                List<TableSession> orderSessions = allOrderSessions
+                    .Where(ts => ts.OrderId == orderId)
+                    .ToList();
+
+                bool allIncluded = orderSessions.All(ts => normalizedTableIds.Contains(ts.TableId));
+
+                if (allIncluded)
+                {
+                    Order? order = await Repo.GetByIdAsync<Order>(orderId);
+                    if (order != null && order.OrderStatusId == (int)OrderStatus.Open)
+                        throw new AppException("Cannot close table session while order is open");
+                }
+
+                foreach (TableSession session in targetSessions.Where(ts => ts.OrderId == orderId))
+                {
+                    session.IsActive = false;
+                    session.EndedAt = now;
+                    Repo.Update(session);
+                }
+            }
+
+            foreach (TableSession session in targetSessions.Where(ts => ts.OrderId == null))
             {
                 session.IsActive = false;
                 session.EndedAt = now;
@@ -250,7 +296,6 @@ namespace RestX.BLL.Services
 
             await Repo.SaveAsync();
         }
-
         public async Task<IEnumerable<TableSessionInfo>> GetAllTableSession(DateTime? at = null)
         {
             List<TableSession> sessions;
@@ -259,27 +304,18 @@ namespace RestX.BLL.Services
             if (at.HasValue)
             {
                 targetTime = at.Value;
-
-                sessions = (await Repo.GetAsync<TableSession>(
-                    filter: ts => ts.StartedAt <= targetTime
-                               && (ts.EndedAt == null || ts.EndedAt >= targetTime),
-                    includeProperties: "Table,Order,Reservation,Reservation.Customer,Reservation.Customer.ApplicationUser"
-                )).ToList();
             }
             else
             {
                 targetTime = DateTime.UtcNow.AddHours(7);
-
-                sessions = (await Repo.GetAsync<TableSession>(
-                    filter: ts => ts.IsActive
-                               && ts.StartedAt <= targetTime,
-                    includeProperties: "Table,Order,Reservation,Reservation.Customer,Reservation.Customer.ApplicationUser"
-                )).ToList();
             }
 
-            sessions = sessions
-                .OrderBy(ts => ts.Table?.Code, NaturalTableCodeComparer.Instance)
-                .ToList();
+            sessions = (await Repo.GetAsync<TableSession>(
+                filter: ts => ts.IsActive
+                           && ts.StartedAt <= targetTime,
+                includeProperties: "Table,Order,Order.Customer,Order.Customer.ApplicationUser,Reservation,Reservation.Customer,Reservation.Customer.ApplicationUser"
+            )).OrderBy(ts => ts.Table?.Code, NaturalTableCodeComparer.Instance)
+                .ToList(); 
 
             return mapper.Map<List<TableSessionInfo>>(sessions);
         }
@@ -374,6 +410,77 @@ namespace RestX.BLL.Services
             response.Sessions = mapper.Map<List<RestX.BLL.DataTranferObjects.Table.TableSessionInfo>>(sessions);
             return response;
         }
+
+        //public async Task<SplitTableResponse> SplitTable(SplitTableRequest request)
+        //{
+        //    List<Guid> tableIds = (request.TableIds ?? new List<Guid>())
+        //        .Where(x => x != Guid.Empty)
+        //        .Distinct()
+        //        .ToList();
+
+        //    if (!tableIds.Any())
+        //        throw new AppException("TableIds is required");
+
+        //    var tables = (await Repo.GetAsync<Table>(t => tableIds.Contains(t.Id) && t.IsActive)).ToList();
+        //    if (tables.Count != tableIds.Count)
+        //        throw new AppException("One or more tables not found or inactive");
+
+        //    DateTime now = DateTime.UtcNow.AddHours(7);
+
+        //    List<TableSession> sessions = (await Repo.GetAsync<TableSession>(
+        //        filter: ts => tableIds.Contains(ts.TableId)
+        //                   && ts.IsActive
+        //                   && ts.StartedAt <= now
+        //                   && (ts.EndedAt == null || ts.EndedAt > now),
+        //        includeProperties: "Table,Order")).ToList();
+
+        //    if (sessions.Count != tableIds.Count)
+        //        throw new AppException("One or more tables do not have an active session");
+
+        //    List<Guid> orderIds = sessions
+        //        .Where(s => s.OrderId.HasValue)
+        //        .Select(s => s.OrderId!.Value)
+        //        .Distinct()
+        //        .ToList();
+
+        //    var response = new SplitTableResponse
+        //    {
+        //        ExistingOrderIds = orderIds,
+        //        Sessions = mapper.Map<List<RestX.BLL.DataTranferObjects.Table.TableSessionInfo>>(sessions)
+        //    };
+
+        //    if (!orderIds.Any())
+        //    {
+        //        response.OrderId = null;
+        //        response.RequiresManualResolution = false;
+        //        response.Message = "No existing order to split.";
+        //        return response;
+        //    }
+
+        //    if (orderIds.Count > 1)
+        //    {
+        //        response.OrderId = null;
+        //        response.RequiresManualResolution = true;
+        //        response.Message = "Multiple existing orders found. Manual resolution required.";
+        //        return response;
+        //    }
+
+        //    Guid targetOrderId = orderIds[0];
+
+        //    foreach (TableSession session in sessions.Where(s => s.OrderId == targetOrderId))
+        //    {
+        //        session.OrderId = null;
+        //        Repo.Update(session);
+        //    }
+
+        //    await Repo.SaveAsync();
+
+        //    response.OrderId = targetOrderId;
+        //    response.RequiresManualResolution = false;
+        //    response.Message = "Split successfully. Order detached from selected tables.";
+        //    response.Sessions = mapper.Map<List<RestX.BLL.DataTranferObjects.Table.TableSessionInfo>>(sessions);
+        //    return response;
+        //}
 
         private sealed class NaturalTableCodeComparer : IComparer<string?>
         {

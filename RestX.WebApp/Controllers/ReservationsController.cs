@@ -154,6 +154,15 @@ namespace RestX.WebApp.Controllers
                     return BadRequest(new { success = false, message = "Validation failed", errors = ModelState });
 
                 var result = await reservationService.CreateReservation(request);
+                await hub.BroadcastToTenant(CurrentTenant.Id, SignalrServer.ReservationCreated, new
+                {
+                    reservationId = result.Id,
+                    code = result.ConfirmationCode,
+                    reservationTime = result.ReservationDateTime,
+                    numberOfGuests = result.NumberOfGuests,
+                    statusId = result.Status.Id,
+                    statusName = result.Status.Name
+                });
                 return Ok(new { success = true, message = "Reservation created successfully", data = result });
             }
             catch (AppException ex)
@@ -295,6 +304,15 @@ namespace RestX.WebApp.Controllers
                     return BadRequest(new { success = false, message = "Validation failed", errors = ModelState });
 
                 var result = await reservationService.UpdateReservation(id, request);
+                await hub.BroadcastToTenant(CurrentTenant.Id, SignalrServer.ReservationUpdated, new
+                {
+                    reservationId = result.Id,
+                    code = result.ConfirmationCode,
+                    reservationTime = result.ReservationDateTime,
+                    numberOfGuests = result.NumberOfGuests,
+                    statusId = result.Status.Id,
+                    statusName = result.Status.Name
+                });
                 return Ok(new { success = true, message = "Reservation updated successfully", data = result });
             }
             catch (AppException ex)
@@ -502,7 +520,13 @@ namespace RestX.WebApp.Controllers
             try
             {
                 var user = await GetCurrentUserAsync();
-                await reservationService.ConfirmCashDeposit(id,request, user?.Id.ToString());
+                await reservationService.ConfirmCashDeposit(id, request, user?.Id.ToString());
+                await hub.BroadcastToTenant(CurrentTenant.Id, SignalrServer.DepositConfirmed, new
+                {
+                    reservationId = id,
+                    cashReceive = request.CashReceive,
+                    method = "Cash"
+                });
                 return Ok(new { success = true, message = "Cash deposit confirmed" });
             }
             catch (AppException ex)

@@ -212,6 +212,7 @@ namespace RestX.WebApp
             services.AddHttpClient("Gemini", client =>
             {
                 client.BaseAddress = new Uri("https://generativelanguage.googleapis.com/");
+                client.Timeout = TimeSpan.FromSeconds(180);
             });
 
             services.AddCors(options =>

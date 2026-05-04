@@ -170,6 +170,25 @@ namespace RestX.WebApp.Controllers
                 return BadRequest("An internal error occurred");
             }
         }
+        [HttpGet("recent-feedbacks")]
+        public async Task<IActionResult> GetRecentFeedbacks([FromQuery] int top = 10)
+        {
+            try
+            {
+                var result = await _dashboardService.GetRecentFeedbacksAsync(top);
+                return Ok(result);
+            }
+            catch (AppException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
         [HttpPost("push-summary")]
         public async Task<IActionResult> PushSummary([FromQuery] DashboardRequest request)
         {

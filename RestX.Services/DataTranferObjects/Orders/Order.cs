@@ -16,7 +16,7 @@ namespace RestX.BLL.DataTranferObjects.Orders
         [Required]
         public Guid TableId { get; set; }
 
-        public Guid CustomerId { get; set; }
+        public Guid? CustomerId { get; set; }
         public string? CustomerName { get; set; }
         public string? CustomerEmail { get; set; }
         public Guid? ReservationId { get; set; }

@@ -161,6 +161,7 @@ builder.Services.AddScoped<IAdminTokenService, AdminTokenService>();
 builder.Services.AddScoped<IAdminAuthService, AdminAuthService>();
 builder.Services.AddScoped<IRepoHelper, RepoHelper>();
 builder.Services.AddScoped<ITriggerService, TriggerService>();
+builder.Services.AddScoped<IAdminSnapshotService, AdminSnapshotService>();
 
 builder.Services.AddAutoMapper(typeof(AutoMapperProfile));
 var app = builder.Build();
@@ -183,6 +184,20 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.UseHangfireDashboard("/hangfire", new DashboardOptions { Authorization = new[] { new HangfireAuthorizationFilter() } });
+
+var vnTimeZone = TimeZoneInfo.FindSystemTimeZoneById("SE Asia Standard Time");
+
+RecurringJob.AddOrUpdate<IAdminSnapshotService>(
+    "tenant-daily-snapshot",
+    s => s.TakeDailySnapshotAsync(null),
+    "0 5 * * *",
+    new RecurringJobOptions { TimeZone = vnTimeZone });
+
+RecurringJob.AddOrUpdate<IAdminSnapshotService>(
+    "tenant-monthly-snapshot",
+    s => s.TakeMonthlySnapshotAsync(null),
+    "0 5 1 * *",
+    new RecurringJobOptions { TimeZone = vnTimeZone });
 app.UseSwagger();
 app.UseSwaggerUI();
 

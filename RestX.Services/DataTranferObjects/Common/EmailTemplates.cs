@@ -63,7 +63,10 @@ namespace RestX.BLL.DataTranferObjects.Common
       string? paymentLink = null,
       string? hostname = null,
       Guid? reservationId = null,
-      bool depositPaid = false)
+      bool depositPaid = false,
+      string? restaurantName = null,
+      string? restaurantAddress = null,
+      string? restaurantPhone = null)
         {
             var encodedName = System.Net.WebUtility.HtmlEncode(name);
             var encodedTables = System.Net.WebUtility.HtmlEncode(tableList);
@@ -121,10 +124,7 @@ namespace RestX.BLL.DataTranferObjects.Common
                     </table>";
             }
             // Trường hợp chưa thanh toán — email gửi lúc tạo reservation
-            else if (depositAmount.HasValue && depositAmount > 0
-                     && paymentDeadline.HasValue
-                     && !string.IsNullOrWhiteSpace(hostname)
-                     && reservationId.HasValue)
+            else if (depositAmount.HasValue && depositAmount > 0 && paymentDeadline.HasValue)
             {
                 depositSection = $@"
                     <table width='100%' cellpadding='16' cellspacing='0' border='0'
@@ -135,43 +135,61 @@ namespace RestX.BLL.DataTranferObjects.Common
                           <div style='font-size:15px;font-weight:700;color:#b91c1c;margin-bottom:10px'>
                             &#9888; Deposit Required
                           </div>
-                          <table width='100%' cellpadding='0' cellspacing='0' border='0'>
-                            <tr>
-                              <td style='font-size:14px;color:#374151;padding-bottom:4px'>
-                                <strong>Amount:</strong> {depositAmount:N0} VND
-                              </td>
-                            </tr>
-                            <tr>
-                              <td style='font-size:14px;color:#374151;padding-bottom:12px'>
-                                <strong>Deadline:</strong> {paymentDeadline:dd/MM/yyyy HH:mm}
-                              </td>
-                            </tr>
-                          </table>
-                          <table width='100%' cellpadding='0' cellspacing='0' border='0'>
-                            <tr>
-                              <td style='text-align:center'>
-                                <a href='https://{hostname}/your-reservation/{reservationId}'
-                                   style='display:inline-block;background:#dc2626;color:#ffffff;
-                                          text-decoration:none;padding:12px 28px;
-                                          border-radius:8px;font-size:15px;font-weight:600'>
-                                  Pay Now
-                                </a>
-                              </td>
-                            </tr>
-                          </table>
+                          <div style='font-size:14px;color:#374151;margin-bottom:4px'>
+                            <strong>Amount:</strong> {depositAmount:N0} VND
+                          </div>
+                          <div style='font-size:14px;color:#374151;margin-bottom:12px'>
+                            <strong>Deadline:</strong> {paymentDeadline:dd/MM/yyyy HH:mm}
+                          </div>
+                          <div style='font-size:13px;color:#6b7280'>
+                            Please click <strong>View Reservation Details</strong> below to complete your deposit payment before the deadline.
+                          </div>
                         </td>
                       </tr>
                     </table>";
             }
 
-            return $@"
-                    <html>
-                    <body style='margin:0;padding:0;background:#f3f4f6;font-family:Arial,sans-serif'>
-                    <table width='100%' cellpadding='0' cellspacing='0' border='0' style='background:#f3f4f6;padding:40px 0'>
+            var restaurantInfoSection = !string.IsNullOrWhiteSpace(restaurantName)
+                ? $@"
+                    <table width='100%' cellpadding='16' cellspacing='0' border='0'
+                           style='background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;margin-top:24px'>
                       <tr>
-                        <td align='center'>
-                          <table width='600' cellpadding='0' cellspacing='0' border='0'
-                                 style='background:#ffffff;border-radius:12px;overflow:hidden;
+                        <td>
+                          <div style='font-size:13px;font-weight:700;color:#374151;margin-bottom:6px'>
+                            &#127860; {System.Net.WebUtility.HtmlEncode(restaurantName)}
+                          </div>
+                          {(!string.IsNullOrWhiteSpace(restaurantAddress) ? $"<div style='font-size:13px;color:#6b7280;margin-bottom:4px'>&#128205; {System.Net.WebUtility.HtmlEncode(restaurantAddress)}</div>" : "")}
+                          {(!string.IsNullOrWhiteSpace(restaurantPhone) ? $"<div style='font-size:13px;color:#6b7280'>&#128222; {System.Net.WebUtility.HtmlEncode(restaurantPhone)}</div>" : "")}
+                        </td>
+                      </tr>
+                    </table>"
+                : "";
+
+            return $@"
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                      <meta charset='UTF-8'/>
+                      <meta name='viewport' content='width=device-width,initial-scale=1'/>
+                      <style>
+                        @media only screen and (max-width:600px) {{
+                          .email-wrapper {{ padding: 12px 0 !important; }}
+                          .email-card {{ border-radius: 0 !important; width: 100% !important; }}
+                          .card-body {{ padding: 20px !important; }}
+                          .info-cell {{ display: block !important; width: 100% !important;
+                                        padding: 4px 0 !important; box-sizing: border-box; }}
+                          .info-inner {{ margin-bottom: 8px !important; }}
+                        }}
+                      </style>
+                    </head>
+                    <body style='margin:0;padding:0;background:#f3f4f6;font-family:Arial,sans-serif'>
+                    <table width='100%' cellpadding='0' cellspacing='0' border='0'
+                           class='email-wrapper' style='background:#f3f4f6;padding:40px 0'>
+                      <tr>
+                        <td align='center' style='padding:0 12px'>
+                          <table width='100%' cellpadding='0' cellspacing='0' border='0'
+                                 class='email-card'
+                                 style='max-width:600px;background:#ffffff;border-radius:12px;overflow:hidden;
                                         box-shadow:0 6px 24px rgba(0,0,0,0.06)'>
 
                             <!-- HEADER -->
@@ -185,7 +203,7 @@ namespace RestX.BLL.DataTranferObjects.Common
 
                             <!-- BODY -->
                             <tr>
-                              <td style='padding:32px'>
+                              <td class='card-body' style='padding:32px'>
 
                                 <p style='font-size:16px;margin:0 0 24px 0;color:#111827'>
                                   Hi <strong>{encodedName}</strong>,<br/>
@@ -200,7 +218,7 @@ namespace RestX.BLL.DataTranferObjects.Common
                                       <div style='font-size:12px;color:#6b7280;letter-spacing:1px;margin-bottom:8px'>
                                         CONFIRMATION CODE
                                       </div>
-                                      <div style='font-size:32px;font-weight:700;letter-spacing:6px;color:#2563eb'>
+                                      <div style='font-size:28px;font-weight:700;letter-spacing:4px;color:#2563eb;word-break:break-all'>
                                         {confirmationCode}
                                       </div>
                                     </td>
@@ -211,8 +229,9 @@ namespace RestX.BLL.DataTranferObjects.Common
                                 <table width='100%' cellpadding='0' cellspacing='0' border='0'
                                        style='margin-bottom:20px'>
                                   <tr>
-                                    <td width='33%' style='padding-right:8px'>
+                                    <td class='info-cell' width='33%' style='padding-right:8px;vertical-align:top'>
                                       <table width='100%' cellpadding='12' cellspacing='0' border='0'
+                                             class='info-inner'
                                              style='background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px'>
                                         <tr>
                                           <td style='text-align:center'>
@@ -222,8 +241,9 @@ namespace RestX.BLL.DataTranferObjects.Common
                                         </tr>
                                       </table>
                                     </td>
-                                    <td width='33%' style='padding:0 4px'>
+                                    <td class='info-cell' width='33%' style='padding:0 4px;vertical-align:top'>
                                       <table width='100%' cellpadding='12' cellspacing='0' border='0'
+                                             class='info-inner'
                                              style='background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px'>
                                         <tr>
                                           <td style='text-align:center'>
@@ -233,8 +253,9 @@ namespace RestX.BLL.DataTranferObjects.Common
                                         </tr>
                                       </table>
                                     </td>
-                                    <td width='33%' style='padding-left:8px'>
+                                    <td class='info-cell' width='33%' style='padding-left:8px;vertical-align:top'>
                                       <table width='100%' cellpadding='12' cellspacing='0' border='0'
+                                             class='info-inner'
                                              style='background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px'>
                                         <tr>
                                           <td style='text-align:center'>
@@ -260,9 +281,11 @@ namespace RestX.BLL.DataTranferObjects.Common
 
                                 {specialRequestsSection}
 
+                                {depositSection}
+
                                 {viewDetailSection}
 
-                                {depositSection}
+                                {restaurantInfoSection}
 
                                 <!-- NOTE -->
                                 <p style='margin-top:24px;font-size:13px;color:#9ca3af;text-align:center'>

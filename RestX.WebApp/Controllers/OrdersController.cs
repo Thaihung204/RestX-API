@@ -25,20 +25,27 @@ namespace RestX.WebApp.Controllers
         private readonly IOrderService orderService;
         private readonly IHubContext<SignalrServer> hubContext;
         private readonly IFeedbackService feedbackService;
+        private readonly IPaymentService paymentService;
+        private readonly ILogger<OrdersController> _logger;
 
         public OrdersController(
+            ILogger<OrdersController> logger,
             IOrderService orderService,
+            IPaymentService paymentService,
             IHubContext<SignalrServer> hubContext,
             IFeedbackService feedbackService,
             IMapper mapper,
             UserManager<ApplicationUser> userManager,
             IExceptionHandler exceptionHandler,
             IEnumerable<ActiveTenant> tenant
+
         ) : base(mapper, userManager, exceptionHandler, tenant)
         {
             this.orderService = orderService;
+            this.paymentService = paymentService;
             this.hubContext = hubContext;
             this.feedbackService = feedbackService;
+            _logger = logger;
         }
 
         [HttpGet("export/csv")]
@@ -106,6 +113,8 @@ namespace RestX.WebApp.Controllers
         {
             try
             {
+                await paymentService.RecalculateOrderAmountForCheckout(id);
+
                 var order = await orderService.GetOrderById(id);
                 if (order == null)
                     return NotFound(new { success = false, message = "Order not found" });

@@ -231,8 +231,7 @@ namespace RestX.WebApp
                             "http://localhost:3000",
                             "https://localhost:3000",
                             "http://demo.localhost:3000",
-                            "https://demo.localhost:3000",
-                            "https://lebon.io.vn"
+                            "https://demo.localhost:3000"
                         )
                         .AllowAnyMethod()
                         .AllowAnyHeader()

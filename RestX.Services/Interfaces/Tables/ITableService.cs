@@ -16,6 +16,7 @@ namespace RestX.BLL.Interfaces.Tables
         Task CloseTableSession(List<Guid> tableIds);
         Task<IEnumerable<TableSessionInfo>> GetAllTableSession(DateTime? at = null);
         Task<MergeTableResponse> MergeTable(MergeTableRequest request, string userId);
+        Task<TableSessionInfo> MoveTable(MoveTableRequest request, string userId);
         //Task<SplitTableResponse> SplitTable(SplitTableRequest request);
     }
 }

@@ -283,6 +283,41 @@ namespace RestX.WebApp.Controllers
             }
         }
 
+        [HttpPost("move")]
+        [Authorize(Roles = "System Admin,Admin,Staff")]
+        public async Task<ActionResult<TableSessionInfo>> MoveTable([FromBody] MoveTableRequest request)
+        {
+            try
+            {
+                ApplicationUser? currentUser = await GetCurrentUserAsync();
+                string userId = currentUser?.MemberId.ToString() ?? string.Empty;
+
+                TableSessionInfo result = await tableService.MoveTable(request, userId);
+
+                await hub.BroadcastToTenant(CurrentTenant.Id, SignalrServer.TableSessionCreated, new
+                {
+                    sessionId = result.Id,
+                    tableId = result.TableId,
+                    orderId = result.OrderId,
+                    reservationId = result.ReservationId,
+                    startedAt = result.StartedAt,
+                    endedAt = result.EndedAt,
+                    isActive = result.IsActive
+                });
+
+                return Ok(result);
+            }
+            catch (AppException ex)
+            {
+                return this.BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                this.ExceptionHandler.RaiseException(ex);
+                return BadRequest("An internal error occurred");
+            }
+        }
+
         //[HttpPost("split")]
         //[Authorize(Roles = "System Admin,Admin,Staff")]
         //public async Task<ActionResult<SplitTableResponse>> SplitTable([FromBody] SplitTableRequest request)

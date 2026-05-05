@@ -411,6 +411,54 @@ namespace RestX.BLL.Services
             return response;
         }
 
+        public async Task<TableSessionInfo> MoveTable(MoveTableRequest request, string userId)
+        {
+            if (request.SourceTableId == Guid.Empty || request.TargetTableId == Guid.Empty)
+                throw new AppException("SourceTableId and TargetTableId are required");
+
+            if (request.SourceTableId == request.TargetTableId)
+                throw new AppException("SourceTableId and TargetTableId must be different");
+
+            bool sourceExists = await Repo.GetExistsAsync<Table>(t => t.Id == request.SourceTableId && t.IsActive);
+            if (!sourceExists)
+                throw new AppException("Source table not found or inactive");
+
+            bool targetExists = await Repo.GetExistsAsync<Table>(t => t.Id == request.TargetTableId && t.IsActive);
+            if (!targetExists)
+                throw new AppException("Target table not found or inactive");
+
+            DateTime now = DateTime.UtcNow.AddHours(7);
+
+            bool targetHasSession = await Repo.GetExistsAsync<TableSession>(
+                ts => ts.TableId == request.TargetTableId
+                   && ts.IsActive
+                   && ts.StartedAt <= now);
+
+            if (targetHasSession)
+                throw new AppException("Target table already has an active session");
+
+            TableSession? sourceSession = await Repo.GetFirstAsync<TableSession>(
+                filter: ts => ts.TableId == request.SourceTableId
+                           && ts.IsActive
+                           && ts.StartedAt <= now,
+                includeProperties: "Table,Order,Order.Customer,Order.Customer.ApplicationUser,Reservation,Reservation.Customer,Reservation.Customer.ApplicationUser");
+
+            if (sourceSession == null)
+                throw new AppException("Source table has no active session");
+
+            sourceSession.TableId = request.TargetTableId;
+            Repo.Update(sourceSession, userId);
+            await Repo.SaveAsync();
+
+            await RedisService.RemoveAsync($"Floor:{CurrentTenant?.Hostname}");
+
+            TableSession? updatedSession = await Repo.GetFirstAsync<TableSession>(
+                filter: ts => ts.Id == sourceSession.Id,
+                includeProperties: "Table,Order,Order.Customer,Order.Customer.ApplicationUser,Reservation,Reservation.Customer,Reservation.Customer.ApplicationUser");
+
+            return mapper.Map<TableSessionInfo>(updatedSession);
+        }
+
         //public async Task<SplitTableResponse> SplitTable(SplitTableRequest request)
         //{
         //    List<Guid> tableIds = (request.TableIds ?? new List<Guid>())

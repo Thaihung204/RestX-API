@@ -235,7 +235,7 @@ public class AdminSnapshotService : IAdminSnapshotService
             "monthly" or "month" => (
                 fromDate ?? new DateOnly(today.Year, today.Month, 1),
                 (toDate ?? new DateOnly(today.Year, today.Month, 1)).AddMonths(1),
-                "monthly"),
+                "daily"),
 
             "quarterly" or "quarter" => (
                 fromDate ?? GetCurrentQuarterStart(today),

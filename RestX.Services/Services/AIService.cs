@@ -175,8 +175,14 @@ namespace RestX.BLL.Services
 
             if (session == null) return null;
 
+            var menuCategories = await _dishService.GetMenu();
+            var menuLookup = menuCategories.SelectMany(c => c.Items).ToDictionary(i => i.Id);
+            var combos = await _dishService.GetActiveCombos();
+            var comboLookup = combos.ToDictionary(c => c.Id);
+
             var today = DateTime.UtcNow.Date;
-            var items = session.Messages.Where(m => m.CreatedDate.Date == today).OrderBy(m => m.CreatedDate).Select(m =>
+            var items = new List<ChatHistoryItem>();
+            foreach (var m in session.Messages.Where(m => m.CreatedDate.Date == today).OrderBy(m => m.CreatedDate))
             {
                 var item = new ChatHistoryItem
                 {
@@ -212,7 +218,7 @@ namespace RestX.BLL.Services
                                 foreach (var s in sugsEl.EnumerateArray())
                                 {
                                     if (!s.TryGetProperty("dishId", out var did) || !Guid.TryParse(did.GetString(), out var dishId)) continue;
-                                    parsed.Suggestions.Add(new AISuggestion
+                                    var suggestion = new AISuggestion
                                     {
                                         DishId = dishId,
                                         DishName = s.TryGetProperty("dishName", out var dn) ? dn.GetString() ?? "" : "",
@@ -220,17 +226,33 @@ namespace RestX.BLL.Services
                                         Reason = s.TryGetProperty("reason", out var rs) ? rs.GetString() ?? "" : "",
                                         Category = s.TryGetProperty("category", out var cat) ? cat.GetString() ?? "" : "",
                                         Actions = BuildActions(dishId)
-                                    });
+                                    };
+                                    if (menuLookup.TryGetValue(dishId, out var menuItem))
+                                        suggestion.ImageUrl = menuItem.ImageUrl;
+                                    parsed.Suggestions.Add(suggestion);
                                 }
 
                             if (root.TryGetProperty("combos", out var combosEl2) && combosEl2.ValueKind == JsonValueKind.Array)
                                 foreach (var c in combosEl2.EnumerateArray())
                                 {
                                     if (!c.TryGetProperty("comboId", out var cid) || !Guid.TryParse(cid.GetString(), out var comboId)) continue;
+                                    if (!comboLookup.TryGetValue(comboId, out var dbCombo)) continue;
                                     parsed.Combos.Add(new AIComboSuggestion
                                     {
                                         ComboId = comboId,
-                                        Reason = c.TryGetProperty("reason", out var rs2) ? rs2.GetString() ?? "" : ""
+                                        ComboName = dbCombo.Name,
+                                        Description = dbCombo.Description,
+                                        ImageUrl = dbCombo.ImageUrl,
+                                        Price = dbCombo.Price,
+                                        Reason = c.TryGetProperty("reason", out var rs2) ? rs2.GetString() ?? "" : "",
+                                        Items = dbCombo.Details.Select(d => new AISuggestion
+                                        {
+                                            DishId = d.DishId,
+                                            DishName = d.DishName,
+                                            Price = d.DishPrice ?? 0,
+                                            Quantity = d.Quantity,
+                                            Actions = BuildActions(d.DishId)
+                                        }).ToList()
                                     });
                                 }
 
@@ -264,8 +286,8 @@ namespace RestX.BLL.Services
                     catch { }
                 }
 
-                return item;
-            }).ToList();
+                items.Add(item);
+            }
 
             return new ChatHistoryResponse { SessionId = sessionId, Messages = items };
         }
@@ -330,9 +352,8 @@ namespace RestX.BLL.Services
             };
 
             var bodyJson = JsonSerializer.Serialize(requestBody);
-            // Try primary model first (2 attempts), then fall back to stable model
-            var modelsToTry = _model == "gemini-2.5-flash"
-                ? new[] { "gemini-2.5-flash", "gemini-2.5-flash-lite" }
+            var modelsToTry = _model.EndsWith("-lite")
+                ? new[] { _model }
                 : new[] { _model, "gemini-2.5-flash-lite" };
             int[] retryDelays = [500];
 
@@ -346,7 +367,7 @@ namespace RestX.BLL.Services
                     response?.Dispose();
                     try
                     {
-                        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(13));
+                        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
                         var httpContent = new StringContent(bodyJson, Encoding.UTF8, "application/json");
                         response = await client.PostAsync(url, httpContent, cts.Token);
                     }

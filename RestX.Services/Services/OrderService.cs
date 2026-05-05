@@ -1691,6 +1691,7 @@ namespace RestX.BLL.Services
 
             orderDetail.ItemStatusId = statusId;
             Repo.Update(orderDetail, userId);
+            Repo.Update(orderDetail.Order, userId);
 
             if (isComboParent && comboChildren.Any())
             {

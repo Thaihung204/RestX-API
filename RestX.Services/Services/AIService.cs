@@ -164,8 +164,7 @@ namespace RestX.BLL.Services
         {
             AIChatSession? session = null;
 
-            bool isLoggedIn = !string.IsNullOrEmpty(userId) && Guid.TryParse(userId, out var appUserId);
-            if (isLoggedIn)
+            if (!string.IsNullOrEmpty(userId) && Guid.TryParse(userId, out var appUserId))
             {
                 var customerId = await _customerService.GetCustomerIdByApplicationUserIdAsync(appUserId);
                 if (customerId.HasValue)

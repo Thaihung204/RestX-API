@@ -9,6 +9,7 @@ using RestX.BLL.DataTranferObjects.Orders;
 using RestX.BLL.Exceptionhandling;
 using RestX.BLL.Interfaces;
 using RestX.BLL.Interfaces.Feedbacks;
+using RestX.BLL.Interfaces.Tables;
 using RestX.Models.Identity;
 using RestX.Models.Tenants;
 using RestX.WebApp.Controllers.BaseControllers;
@@ -23,6 +24,7 @@ namespace RestX.WebApp.Controllers
     public class OrdersController : BaseController
     {
         private readonly IOrderService orderService;
+        private readonly ITableService tableService;
         private readonly IHubContext<SignalrServer> hubContext;
         private readonly IFeedbackService feedbackService;
         private readonly IPaymentService paymentService;
@@ -31,6 +33,7 @@ namespace RestX.WebApp.Controllers
         public OrdersController(
             ILogger<OrdersController> logger,
             IOrderService orderService,
+            ITableService tableService,
             IPaymentService paymentService,
             IHubContext<SignalrServer> hubContext,
             IFeedbackService feedbackService,
@@ -42,6 +45,7 @@ namespace RestX.WebApp.Controllers
         ) : base(mapper, userManager, exceptionHandler, tenant)
         {
             this.orderService = orderService;
+            this.tableService = tableService;
             this.paymentService = paymentService;
             this.hubContext = hubContext;
             this.feedbackService = feedbackService;
@@ -185,6 +189,21 @@ namespace RestX.WebApp.Controllers
                 else userId = order.CustomerId.ToString();
 
                 var result = await orderService.CheckSessionBeforeOrder(order, userId);
+
+                var session = await tableService.GetActiveTableSession(order.TableId);
+                if (session != null)
+                {
+                    await hubContext.BroadcastToTenant(CurrentTenant.Id, SignalrServer.TableSessionCreated, new
+                    {
+                        sessionId = session.Id,
+                        tableId = session.TableId,
+                        orderId = session.OrderId,
+                        reservationId = session.ReservationId,
+                        startedAt = session.StartedAt,
+                        endedAt = session.EndedAt,
+                        isActive = session.IsActive
+                    });
+                }
 
                 await hubContext.BroadcastToTenant(CurrentTenant.Id, SignalrServer.OrderCreated, new { id = result.Id, result });
 

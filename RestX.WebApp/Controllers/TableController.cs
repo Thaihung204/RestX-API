@@ -294,6 +294,12 @@ namespace RestX.WebApp.Controllers
 
                 TableSessionInfo result = await tableService.MoveTable(request, userId);
 
+                await hub.BroadcastToTenant(CurrentTenant.Id, SignalrServer.TableSessionClosed, new
+                {
+                    tableIds = new[] { request.SourceTableId },
+                    closedAt = DateTime.UtcNow.AddHours(7)
+                });
+
                 await hub.BroadcastToTenant(CurrentTenant.Id, SignalrServer.TableSessionCreated, new
                 {
                     sessionId = result.Id,

@@ -98,6 +98,7 @@ namespace RestX.BLL.Services
                     if (existing != null)
                         return existing.SessionId;
                 }
+                return Guid.NewGuid().ToString();
             }
             return string.IsNullOrEmpty(cookieSessionId) ? Guid.NewGuid().ToString() : cookieSessionId;
         }
@@ -163,15 +164,17 @@ namespace RestX.BLL.Services
         {
             AIChatSession? session = null;
 
-            if (!string.IsNullOrEmpty(userId) && Guid.TryParse(userId, out var appUserId))
+            bool isLoggedIn = !string.IsNullOrEmpty(userId) && Guid.TryParse(userId, out var appUserId);
+            if (isLoggedIn)
             {
                 var customerId = await _customerService.GetCustomerIdByApplicationUserIdAsync(appUserId);
                 if (customerId.HasValue)
                     session = await Repo.GetOneAsync<AIChatSession>(s => s.CustomerId == customerId.Value, "Messages");
             }
-
-            if (session == null && !string.IsNullOrEmpty(sessionId))
+            else if (!string.IsNullOrEmpty(sessionId))
+            {
                 session = await Repo.GetOneAsync<AIChatSession>(s => s.SessionId == sessionId, "Messages");
+            }
 
             if (session == null) return null;
 
@@ -180,9 +183,9 @@ namespace RestX.BLL.Services
             var combos = await _dishService.GetActiveCombos();
             var comboLookup = combos.ToDictionary(c => c.Id);
 
-            var today = DateTime.UtcNow.Date;
+            var todayVn = DateTime.UtcNow.AddHours(7).Date;
             var items = new List<ChatHistoryItem>();
-            foreach (var m in session.Messages.Where(m => m.CreatedDate.Date == today).OrderBy(m => m.CreatedDate))
+            foreach (var m in session.Messages.Where(m => m.CreatedDate.AddHours(7).Date == todayVn).OrderBy(m => m.CreatedDate))
             {
                 var item = new ChatHistoryItem
                 {

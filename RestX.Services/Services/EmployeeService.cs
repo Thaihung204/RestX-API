@@ -184,13 +184,13 @@ namespace RestX.BLL.Services
             var direction = sortDescending ? "DESC" : "ASC";
             return (sortBy?.ToLower()) switch
             {
-                "code" => $" ORDER BY e.Code {direction}",
-                "fullname" => $" ORDER BY u.FullName {direction}",
-                "email" => $" ORDER BY u.Email {direction}",
-                "position" => $" ORDER BY e.Position {direction}",
-                "hiredate" => $" ORDER BY e.HireDate {direction}",
-                "isactive" => $" ORDER BY e.IsActive {direction}",
-                _ => $" ORDER BY e.CreatedDate {direction}"
+                "code" => $" ORDER BY e.IsActive DESC, e.Code {direction}",
+                "fullname" => $" ORDER BY e.IsActive DESC, u.FullName {direction}",
+                "email" => $" ORDER BY e.IsActive DESC, u.Email {direction}",
+                "position" => $" ORDER BY e.IsActive DESC, e.Position {direction}",
+                "hiredate" => $" ORDER BY e.IsActive DESC, e.HireDate {direction}",
+                "isactive" => $" ORDER BY e.IsActive DESC, e.CreatedDate {direction}",
+                _ => $" ORDER BY e.IsActive DESC, e.CreatedDate {direction}"
             };
         }
 

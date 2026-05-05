@@ -125,12 +125,12 @@ namespace RestX.BLL.Services
 
             mainQuery += model.SortBy switch
             {
-                "name_asc" => " ORDER BY d.Name ASC",
-                "name_desc" => " ORDER BY d.Name DESC",
-                "price_asc" => " ORDER BY d.Price ASC",
-                "price_desc" => " ORDER BY d.Price DESC",
-                "created_asc" => " ORDER BY d.CreatedDate ASC",
-                _ => " ORDER BY d.CreatedDate DESC"
+                "name_asc" => " ORDER BY d.IsActive DESC, d.Name ASC",
+                "name_desc" => " ORDER BY d.IsActive DESC, d.Name DESC",
+                "price_asc" => " ORDER BY d.IsActive DESC, d.Price ASC",
+                "price_desc" => " ORDER BY d.IsActive DESC, d.Price DESC",
+                "created_asc" => " ORDER BY d.IsActive DESC, d.CreatedDate ASC",
+                _ => " ORDER BY d.IsActive DESC, d.CreatedDate DESC"
             };
 
             mainQuery += $" OFFSET {skip} ROWS FETCH NEXT {model.ItemsPerPage} ROWS ONLY";

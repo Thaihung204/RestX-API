@@ -330,9 +330,8 @@ namespace RestX.BLL.Services
             };
 
             var bodyJson = JsonSerializer.Serialize(requestBody);
-            // Try primary model first (2 attempts), then fall back to stable model
-            var modelsToTry = _model == "gemini-2.5-flash"
-                ? new[] { "gemini-2.5-flash", "gemini-2.5-flash-lite" }
+            var modelsToTry = _model.EndsWith("-lite")
+                ? new[] { _model }
                 : new[] { _model, "gemini-2.5-flash-lite" };
             int[] retryDelays = [500];
 
@@ -346,7 +345,7 @@ namespace RestX.BLL.Services
                     response?.Dispose();
                     try
                     {
-                        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(13));
+                        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
                         var httpContent = new StringContent(bodyJson, Encoding.UTF8, "application/json");
                         response = await client.PostAsync(url, httpContent, cts.Token);
                     }

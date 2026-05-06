@@ -112,10 +112,10 @@ namespace RestX.BLL.Services
             var sessionId = request.SessionId ?? Guid.NewGuid().ToString();
             var customerId = await GetCustomerId(request.UserId);
 
-            var (history, menu, orderHistory, combos) = await LoadContext(sessionId, customerId);
+            var (_, menu, orderHistory, combos) = await LoadContext(sessionId, customerId);
             var systemPrompt = BuildChatSystemPrompt(menu, combos, request.TableId, orderHistory);
 
-            var rawResponse = await CallGemini(systemPrompt, history, request.Message, maxTokens: 3000);
+            var rawResponse = await CallGemini(systemPrompt, new List<ChatMessage>(), request.Message, maxTokens: 3000);
             var session = await SaveHistory(sessionId, request.Message, rawResponse, customerId, request.TableId);
 
             var tableId = request.TableId ?? session.TableId;

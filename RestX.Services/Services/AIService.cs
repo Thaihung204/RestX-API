@@ -354,9 +354,9 @@ namespace RestX.BLL.Services
             };
 
             var bodyJson = JsonSerializer.Serialize(requestBody);
-            var modelsToTry = _model.EndsWith("-lite")
-                ? new[] { _model }
-                : new[] { _model, "gemini-2.5-flash-lite" };
+            var modelsToTry = _model == "gemini-2.5-flash"
+                 ? new[] { "gemini-2.5-flash", "gemini-2.5-flash-lite" }
+                 : new[] { _model, "gemini-2.5-flash-lite" };
             int[] retryDelays = [500];
 
             foreach (var model in modelsToTry)

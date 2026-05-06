@@ -184,7 +184,7 @@ namespace RestX.BLL.Services
 
             var todayVn = DateTime.UtcNow.AddHours(7).Date;
             var items = new List<ChatHistoryItem>();
-            foreach (var m in session.Messages.Where(m => m.CreatedDate.AddHours(7).Date == todayVn).OrderBy(m => m.CreatedDate))
+            foreach (var m in session.Messages.Where(m => m.CreatedDate.Date == todayVn).OrderBy(m => m.CreatedDate))
             {
                 var item = new ChatHistoryItem
                 {

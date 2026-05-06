@@ -15,6 +15,7 @@ using RestX.Models.Tenants;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.Logging;
 
 namespace RestX.BLL.Services
 {
@@ -33,6 +34,7 @@ namespace RestX.BLL.Services
         private readonly string _apiKey;
         private readonly int _maxHistoryMessages;
         private readonly int _sessionExpireMinutes;
+        private readonly ILogger<AIService> _logger;
 
         private static readonly JsonSerializerOptions _jsonOptions = new()
         {
@@ -66,6 +68,7 @@ namespace RestX.BLL.Services
             IConfiguration configuration,
             IRepository repo,
             IRedisService redisService,
+            ILogger<AIService> logger,
             IEnumerable<ActiveTenant> tenant = null)
             : base(repo, redisService, tenant)
         {
@@ -75,6 +78,7 @@ namespace RestX.BLL.Services
             _customerService = customerService;
             _dashboardService = dashboardService;
             _httpClientFactory = httpClientFactory;
+            _logger = logger;
 
             var aiConfig = configuration.GetSection("AISuggestion");
             _model = aiConfig["Model"] ?? "gemini-2.5-flash";
@@ -98,6 +102,7 @@ namespace RestX.BLL.Services
                     if (existing != null)
                         return existing.SessionId;
                 }
+                return Guid.NewGuid().ToString();
             }
             return string.IsNullOrEmpty(cookieSessionId) ? Guid.NewGuid().ToString() : cookieSessionId;
         }
@@ -107,10 +112,10 @@ namespace RestX.BLL.Services
             var sessionId = request.SessionId ?? Guid.NewGuid().ToString();
             var customerId = await GetCustomerId(request.UserId);
 
-            var (history, menu, orderHistory, combos) = await LoadContext(sessionId, customerId);
+            var (_, menu, orderHistory, combos) = await LoadContext(sessionId, customerId);
             var systemPrompt = BuildChatSystemPrompt(menu, combos, request.TableId, orderHistory);
 
-            var rawResponse = await CallGemini(systemPrompt, history, request.Message, maxTokens: 3000);
+            var rawResponse = await CallGemini(systemPrompt, new List<ChatMessage>(), request.Message, maxTokens: 3000);
             var session = await SaveHistory(sessionId, request.Message, rawResponse, customerId, request.TableId);
 
             var tableId = request.TableId ?? session.TableId;
@@ -169,14 +174,21 @@ namespace RestX.BLL.Services
                 if (customerId.HasValue)
                     session = await Repo.GetOneAsync<AIChatSession>(s => s.CustomerId == customerId.Value, "Messages");
             }
-
-            if (session == null && !string.IsNullOrEmpty(sessionId))
+            else if (!string.IsNullOrEmpty(sessionId))
+            {
                 session = await Repo.GetOneAsync<AIChatSession>(s => s.SessionId == sessionId, "Messages");
+            }
 
             if (session == null) return null;
 
-            var today = DateTime.UtcNow.Date;
-            var items = session.Messages.Where(m => m.CreatedDate.Date == today).OrderBy(m => m.CreatedDate).Select(m =>
+            var menuCategories = await _dishService.GetMenu();
+            var menuLookup = menuCategories.SelectMany(c => c.Items).ToDictionary(i => i.Id);
+            var combos = await _dishService.GetActiveCombos();
+            var comboLookup = combos.ToDictionary(c => c.Id);
+
+            var todayVn = DateTime.UtcNow.AddHours(7).Date;
+            var items = new List<ChatHistoryItem>();
+            foreach (var m in session.Messages.Where(m => m.CreatedDate.Date == todayVn).OrderBy(m => m.CreatedDate))
             {
                 var item = new ChatHistoryItem
                 {
@@ -212,7 +224,7 @@ namespace RestX.BLL.Services
                                 foreach (var s in sugsEl.EnumerateArray())
                                 {
                                     if (!s.TryGetProperty("dishId", out var did) || !Guid.TryParse(did.GetString(), out var dishId)) continue;
-                                    parsed.Suggestions.Add(new AISuggestion
+                                    var suggestion = new AISuggestion
                                     {
                                         DishId = dishId,
                                         DishName = s.TryGetProperty("dishName", out var dn) ? dn.GetString() ?? "" : "",
@@ -220,17 +232,33 @@ namespace RestX.BLL.Services
                                         Reason = s.TryGetProperty("reason", out var rs) ? rs.GetString() ?? "" : "",
                                         Category = s.TryGetProperty("category", out var cat) ? cat.GetString() ?? "" : "",
                                         Actions = BuildActions(dishId)
-                                    });
+                                    };
+                                    if (menuLookup.TryGetValue(dishId, out var menuItem))
+                                        suggestion.ImageUrl = menuItem.ImageUrl;
+                                    parsed.Suggestions.Add(suggestion);
                                 }
 
                             if (root.TryGetProperty("combos", out var combosEl2) && combosEl2.ValueKind == JsonValueKind.Array)
                                 foreach (var c in combosEl2.EnumerateArray())
                                 {
                                     if (!c.TryGetProperty("comboId", out var cid) || !Guid.TryParse(cid.GetString(), out var comboId)) continue;
+                                    if (!comboLookup.TryGetValue(comboId, out var dbCombo)) continue;
                                     parsed.Combos.Add(new AIComboSuggestion
                                     {
                                         ComboId = comboId,
-                                        Reason = c.TryGetProperty("reason", out var rs2) ? rs2.GetString() ?? "" : ""
+                                        ComboName = dbCombo.Name,
+                                        Description = dbCombo.Description,
+                                        ImageUrl = dbCombo.ImageUrl,
+                                        Price = dbCombo.Price,
+                                        Reason = c.TryGetProperty("reason", out var rs2) ? rs2.GetString() ?? "" : "",
+                                        Items = dbCombo.Details.Select(d => new AISuggestion
+                                        {
+                                            DishId = d.DishId,
+                                            DishName = d.DishName,
+                                            Price = d.DishPrice ?? 0,
+                                            Quantity = d.Quantity,
+                                            Actions = BuildActions(d.DishId)
+                                        }).ToList()
                                     });
                                 }
 
@@ -264,8 +292,8 @@ namespace RestX.BLL.Services
                     catch { }
                 }
 
-                return item;
-            }).ToList();
+                items.Add(item);
+            }
 
             return new ChatHistoryResponse { SessionId = sessionId, Messages = items };
         }
@@ -330,11 +358,12 @@ namespace RestX.BLL.Services
             };
 
             var bodyJson = JsonSerializer.Serialize(requestBody);
-            // Try primary model first (2 attempts), then fall back to stable model
             var modelsToTry = _model == "gemini-2.5-flash"
-                ? new[] { "gemini-2.5-flash", "gemini-2.5-flash-lite" }
-                : new[] { _model, "gemini-2.5-flash-lite" };
-            int[] retryDelays = [500];
+                 ? new[] { "gemini-2.5-flash", "gemini-2.5-flash-lite" }
+                 : new[] { _model, "gemini-2.5-flash-lite" };
+            int[] retryDelays = [1000, 2000];
+
+            _logger.LogInformation("[AI] Start — primary: {Model}, promptLen: {Len} chars", _model, bodyJson.Length);
 
             foreach (var model in modelsToTry)
             {
@@ -344,18 +373,27 @@ namespace RestX.BLL.Services
                 for (int attempt = 0; attempt <= retryDelays.Length; attempt++)
                 {
                     response?.Dispose();
+                    var sw = System.Diagnostics.Stopwatch.StartNew();
                     try
                     {
-                        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(13));
+                        var timeoutSeconds = model.EndsWith("-lite") ? 22 : 28;
+                        _logger.LogInformation("[AI] Calling {Model} attempt {Attempt}, timeout {Timeout}s", model, attempt + 1, timeoutSeconds);
+                        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
                         var httpContent = new StringContent(bodyJson, Encoding.UTF8, "application/json");
                         response = await client.PostAsync(url, httpContent, cts.Token);
+                        sw.Stop();
+                        _logger.LogInformation("[AI] {Model} responded {Ms}ms — HTTP {Status}", model, sw.ElapsedMilliseconds, (int)response.StatusCode);
                     }
                     catch (OperationCanceledException)
                     {
+                        sw.Stop();
+                        _logger.LogWarning("[AI] {Model} TIMEOUT after {Ms}ms (attempt {Attempt})", model, sw.ElapsedMilliseconds, attempt + 1);
                         break;
                     }
-                    catch (Exception) when (attempt < retryDelays.Length)
+                    catch (Exception ex) when (attempt < retryDelays.Length)
                     {
+                        sw.Stop();
+                        _logger.LogWarning(ex, "[AI] {Model} network error attempt {Attempt}, retrying...", model, attempt + 1);
                         await Task.Delay(retryDelays[attempt]);
                         continue;
                     }
@@ -366,8 +404,13 @@ namespace RestX.BLL.Services
                     var isRetryable = statusCode == 503 || statusCode == 429 || statusCode == 529 || statusCode == 500;
 
                     if (!isRetryable || attempt == retryDelays.Length)
-                        break; // move to next model
+                    {
+                        var errBody = await response.Content.ReadAsStringAsync();
+                        _logger.LogWarning("[AI] {Model} HTTP {Status} — {Body}", model, statusCode, errBody[..Math.Min(300, errBody.Length)]);
+                        break;
+                    }
 
+                    _logger.LogWarning("[AI] {Model} HTTP {Status}, retrying in {Delay}ms...", model, statusCode, retryDelays[attempt]);
                     await Task.Delay(retryDelays[attempt]);
                 }
 
@@ -375,17 +418,21 @@ namespace RestX.BLL.Services
                 {
                     var responseBody = await response.Content.ReadAsStringAsync();
                     using var doc = JsonDocument.Parse(responseBody);
-                    return doc.RootElement
+                    var text = doc.RootElement
                         .GetProperty("candidates")[0]
                         .GetProperty("content")
                         .GetProperty("parts")[0]
                         .GetProperty("text")
                         .GetString() ?? string.Empty;
+                    _logger.LogInformation("[AI] Success with {Model}, responseLen: {Len} chars", model, text.Length);
+                    return text;
                 }
 
+                _logger.LogWarning("[AI] Falling back from {Model}...", model);
                 response?.Dispose();
             }
 
+            _logger.LogError("[AI] All models exhausted. primary={Model}", _model);
             throw new Exception("Gemini API không khả dụng sau khi thử tất cả models. Vui lòng thử lại sau.");
         }
 
@@ -611,7 +658,10 @@ namespace RestX.BLL.Services
                 var end = rawText.LastIndexOf('}');
 
                 if (start == -1 || end == -1 || end < start)
+                {
+                    _logger.LogWarning("[AI] ParseAIResponse: no JSON found. Raw: {Raw}", rawText[..Math.Min(200, rawText.Length)]);
                     return (FallbackResponse(sessionId, rawText), null);
+                }
 
                 var jsonStr = rawText[start..(end + 1)];
                 using var doc = JsonDocument.Parse(jsonStr);
@@ -715,8 +765,9 @@ namespace RestX.BLL.Services
 
                 return (response, orderAction);
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogWarning(ex, "[AI] ParseAIResponse exception. Raw: {Raw}", rawText[..Math.Min(200, rawText.Length)]);
                 return (FallbackResponse(sessionId, rawText), null);
             }
         }

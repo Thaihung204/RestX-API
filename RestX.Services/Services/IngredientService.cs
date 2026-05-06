@@ -77,6 +77,19 @@ namespace RestX.BLL.Services
                 ingredient.InventoryStock.CurrentQuantity = ingredientItem.CurrentQuantity;
                 ingredient.InventoryStock.LastUpdated = DateTime.UtcNow;
 
+                if (ingredientItem.CurrentQuantity <= 0)
+                {
+                    ingredient.Status = IngredientStatus.OutOfStock;
+                }
+                else if (ingredientItem.CurrentQuantity < ingredient.MinStockLevel)
+                {
+                    ingredient.Status = IngredientStatus.LowStock;
+                }
+                else if (ingredientItem.CurrentQuantity > ingredient.MinStockLevel)
+                {
+                    ingredient.Status = IngredientStatus.InStock;
+                }
+
                 Repo.Update(ingredient);
                 await Repo.SaveAsync();
                 return ingredient.Id;
@@ -99,10 +112,22 @@ namespace RestX.BLL.Services
                 }
             };
 
+            if (ingredientItem.CurrentQuantity <= 0)
+            {
+                ingredient.Status = IngredientStatus.OutOfStock;
+            }
+            else if (ingredientItem.CurrentQuantity < ingredient.MinStockLevel)
+            {
+                ingredient.Status = IngredientStatus.LowStock;
+            }
+            else if (ingredientItem.CurrentQuantity > ingredient.MinStockLevel)
+            {
+                ingredient.Status = IngredientStatus.InStock;
+            }
+
             await Repo.CreateAsync(ingredient);
             return ingredient.Id;
         }
-
         private async Task ValidateIngredientData(IngredientItem ingredientItem)
         {
             if (ingredientItem == null)

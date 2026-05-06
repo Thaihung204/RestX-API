@@ -15,6 +15,7 @@ using RestX.Models.Tenants;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.Logging;
 
 namespace RestX.BLL.Services
 {
@@ -33,6 +34,7 @@ namespace RestX.BLL.Services
         private readonly string _apiKey;
         private readonly int _maxHistoryMessages;
         private readonly int _sessionExpireMinutes;
+        private readonly ILogger<AIService> _logger;
 
         private static readonly JsonSerializerOptions _jsonOptions = new()
         {
@@ -66,6 +68,7 @@ namespace RestX.BLL.Services
             IConfiguration configuration,
             IRepository repo,
             IRedisService redisService,
+            ILogger<AIService> logger,
             IEnumerable<ActiveTenant> tenant = null)
             : base(repo, redisService, tenant)
         {
@@ -75,6 +78,7 @@ namespace RestX.BLL.Services
             _customerService = customerService;
             _dashboardService = dashboardService;
             _httpClientFactory = httpClientFactory;
+            _logger = logger;
 
             var aiConfig = configuration.GetSection("AISuggestion");
             _model = aiConfig["Model"] ?? "gemini-2.5-flash";
@@ -357,7 +361,9 @@ namespace RestX.BLL.Services
             var modelsToTry = _model == "gemini-2.5-flash"
                  ? new[] { "gemini-2.5-flash", "gemini-2.5-flash-lite" }
                  : new[] { _model, "gemini-2.5-flash-lite" };
-            int[] retryDelays = [500];
+            int[] retryDelays = [1000, 2000];
+
+            _logger.LogInformation("[AI] Start — primary: {Model}, promptLen: {Len} chars", _model, bodyJson.Length);
 
             foreach (var model in modelsToTry)
             {
@@ -367,18 +373,27 @@ namespace RestX.BLL.Services
                 for (int attempt = 0; attempt <= retryDelays.Length; attempt++)
                 {
                     response?.Dispose();
+                    var sw = System.Diagnostics.Stopwatch.StartNew();
                     try
                     {
-                        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(13));
+                        var timeoutSeconds = model.EndsWith("-lite") ? 22 : 28;
+                        _logger.LogInformation("[AI] Calling {Model} attempt {Attempt}, timeout {Timeout}s", model, attempt + 1, timeoutSeconds);
+                        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
                         var httpContent = new StringContent(bodyJson, Encoding.UTF8, "application/json");
                         response = await client.PostAsync(url, httpContent, cts.Token);
+                        sw.Stop();
+                        _logger.LogInformation("[AI] {Model} responded {Ms}ms — HTTP {Status}", model, sw.ElapsedMilliseconds, (int)response.StatusCode);
                     }
                     catch (OperationCanceledException)
                     {
+                        sw.Stop();
+                        _logger.LogWarning("[AI] {Model} TIMEOUT after {Ms}ms (attempt {Attempt})", model, sw.ElapsedMilliseconds, attempt + 1);
                         break;
                     }
-                    catch (Exception) when (attempt < retryDelays.Length)
+                    catch (Exception ex) when (attempt < retryDelays.Length)
                     {
+                        sw.Stop();
+                        _logger.LogWarning(ex, "[AI] {Model} network error attempt {Attempt}, retrying...", model, attempt + 1);
                         await Task.Delay(retryDelays[attempt]);
                         continue;
                     }
@@ -389,8 +404,13 @@ namespace RestX.BLL.Services
                     var isRetryable = statusCode == 503 || statusCode == 429 || statusCode == 529 || statusCode == 500;
 
                     if (!isRetryable || attempt == retryDelays.Length)
-                        break; // move to next model
+                    {
+                        var errBody = await response.Content.ReadAsStringAsync();
+                        _logger.LogWarning("[AI] {Model} HTTP {Status} — {Body}", model, statusCode, errBody[..Math.Min(300, errBody.Length)]);
+                        break;
+                    }
 
+                    _logger.LogWarning("[AI] {Model} HTTP {Status}, retrying in {Delay}ms...", model, statusCode, retryDelays[attempt]);
                     await Task.Delay(retryDelays[attempt]);
                 }
 
@@ -398,17 +418,21 @@ namespace RestX.BLL.Services
                 {
                     var responseBody = await response.Content.ReadAsStringAsync();
                     using var doc = JsonDocument.Parse(responseBody);
-                    return doc.RootElement
+                    var text = doc.RootElement
                         .GetProperty("candidates")[0]
                         .GetProperty("content")
                         .GetProperty("parts")[0]
                         .GetProperty("text")
                         .GetString() ?? string.Empty;
+                    _logger.LogInformation("[AI] Success with {Model}, responseLen: {Len} chars", model, text.Length);
+                    return text;
                 }
 
+                _logger.LogWarning("[AI] Falling back from {Model}...", model);
                 response?.Dispose();
             }
 
+            _logger.LogError("[AI] All models exhausted. primary={Model}", _model);
             throw new Exception("Gemini API không khả dụng sau khi thử tất cả models. Vui lòng thử lại sau.");
         }
 
@@ -634,7 +658,10 @@ namespace RestX.BLL.Services
                 var end = rawText.LastIndexOf('}');
 
                 if (start == -1 || end == -1 || end < start)
+                {
+                    _logger.LogWarning("[AI] ParseAIResponse: no JSON found. Raw: {Raw}", rawText[..Math.Min(200, rawText.Length)]);
                     return (FallbackResponse(sessionId, rawText), null);
+                }
 
                 var jsonStr = rawText[start..(end + 1)];
                 using var doc = JsonDocument.Parse(jsonStr);
@@ -738,8 +765,9 @@ namespace RestX.BLL.Services
 
                 return (response, orderAction);
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogWarning(ex, "[AI] ParseAIResponse exception. Raw: {Raw}", rawText[..Math.Min(200, rawText.Length)]);
                 return (FallbackResponse(sessionId, rawText), null);
             }
         }
